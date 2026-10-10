@@ -1,29 +1,75 @@
-# NEO
+# NEO Canon
 
-**A distraction-free word processor for authors, by a wannabe author.**
+**A word processor for books that remembers your world, so you don't have to.**
 
-NEO understands from the moment you install it that you are writing *books* and nothing else. No bloat, no distractions, with manuscripts that look like books as you write them.
+![NEO Canon demo](docs/semantics/demo/neo-canon-demo.gif)
 
-NEO runs locally. WIPs are saved in plain files on your disk. No accounts or subscriptions. And it's free!
+[Watch it as an MP4](docs/semantics/demo/neo-canon-demo.mp4)
+
+## Why
+
+Have you ever forgotten where a character was from? The dialect a town speaks? The colour of the shoes a side character wore two chapters ago?
+
+You are in good company. As the story goes among fans, George R.R. Martin once let a horse change its sex between books, and it took a reader with a better memory to set him straight. Tolkien kept notes on everything; J.K. Rowling kept fact sheets. Every long story needs a ledger of what is true in its world, and keeping one by hand is a second job on top of writing.
+
+NEO Canon keeps the fact sheet for you, fluidly, as you write. It never interrupts a sentence. When you pause, it checks what you wrote against what you have already established, and if something slips, it shows you the line it contradicts, quoted from your own pages, with the fix one click away.
+
+![A slip: Bramble is a mare](docs/semantics/screens/canon-slip-popover.png)
+
+## Built on NEO
+
+NEO Canon is built on [NEO](https://github.com/hughhowey/neo) by Hugh Howey, a distraction-free word processor for authors. Everything NEO does is still here, and a library written in one opens in the other: NEO Canon keeps the same `NEO Library` folder, and keeps its own Canon in separate `canon-*` folders that NEO ignores.
+
+## What Canon does
+
+- **A Canon for each shelf.** A shelf is a world: a series, a universe, one big story. Its Canon is the people, places, creatures and rules of that world.
+- **Entries are plain Markdown files.** Each one lists its facts, and every fact cites the passage it came from. Open them in any editor.
+- **Read the Shelf.** A local reader reads your books and proposes entries and facts. One-button download, then it works offline. Nothing leaves your computer.
+- **Continuity Pass.** Run it over a book or the whole shelf. Quiet checks also run when you pause, never mid-sentence.
+- **Slip popover with the exact fix.** A faint dotted mark on the word, and a card that says what is established and where. Apply the fix, change the fact, or mark it *Not a slip*.
+- **Change a fact across the series.** "Bramble is now male" gives you a review list of every line affected, with a snapshot taken first, so it is one undo away.
+- **Notebooks.** Free pages that live beside the Canon on the shelf.
+- **Needs You.** Where the reader was unsure, it asks you instead of guessing.
+- **`[[links]]` and backlinks.** Link entries to each other; every entry shows where it is mentioned.
+- **In this chapter.** The entries and facts in play where your caret is.
+- **⌘K Go to Anything.** Chapters, entries, facts, notebooks and commands from one box.
+- **World Map, 2D and 3D.** Your world as a map of who and what connects.
+
+![An entry with backlinks](docs/semantics/screens/canon-entry-backlinks.png)
+
+![Reviewing a change across the series](docs/semantics/screens/canon-review-changes.png)
+
+![Go to Anything](docs/semantics/screens/canon-go-anything.png)
+
+![The World Map in 3D](docs/semantics/screens/canon-map-3d-night.png)
+
+![The notebook shelf](docs/semantics/screens/canon-notebook-shelf.png)
+
+### Principles
+
+- **You are the writer.** Canon never generates prose and never suggests plot. It reads and remembers.
+- **Accuracy over speed.** Every fact quotes its source. A fact that is not verified against your text never raises a slip.
+- **Offline first.** The reader runs on your machine. Nothing is sent anywhere.
+- **Plain files.** Canon is Markdown and JSON in your library folder.
 
 ## Download
 
 Get the latest installer from the **[Releases page](../../releases)**:
 
-- **macOS** — download the `.dmg` for older Intel machines or the arm64 file for Mac silicon. Open it and drag NEO to Applications.
-- **Windows** — get `NEO-Setup` (the installer, which keeps itself up to date) and run it, or the `portable` `.exe`, which runs without installing.
+- **macOS** — download the `.dmg` for older Intel machines or the arm64 file for Mac silicon. Open it and drag NEO Canon to Applications.
+- **Windows** — get `NEO-Canon-Setup` (the installer, which keeps itself up to date) and run it, or the `portable` `.exe`, which runs without installing.
 
-  Your library lives in `Documents\NEO Library`. If OneDrive backs up your Documents folder, that puts your books in OneDrive too; File → Library Folder… moves the library anywhere you like. If Windows Security's *Controlled folder access* is on, Windows won't let NEO save in Documents: NEO says so when it starts, and you can allow NEO there or pick another folder.
+  Your library lives in `Documents\NEO Library`. If OneDrive backs up your Documents folder, that puts your books in OneDrive too; File → Library Folder… moves the library anywhere you like. If Windows Security's *Controlled folder access* is on, Windows won't let NEO Canon save in Documents: it says so when it starts, and you can allow it there or pick another folder.
 - **Linux** — download the `.AppImage`, make it executable, and run it:
 
   ```
-  chmod +x NEO-*.AppImage
-  ./NEO-*.AppImage
+  chmod +x NEO-Canon-*.AppImage
+  ./NEO-Canon-*.AppImage
   ```
 
-  If it complains about a sandbox (common on Ubuntu 24.04 and newer), run it as `./NEO-*.AppImage --no-sandbox`. Your library lives in `~/Documents/NEO Library`; File → Library Folder… moves it anywhere you like.
+  If it complains about a sandbox (common on Ubuntu 24.04 and newer), run it as `./NEO-Canon-*.AppImage --no-sandbox`. Your library lives in `~/Documents/NEO Library`; File → Library Folder… moves it anywhere you like.
 
-## Why NEO?
+## Everything NEO does
 
 **The bookshelf** 
 
@@ -89,37 +135,32 @@ Everything lives in `~/Documents/NEO Library` — one folder per book, chapters 
 
 ## Languages
 
-NEO speaks English, French, Spanish, Portuguese, German, Italian, Dutch, Polish, Romanian and Russian. Pick one under **View → Language**; on first launch NEO follows your system language when it has it. Adding a language is a single file, no programming needed: see [TRANSLATING.md](TRANSLATING.md).
+NEO Canon speaks English, French, Spanish, Portuguese, German, Italian, Dutch, Polish, Romanian and Russian. Pick one under **View → Language**; on first launch it follows your system language when it has it. Adding a language is a single file, no programming needed: see [TRANSLATING.md](TRANSLATING.md).
 
-## Building from source (for the eggheads):
+## Roadmap
+
+- **Stage 2, bring your own model.** Use Ollama, or your own OpenAI or Anthropic API key, in place of the local reader. Opt in, per shelf.
+- **Stage 3, a hosted web version** with login, for writing in a browser.
+
+## Development
 
 Requires [Node.js](https://nodejs.org).
 
 ```
-git clone https://github.com/hughhowey/neo.git
-cd neo
+git clone https://github.com/bfdcampos/neo-canon.git
+cd neo-canon
 npm install
 npm start
+npm test
+xvfb-run -a npx electron --no-sandbox scripts/canon.e2e.js
 ```
 
-**View → Keyboard Shortcuts…** opens the shortcut reference. You can also press `Cmd+/` on macOS or `Ctrl+/` on Windows and Linux, or use **Help → NEO Shortcuts**.
+The last line is the Canon end-to-end run (`npm run test:canon` on a machine with a display). Design notes are in [docs/semantics/](docs/semantics/): [PRODUCT](docs/semantics/PRODUCT.md), [ARCHITECTURE](docs/semantics/ARCHITECTURE.md), [IDE](docs/semantics/IDE.md), [ACCURACY](docs/semantics/ACCURACY.md), [RENAME](docs/semantics/RENAME.md). Agents: see [AGENTS.md](AGENTS.md). To build installers: `npm run package`, `npm run package:win` or `npm run package:linux`; output lands in `dist/`.
 
-To build installers: `npm install electron-builder --save-dev`, then `npm run package` (macOS, also `npm run package:mac`), `npm run package:win` (Windows), or `npm run package:all`. Output lands in `dist/`.
+Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Translating: [TRANSLATING.md](TRANSLATING.md).
 
-The app is very simple: an Electron shell (`main.js`), a preload bridge (`preload.js`), and a renderer (`app.js` + `styles.css` + `index.html`). If you know JavaScript, you can change NEO. Have at it.
+## Licence
 
-## Roadmap (things I'm dreaming up but may never get to):
+[MIT](LICENSE): free to use, free to modify, free to share.
 
-Chapter version history · manuscript format for agent submissions (Times New Roman, double-spaced, address block, just to make Kristin Nelson happy) · global end matter that updates every book at once (same for copyright pages, bios, etc).
-
-## Contributing
-
-Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Fair warning: NEO is opinionated by design, and bloat killed every writing app I've ever tried. If you want complex, try Scrivener. It really is a great application beloved by many! There are so many wonderful writing apps out there! Nobody needs to use this but me.
-
-## License
-
-[MIT](LICENSE) — free to use, free to modify, free to share.
-
-## Philosophy
-
-If you didn't know, I opened up the Silo universe to fan fiction years ago. And not just to put on fan fiction sites, but you can charge money for the things you write and keep every penny of the income! Lots of incredible Silo Stories out there. But readers are forever looking for more.
+NEO is copyright Hugh Howey; Canon is added by its contributors under the same licence.

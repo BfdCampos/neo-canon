@@ -17,6 +17,24 @@
   --page-w: clamp(680px, 44vw, 760px);
   /* the room the scrollbar and the page's own shadow need beside it */
   --page-gutter: 80px;
+  /* Canon's kinds (IDE.md §1): the map and the lists read these. Bright on
+     the dark room; deeper on white paper and in the light theme. */
+  --canon-person: #e8b465;
+  --canon-creature: #93c98a;
+  --canon-place: #72aee6;
+  --canon-thing: #e48f7c;
+  --canon-group: #b496e8;
+  --canon-rule: #5fcfc0;
+  --canon-other: #b3ada3;
+}
+body.light, body:not(.night) #aux-paper {
+  --canon-person: #b07a22;
+  --canon-creature: #4b8a45;
+  --canon-place: #2f72b0;
+  --canon-thing: #b5573f;
+  --canon-group: #7653b8;
+  --canon-rule: #1f8c80;
+  --canon-other: #8a8379;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2097,3 +2115,326 @@ body.light .side-card { background: #fbf5e3; border-color: #e6dfcc; }
 body.light .side-card-head { color: #5f5a50; }
 body.light .side-card textarea { color: #2b2926; }
 body.light .side-card textarea::placeholder { color: #a39d90; }
+
+/* ============================ CANON ============================ */
+/* The Canon tab: entries listed in the left pane, one on the page.  */
+::highlight(neo-canon-quote) { background: rgba(201, 168, 106, 0.35); }
+.cn-find {
+  display: block; width: calc(100% - 36px); margin: 0 18px 8px; padding: 6px 8px;
+  background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #ddd; font-size: 12px; outline: none;
+}
+.cn-find:focus { border-color: var(--accent); }
+.cn-kind-head { padding: 14px 18px 4px; font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.nav-item.cn-item .n-row { cursor: pointer; }
+.nav-item.cn-broken .n-label { font-style: italic; color: #777; }
+.cn-restore { background: none; border: none; color: var(--muted); font-size: 11px; opacity: 0; }
+.cn-item:hover .cn-restore, .cn-restore:focus-visible { opacity: 1; }
+.cn-restore:hover { color: var(--accent); }
+.cn-new {
+  display: block; width: calc(100% - 36px); margin: 14px 18px 0;
+  background: none; border: 1px dashed #3a3a3a; border-radius: 6px; color: #666; font-size: 12px; padding: 8px;
+}
+.cn-new:hover { color: var(--accent); border-color: var(--accent); }
+
+#canon-view { font-family: var(--body-font); font-size: calc(var(--editor-size, 16px) * var(--page-zoom, 1)); line-height: 1.6; }
+#canon-view button { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+.cn-note { color: #8a8478; font-style: italic; margin-bottom: 14px; }
+.cn-home .cn-h { margin-top: 36px; }
+.cn-name { font-size: 1.9em; font-weight: 400; outline: none; margin-bottom: 4px; }
+.cn-meta { display: flex; gap: 14px; margin-bottom: 28px; }
+.cn-meta button, .cn-btn, .cn-where, .cn-add {
+  background: none; border: none; padding: 0; color: #8a8478; font-size: 12px; letter-spacing: 0.3px;
+}
+.cn-meta button:hover, .cn-btn:hover, .cn-where:hover, .cn-add:hover { color: var(--accent); }
+.cn-h.cn-sub { margin-top: 18px; opacity: 0.85; }
+.cn-h { font-size: 11px; font-weight: 400; letter-spacing: 2.5px; text-transform: uppercase; color: #8a8478; margin: 26px 0 10px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.cn-facts { list-style: none; }
+.cn-fact { margin-bottom: 12px; }
+.cn-row { display: flex; align-items: baseline; gap: 2px; }
+.cn-dot { width: 7px; height: 7px; border-radius: 50%; margin-right: 9px; flex: none; position: relative; top: -1px; border: 1.5px solid #b9b2a2; }
+.st-verified .cn-dot { background: #8a8478; border-color: #8a8478; }
+.st-yours .cn-dot { border-radius: 1px 50% 1px 50%; transform: rotate(45deg); background: var(--accent); border-color: var(--accent); }
+.st-disagree .cn-dot { background: linear-gradient(90deg, #8a8478 50%, transparent 50%); }
+.cn-fl { color: #8a8478; margin-right: 0.35em; }
+.cn-ctl { margin-left: auto; display: flex; gap: 12px; opacity: 0; transition: opacity 0.12s; }
+.cn-fact:hover .cn-ctl, .cn-ctl:focus-within { opacity: 1; }
+.cn-src { margin: 2px 0 0 18px; font-size: 0.86em; color: #5f5a50; }
+.cn-src .cn-where { margin-right: 8px; text-decoration: underline dotted #c9c2b2; }
+.cn-quote { font-style: italic; }
+.cn-tag { margin-left: 8px; font-size: 11px; color: #9a9384; font-family: -apple-system, sans-serif; }
+.cn-changed, .cn-warn { color: #b0683c; }
+.cn-warn { margin-left: 18px; font-size: 12px; font-family: -apple-system, sans-serif; }
+.cn-add { margin: 4px 0 0 18px; opacity: 0; }
+.cn-entry:hover .cn-add, .cn-entry:focus-within .cn-add, .cn-add:focus-visible { opacity: 1; }
+.cn-add-input { margin: 4px 0 0 18px; width: 60%; font: inherit; padding: 2px 6px; border: 1px solid rgba(138,132,120,0.5); border-radius: 4px; background: transparent; color: inherit; outline: none; }
+.cn-words { min-height: 3em; outline: none; white-space: pre-wrap; }
+.cn-words:empty::before { content: attr(data-ph); color: #b9b4a8; font-style: italic; }
+.cn-src span.cn-where { text-decoration: none; }
+
+/* A Continuity Pass: slips under a muted gold dotted line, never in the file */
+::highlight(neo-slip) {
+  text-decoration: underline dotted #b39250; text-decoration-thickness: 2px; text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+.canon-pop {
+  position: fixed; z-index: 320; width: 360px; padding: 14px 16px 12px;
+  background: #262626; border: 1px solid #3a3a3a; border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+  color: #ddd; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+.canon-pop .cp-claim { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.canon-pop .cp-where, .canon-pop .cp-why { color: #9a9a9a; font-size: 12px; }
+.canon-pop .cp-quote { display: block; margin: 6px 0; font-family: var(--body-font); font-style: italic; color: #c9c2b2; }
+.canon-pop .cp-change { margin: 10px 0 2px; font-family: var(--body-font); font-size: 15px; }
+.canon-pop .cp-change s { color: #9a9a9a; }
+.canon-pop .cp-change b { color: var(--accent); font-weight: 600; }
+.canon-pop .cp-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.canon-pop button {
+  background: none; border: 1px solid #444; border-radius: 5px; color: #ccc; padding: 4px 9px; font-size: 12px;
+}
+.canon-pop button:hover { border-color: var(--accent); color: #fff; }
+.canon-pop button.cp-main { border-color: var(--accent); color: var(--accent); }
+.canon-pop button.cp-swap { font-family: var(--body-font); font-size: 13.5px; }
+body.light .canon-pop { background: #fff; border-color: #d9d4ca; color: #222; box-shadow: 0 8px 28px rgba(0,0,0,0.16); }
+body.light .canon-pop button { color: #555; border-color: #ccc; }
+body.light .canon-pop .cp-where, body.light .canon-pop .cp-why, body.light .canon-pop .cp-change s { color: #6e695f; }
+body.light .canon-pop .cp-quote { color: #4a463f; }
+body.light .canon-pop button.cp-main { color: #8a6a1c; border-color: #b39250; }
+
+/* the pass's slips in the right-hand pane, which stays open meanwhile */
+#editor-view.canon-side #sticky-list, #editor-view.canon-side #side-cards, #editor-view.canon-side .side-title-notes { display: none; }
+#editor-view.canon-side #paper-scroll { left: calc(50% - 125px * var(--ui-zoom)); }
+#canon-side { padding: 0 14px 16px; font-size: 13px; color: #bbb; }
+#canon-side .cs-title { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); padding: 0 4px 8px; }
+#canon-side .cs-scope { display: flex; gap: 6px; margin: 0 4px 10px; }
+#canon-side .cs-scope button { background: none; border: 1px solid #3a3a3a; border-radius: 12px; color: #888; font-size: 11.5px; padding: 3px 10px; }
+#canon-side .cs-scope button.on { border-color: var(--accent); color: var(--accent); }
+#canon-side .cs-note { color: #888; font-size: 12px; padding: 4px; font-style: italic; }
+#canon-side .cs-slip {
+  display: block; width: 100%; text-align: left; background: none; border: none; border-left: 2px solid transparent;
+  color: #ccc; padding: 7px 8px; font-size: 12.5px; line-height: 1.4;
+}
+#canon-side .cs-slip:hover { background: #282828; border-left-color: #b39250; }
+#canon-side .cs-count { white-space: nowrap; }
+#canon-side .cs-where { color: #777; }
+#canon-side q { font-family: var(--body-font); font-style: italic; color: #aaa; }
+.cn-read { margin: 4px 0 12px; }
+/* the reader's setup page and Read the Shelf: a thin bar, a line, one button */
+.cn-bar { height: 3px; background: rgba(138,132,120,0.22); border-radius: 2px; overflow: hidden; margin: 6px 0 10px; max-width: 420px; }
+.cn-bar i { display: block; height: 100%; background: var(--accent); transition: width 0.4s; }
+.cn-setup .btn-gold, .cn-setup > .cn-btn { margin: 2px 0 14px; }
+.cn-progress .cn-paused:empty { display: none; }
+.cn-progress .cn-stop { margin-bottom: 12px; }
+.cn-ready { color: var(--accent); font-style: normal; }
+.cn-more { margin: 4px 0 16px; color: #8a8478; font-size: 0.9em; }
+.cn-more summary { cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; list-style: none; }
+.cn-more summary::-webkit-details-marker { display: none; }
+.cn-more summary:hover { color: var(--accent); }
+.cn-choice { margin: 10px 0 0 2px; }
+.cn-choice .cn-note { margin: 2px 0 0; font-size: 0.9em; }
+.cn-fine { font-size: 0.8em; margin-top: 10px; }
+.cn-setup .cn-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.cn-setup .cn-foot > .cn-note { margin: 0; }
+.cn-setup .cn-hand { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(138,132,120,0.25); display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.cn-setup .cn-hand .cn-note { margin: 0; font-style: italic; }
+.cn-home .cn-inline { margin-left: 4px; }
+#canon-side .cs-need { padding: 8px 6px 10px; border-bottom: 1px solid #2c2c2c; line-height: 1.4; }
+#canon-side .cs-need strong { color: #ddd; font-weight: 600; }
+#canon-side .cs-src { margin-top: 4px; color: #999; font-size: 12px; }
+#canon-side .cs-where-btn { background: none; border: none; padding: 0; color: #888; font-size: 12px; text-decoration: underline dotted #555; }
+#canon-side .cs-where-btn:hover { color: var(--accent); }
+#canon-side .cs-tag { color: #b0683c; font-size: 11.5px; }
+#canon-side .cs-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
+#canon-side .cs-row button { background: none; border: 1px solid #3a3a3a; border-radius: 5px; color: #aaa; font-size: 11.5px; padding: 3px 9px; }
+#canon-side .cs-row button:hover { border-color: var(--accent); color: #fff; }
+#editor-view.canon-side #side-head > span:first-child { visibility: hidden; }
+/* Canon: Review Changes (a fact changed across the series) */
+#canon-side .cs-review { padding: 8px 6px 10px; border-bottom: 1px solid #2c2c2c; line-height: 1.45; }
+#canon-side .cs-sent { margin: 4px 0 6px; font-family: var(--body-font); font-size: 13.5px; color: #cfcac0; }
+#canon-side .cs-sent s { color: #8a8a8a; }
+#canon-side .cs-sent b { color: var(--accent); font-weight: 600; }
+#canon-side .cs-sent mark { background: none; color: #d9a074; text-decoration: underline dotted; }
+#canon-side .cs-row button.cs-main { border-color: var(--accent); color: var(--accent); }
+#canon-side .cs-review-top { margin: 4px 0 12px; flex-wrap: nowrap; gap: 5px; }
+#canon-side .cs-review-top button { white-space: nowrap; padding: 3px 6px; font-size: 11px; flex: none; }
+#canon-side .cs-applied, #canon-side .cs-edited, #canon-side .cs-skipped { opacity: 0.6; }
+#canon-side .cs-done { color: var(--accent); font-size: 12.5px; padding: 4px 4px 10px; }
+.canon-pop .cp-ask { margin: 10px 0 2px; font-size: 12.5px; line-height: 1.45; max-width: 340px; }
+/* Canon: a notebook on the shelf, a cloth field notebook: shorter and
+   narrower than a book, an elastic band down the right edge, a ribbon at
+   the foot, its title on a paper label. No cover art, no progress bar. */
+.book.nb-tile {
+  width: 94px; height: 136px; align-self: flex-end; display: block; overflow: visible; border-radius: 3px 7px 7px 3px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0,0,0,0.12) 0 1px, transparent 1px 3px),
+    linear-gradient(90deg, #26302a, #33413a 30%, #2d3a33);
+  box-shadow: inset 3px 0 6px -3px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.05), 2px 3px 8px rgba(0,0,0,0.5);
+}
+.nb-tile .nb-band { position: absolute; right: 11px; top: -1px; bottom: -1px; width: 5px; background: linear-gradient(90deg, #0d0d0d, #2b2b2b 50%, #0d0d0d); box-shadow: 0 0 2px rgba(0,0,0,0.7); }
+.nb-tile .nb-label {
+  position: absolute; left: 11px; right: 24px; top: 26%; padding: 7px 5px; border-radius: 1px;
+  background: #ece5d3; color: #2a2620; font-family: var(--body-font); font-size: 9.5px; line-height: 1.25;
+  text-align: center; overflow-wrap: anywhere; box-shadow: 0 1px 2px rgba(0,0,0,0.45); pointer-events: none;
+}
+.nb-tile .nb-ribbon { position: absolute; left: 38%; bottom: -11px; width: 6px; height: 16px; background: #8c2f2a; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); }
+/* a page left out of Canon: a small hollow ring beside its title, on hover */
+.nav-item.cn-out .n-label::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 7px; border: 1.2px solid var(--muted); border-radius: 50%; vertical-align: 1px; opacity: 0; transition: opacity 0.12s; }
+.nav-item.cn-out:hover .n-label::after, .nav-item.cn-out:focus-within .n-label::after { opacity: 1; }
+#canon-side .cs-dismissed-head { display: block; margin: 16px 4px 4px; padding: 0; background: none; border: none; color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+#canon-side .cs-dismissed-head:hover { color: var(--accent); }
+#canon-side q.cs-src { display: block; font-style: italic; }
+.cn-home .cn-again { margin: 0 0 12px 18px; }
+/* Canon as an IDE (docs/semantics/IDE.md): links, Linked from, Mentioned in */
+.cn-link {
+  background: none; border: none; padding: 0; font: inherit; color: inherit; text-align: inherit; cursor: pointer;
+  text-decoration: underline transparent; text-underline-offset: 3px; text-decoration-thickness: 1px; transition: text-decoration-color 0.12s;
+}
+.cn-link:hover, .cn-link:focus-visible { text-decoration-color: currentColor; outline: none; }
+.cn-link.cn-unresolved { text-decoration: underline dotted; text-decoration-color: #9a9384; }
+.cn-link.cn-unresolved:hover { color: var(--accent); }
+.cn-fv.cn-link { font-family: var(--body-font); }
+.cn-words .cn-link { font-style: inherit; }
+.cn-back-list { list-style: none; }
+.cn-back { margin: 0 0 7px; line-height: 1.45; }
+.cn-why, .cn-where-in { color: #8a8478; }
+.cn-pass { background: none; border: none; padding: 0; color: inherit; text-align: left; font-family: var(--body-font) !important; font-size: 0.92em; cursor: pointer; }
+.cn-pass i { font-style: italic; }
+.cn-pass q { color: #6f6a60; font-style: normal; transition: color 0.12s; }
+.cn-pass q b { font-weight: 600; color: var(--ink); }
+.cn-pass:hover q, .cn-pass:focus-visible q { color: inherit; }
+.cn-pass:focus-visible { outline: none; }
+.cn-show-all { margin: 2px 0 0; }
+#canon-view .cn-link, #canon-view .cn-pass, #canon-here .cn-link { font-family: var(--body-font); }
+body.night .cn-pass q { color: #8f897d; }
+/* In this chapter / On this page: below the side cards */
+#canon-here { padding: 0 16px; font-size: 13px; }
+#canon-here:not(:empty) { margin-bottom: 22px; }
+#editor-view.outline-tab #canon-here, #editor-view.darlings-tab #canon-here, #editor-view.canon-side #canon-here { display: none; }
+#canon-here .ch-title { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
+#canon-here .ch-row { margin-bottom: 9px; }
+#canon-here .ch-kind { font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: #77736b; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+#canon-here .ch-kind::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--kind); box-shadow: 0 0 6px var(--kind); }
+#canon-here .ch-names { line-height: 1.55; color: #cfcac0; }
+#canon-here .ch-sep { color: #5d5a54; }
+#canon-here .ch-name { background: none; border: none; padding: 0; color: inherit; font: inherit; text-align: left; text-decoration: underline transparent; text-underline-offset: 3px; transition: color 0.12s, text-decoration-color 0.12s; }
+#canon-here .ch-name:hover, #canon-here .ch-name:focus-visible { text-decoration-color: currentColor; outline: none; }
+#canon-here .ch-name.here { color: var(--accent); }
+#canon-here .ch-facts { min-height: 1.4em; font-size: 12px; font-style: italic; color: #8f8a80; font-family: var(--body-font); }
+#canon-here .ch-back { background: none; border: none; padding: 0; margin-bottom: 10px; color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+#canon-here .ch-back:hover { color: var(--accent); }
+/* an entry beside the page: the entry page, set small for the pane */
+#editor-view.canon-aside #side-cards, #editor-view.canon-aside #sticky-list, #editor-view.canon-aside #side-head { display: none; }
+#canon-here .cn-entry { font-family: var(--body-font); font-size: 13.5px; line-height: 1.5; color: #d6d2c6; }
+#canon-here .cn-entry button { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+#canon-here .cn-name { font-size: 1.5em; }
+#canon-here .cn-meta { margin-bottom: 14px; flex-wrap: wrap; gap: 4px 12px; }
+#canon-here .cn-h { margin: 16px 0 6px; }
+#canon-here .cn-row { flex-wrap: wrap; }
+#canon-here .cn-ctl { margin-left: 0; width: 100%; }
+#canon-here .cn-src { margin-left: 12px; }
+body.light #canon-here .ch-names { color: #3a362f; }
+body.light #canon-here .ch-sep { color: #c3bdb1; }
+body.light #canon-here .ch-kind { color: #8f897d; }
+body.light #canon-here .cn-entry { color: #2b2926; }
+/* Go to Anything (⌘K): one field near the top, the width of the page */
+.go-backdrop { position: fixed; inset: 0; z-index: 940; background: rgba(8, 8, 8, 0.42); animation: go-in 0.12s ease-out; zoom: var(--ui-zoom, 1); }
+@keyframes go-in { from { opacity: 0; } }
+.go-box {
+  position: absolute; left: 50%; top: 12vh; transform: translateX(-50%);
+  width: min(calc(var(--page-w) * var(--page-zoom, 1)), calc(100vw - 48px));
+  background: #232323; border: 1px solid #3a3a3a; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+.go-input { display: block; width: 100%; background: none; border: none; outline: none; color: #eee; font: 17px/1.3 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; padding: 17px 20px; }
+.go-input::placeholder { color: #6b675f; }
+.go-list { max-height: min(60vh, 520px); overflow-y: auto; }
+.go-list:not(:empty) { border-top: 1px solid #333; padding: 6px; }
+.go-row { display: flex; align-items: center; gap: 14px; padding: 8px 12px; border-radius: 7px; cursor: pointer; }
+.go-row.on { background: #2f2e2b; box-shadow: inset 2px 0 0 var(--accent); }
+.go-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; white-space: nowrap; }
+.go-title { color: #e9e5dc; font-weight: 600; flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+.go-title.go-kind::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; background: var(--kind, var(--accent)); box-shadow: 0 0 6px var(--kind, transparent); }
+.go-sub { color: #8f8a80; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.go-snip { font-family: var(--body-font); font-size: 13.5px; font-style: italic; }
+.go-snip b { color: #e9e5dc; font-weight: 600; }
+.go-group { flex: none; font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: #6f6b64; display: flex; gap: 10px; align-items: baseline; }
+.go-group kbd { font: 11.5px -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: 0; text-transform: none; color: #8f8a80; }
+.go-none { padding: 14px 16px; color: #8f8a80; font-style: italic; }
+body.light .go-backdrop { background: rgba(60, 54, 44, 0.18); }
+body.light .go-box { background: #fff; border-color: #d9d4ca; box-shadow: 0 24px 70px rgba(40,34,24,0.18), 0 2px 8px rgba(40,34,24,0.08); }
+body.light .go-input { color: #2b2926; }
+body.light .go-input::placeholder { color: #aaa49a; }
+body.light .go-list:not(:empty) { border-top-color: #ebe7df; }
+body.light .go-row.on { background: #f3f0ea; }
+body.light .go-title, body.light .go-snip b { color: #2b2926; }
+body.light .go-sub, body.light .go-group kbd { color: #8a8379; }
+body.light .go-group { color: #a39d90; }
+/* The World Map: the full view over the page, and the small one in the pane */
+#map-view { position: fixed; inset: 0 0 40px 0; z-index: 55; background: #121212; animation: map-in 0.25s ease-out; }
+@keyframes map-in { from { opacity: 0; } }
+#map-view .map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#map-view .map-title {
+  position: absolute; left: 36px; top: 30px; pointer-events: none;
+  font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: rgba(214, 208, 196, 0.42);
+}
+#map-view .map-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; font-family: var(--body-font); font-style: italic; font-size: 17px; color: #8f8a80; }
+#map-view .map-controls {
+  position: absolute; right: 24px; top: 24px; width: 214px; padding: 14px; border-radius: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  background: rgba(30, 30, 28, 0.72); border: 1px solid rgba(255, 255, 255, 0.06); backdrop-filter: blur(10px);
+  opacity: 0; transform: translateY(-4px); transition: opacity 0.18s, transform 0.18s;
+  font: 12.5px/1.3 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: #cfcac0;
+}
+#map-view:hover .map-controls, #map-view .map-controls:focus-within { opacity: 1; transform: none; }
+#map-view .map-modes { display: flex; background: rgba(0, 0, 0, 0.28); border-radius: 8px; padding: 3px; }
+#map-view .map-modes button { flex: 1; background: none; border: none; border-radius: 6px; color: #8f8a80; padding: 5px 0; font-size: 12px; letter-spacing: 1px; transition: background 0.15s, color 0.15s; }
+#map-view .map-modes button.on { background: rgba(255, 255, 255, 0.1); color: #f2eee5; }
+#map-view .map-find { width: 100%; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; color: #eee; font: inherit; padding: 6px 9px; outline: none; }
+#map-view .map-find:focus { border-color: var(--accent); }
+#map-view .map-find::placeholder { color: #77736b; }
+#map-view .map-legend { display: flex; flex-direction: column; gap: 2px; }
+#map-view .map-kind { display: flex; align-items: center; gap: 9px; background: none; border: none; padding: 3px 2px; color: #d6d1c6; text-align: left; font: inherit; border-radius: 5px; }
+#map-view .map-kind::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--kind); box-shadow: 0 0 8px var(--kind); transition: opacity 0.15s; }
+#map-view .map-kind:hover { color: #fff; }
+#map-view .map-kind.off { color: #6f6b64; }
+#map-view .map-kind.off::before { opacity: 0.25; box-shadow: none; }
+#map-view .map-together { display: flex; align-items: center; gap: 6px; color: #9a958b; cursor: pointer; }
+#map-view .map-together input { accent-color: var(--accent); }
+body.light #map-view { background: #f2efe8; }
+body.light #map-view .map-title { color: rgba(80, 74, 64, 0.5); }
+body.light #map-view .map-controls { background: rgba(255, 255, 255, 0.78); border-color: rgba(0, 0, 0, 0.07); color: #3a362f; box-shadow: 0 8px 28px rgba(40, 34, 24, 0.1); }
+body.light #map-view .map-modes { background: rgba(0, 0, 0, 0.05); }
+body.light #map-view .map-modes button.on { background: #fff; color: #2b2926; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
+body.light #map-view .map-find { background: #fff; border-color: #ddd8ce; color: #2b2926; }
+body.light #map-view .map-kind { color: #3a362f; }
+body.light #map-view .map-kind.off { color: #b0aa9e; }
+body.light #map-view .map-together { color: #6f6a60; }
+.map-small { position: relative; height: 180px; margin: 0 2px 18px; border-radius: 10px; overflow: hidden; border: 1px solid #2c2c2a; }
+.map-small canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.map-small .map-open {
+  position: absolute; right: 8px; bottom: 8px; padding: 4px 9px; border-radius: 6px; font-size: 11px;
+  background: rgba(20, 20, 19, 0.75); border: 1px solid rgba(255, 255, 255, 0.1); color: #d6d1c6;
+  opacity: 0; transition: opacity 0.15s;
+}
+.map-small:hover .map-open, .map-small .map-open:focus-visible { opacity: 1; }
+.map-small .map-open:hover { color: var(--accent); border-color: var(--accent); }
+body.light .map-small { border-color: #e2ddd3; }
+body.light .map-small .map-open { background: rgba(255, 255, 255, 0.85); border-color: #d9d4ca; color: #3a362f; }
+body.light #canon-side { color: #4a463f; }
+body.light #canon-side .cs-need, body.light #canon-side .cs-review { border-bottom-color: #e6e2da; }
+body.light #canon-side .cs-need strong { color: #2b2926; }
+body.light #canon-side .cs-slip { color: #2b2926; }
+body.light .cn-note, body.light .cn-more { color: #6e695f; }
+body.light #canon-side .cs-slip:hover { background: #e8e5de; }
+body.light #canon-side .cs-where, body.light #canon-side .cs-note { color: #6e695f; }
+body.light #canon-side .cs-scope button { border-color: #d9d4ca; color: #6e695f; }
+body.light #canon-side .cs-scope button.on { border-color: var(--accent); color: #8a6a1c; }
+body.light #canon-side .cs-tag { color: #9a4f22; }
+body.light #canon-side .cs-src, body.light #canon-side .cs-where-btn { color: #7a756b; }
+body.light #canon-side q { color: #5f5a50; }
+body.light #canon-side .cs-row button { border-color: #d9d4ca; color: #5f5a50; }
+body.light #canon-side .cs-row button:hover { color: #2b2926; }
+body.light #canon-side .cs-sent { color: #3a362f; }
+body.light .cn-find { background: #fff; border-color: #d9d4ca; color: #2b2926; }
+body.light .cn-new { border-color: #cfc9be; color: #8a8379; }

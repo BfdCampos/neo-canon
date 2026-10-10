@@ -1,0 +1,18 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-lan",
+      "name": "The Lantern Coast",
+      "bookIds": [
+        "book-the-keepers-year-key1",
+        "book-the-dark-light-dark2",
+        "book-keepers-notes-kn3"
+      ],
+      "canonId": "canon-the-lantern-coast-shelf-lan"
+    }
+  ]
+}

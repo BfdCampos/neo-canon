@@ -73,5 +73,45 @@
   "Snapshot taken, {time}: {n} chapters changed. It’s on the Darlings tab.": {
     "one": "Snapshot taken, {time}: {n} chapter changed. It’s on the Darlings tab.",
     "other": "Snapshot taken, {time}: {n} chapters changed. It’s on the Darlings tab."
+  },
+  "{n} books": {
+    "one": "{n} book",
+    "other": "{n} books"
+  },
+  "{n} notebooks": {
+    "one": "{n} notebook",
+    "other": "{n} notebooks"
+  },
+  "about {n} minutes": {
+    "one": "about a minute",
+    "other": "about {n} minutes"
+  },
+  "about {n} hours": {
+    "one": "about an hour",
+    "other": "about {n} hours"
+  },
+  "{n} entries": {
+    "one": "{n} entry",
+    "other": "{n} entries"
+  },
+  "{n} facts": {
+    "one": "{n} fact",
+    "other": "{n} facts"
+  },
+  "{n} need you": {
+    "one": "{n} needs you",
+    "other": "{n} need you"
+  },
+  "{n} passages": {
+    "one": "{n} passage",
+    "other": "{n} passages"
+  },
+  "{n} passages changed": {
+    "one": "{n} passage changed",
+    "other": "{n} passages changed"
+  },
+  "{n} need your words": {
+    "one": "{n} needs your words",
+    "other": "{n} need your words"
   }
 }

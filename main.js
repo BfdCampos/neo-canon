@@ -1907,7 +1907,7 @@ async function dailyBackup() {
         if (rel === '' && skip.has(name)) continue;
         // only NEO's own things: a library kept in a busy folder (Dropbox,
         // Documents) doesn't zip everything else in there every day
-        if (rel === '' && !(name.startsWith('book-') || name.startsWith('library.json') || name === '_catalog.txt')) continue;
+        if (rel === '' && !(name.startsWith('book-') || name.startsWith('canon-') || name.startsWith('library.json') || name === '_catalog.txt')) continue;
         // a book's snapshots stay out: the zip stays the size of the books,
         // and the snapshots are already a history of their own
         if (name === 'snapshots' && rel.startsWith('book-') && !rel.includes('/')) continue;
@@ -2194,12 +2194,546 @@ ipcMain.handle('spell:learn', async (_e, word) => {
 });
 
 // ---------------------------------------------------------------------------
+// Canon (docs/semantics/ARCHITECTURE.md). A shelf that keeps a Canon has a
+// folder of its own, canon-<slug>-<shelfId>/: canon.json, not-slips.json,
+// entries/<id>.md and set-aside/<id>.md. canon.js decides everything; this
+// reads and writes the files, always through libName and writeFileDurable,
+// and only when what would be written differs from what's there.
+// ---------------------------------------------------------------------------
+const Canon = require('./canon.js');
+
+function canonDir(canonId) {
+  if (!/^canon-/.test(libName(canonId))) throw new Error('Invalid canon name');
+  return path.join(LIBRARY_DIR, canonId);
+}
+const canonFile = (canonId, ...parts) => path.join(canonDir(canonId), ...parts.map(libName));
+const fileStamp = (file) => { try { const st = fs.statSync(file); return st.mtimeMs + ':' + st.size; } catch { return null; } };
+
+// each entry file: its id is its file name; one Canon can't read says
+// which line, and the name and kind it could find
+function canonEntryFiles(canonId, folder = 'entries') {
+  const dir = canonFile(canonId, folder);
+  let names = [];
+  // (files only: a sync tool's conflict folder named like an entry is passed by)
+  try { names = fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile() && d.name.endsWith('.md')).map((d) => d.name); } catch { return []; }
+  return names.flatMap((f) => {
+    try { return [{ id: f.slice(0, -3), file: path.join(dir, f), text: fs.readFileSync(path.join(dir, f), 'utf8') }]; } catch (err) { logError('canon entry ' + f, err); return []; }
+  });
+}
+function canonEntries(canonId, folder = 'entries') {
+  return canonEntryFiles(canonId, folder).map(({ id, file, text }) => {
+    const data = Canon.parseEntry(text);
+    return { id, stamp: fileStamp(file), ...(data.error ? data : { data: { ...data, id } }) };
+  });
+}
+
+// Keep a Canon for This Shelf: a folder kept from an earlier time is taken
+// up again, with everything in it
+ipcMain.handle('canon:create', (_e, shelfId, shelfName) => {
+  ensureLibrary();
+  libName(shelfId);
+  let id = fs.readdirSync(LIBRARY_DIR).find((d) => d.startsWith('canon-') && d.endsWith('-' + shelfId));
+  if (!id) id = 'canon-' + (Canon.slug(shelfName) === 'entry' ? '' : Canon.slug(shelfName).slice(0, 30) + '-') + shelfId;
+  for (const sub of ['entries', 'set-aside']) fs.mkdirSync(canonFile(id, sub), { recursive: true });
+  if (!fs.existsSync(canonFile(id, 'canon.json'))) writeJSON(canonFile(id, 'canon.json'), { v: 1, shelfId, read: {}, out: {}, settings: {} });
+  if (!fs.existsSync(canonFile(id, 'not-slips.json'))) writeJSON(canonFile(id, 'not-slips.json'), []);
+  return id;
+});
+
+ipcMain.handle('canon:open', (_e, canonId) => ({
+  meta: readJSON(canonFile(canonId, 'canon.json'), { v: 1, read: {}, out: {} }),
+  entries: canonEntries(canonId),
+  setAside: canonEntries(canonId, 'set-aside'),
+  notSlips: readJSON(canonFile(canonId, 'not-slips.json'), []),
+  reader: canonReaderStatus(),
+  shelf: canonShelfSize(canonId)
+}));
+
+// what Read the Shelf has before it: books, notebooks and their words
+function canonShelfSize(canonId) {
+  const out = readJSON(canonFile(canonId, 'canon.json'), {}).out || {};
+  const sources = canonSources(canonId).filter((s) => !(out[s.bookId] || []).includes(s.chId));
+  const words = sources.reduce((n, s) => n + Canon.sourceParas(s.html).reduce((m, p) => m + (p.text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).length, 0), 0);
+  const notebooks = new Set(sources.filter((s) => !s.notes && s.notebook).map((s) => s.bookId)).size;
+  return { books: new Set(sources.map((s) => s.bookId)).size - notebooks, notebooks, words };
+}
+
+// hand edits from a text editor or another device, found by their stamps
+ipcMain.handle('canon:refresh', (_e, canonId, stamps) => {
+  const now = canonEntries(canonId);
+  return {
+    changed: now.filter((x) => (stamps || {})[x.id] !== x.stamp),
+    removed: Object.keys(stamps || {}).filter((id) => !now.some((x) => x.id === id))
+  };
+});
+
+// `stamp` is the file as the window last had it: another write since then
+// hands back what's there for the window to apply its change to again
+ipcMain.handle('canon:saveEntry', (_e, canonId, entry, stamp) => {
+  const file = canonFile(canonId, 'entries', libName(entry.id) + '.md');
+  const now = fileStamp(file);
+  if (now !== (stamp || null)) {
+    const data = now ? Canon.parseEntry(fs.readFileSync(file, 'utf8')) : { error: 'gone' };
+    return { conflict: true, entry: data.error ? null : { ...data, id: entry.id }, stamp: now };
+  }
+  const text = Canon.serialiseEntry(entry);
+  let old = null;
+  try { old = fs.readFileSync(file, 'utf8'); } catch { /* new */ }
+  if (old !== text) writeFileDurable(file, text);
+  return { ok: true, stamp: fileStamp(file) };
+});
+
+// Set Aside an entry, or bring it back: the file moves, nothing is deleted.
+// Set aside beside one of the same name, it takes the next free one (and
+// answers with it); brought back onto a name in use, it stays where it is.
+function canonMove(canonId, entryId, from, to) {
+  const src = canonFile(canonId, from, libName(entryId) + '.md');
+  let id = entryId;
+  if (to === 'set-aside') for (let n = 2; fs.existsSync(canonFile(canonId, to, id + '.md')); n++) id = entryId + '-' + n;
+  const dest = canonFile(canonId, to, id + '.md');
+  if (!fs.existsSync(src) || fs.existsSync(dest)) return false;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  renameIntoPlace(src, dest);
+  return id;
+}
+ipcMain.handle('canon:setAside', (_e, canonId, entryId) => canonMove(canonId, entryId, 'entries', 'set-aside'));
+ipcMain.handle('canon:restore', (_e, canonId, entryId) => canonMove(canonId, entryId, 'set-aside', 'entries'));
+
+ipcMain.handle('canon:saveMeta', (_e, canonId, patch) => {
+  const file = canonFile(canonId, 'canon.json');
+  const meta = readJSON(file, { v: 1 });
+  const next = { ...meta };
+  for (const k of ['out', 'settings']) if (patch && patch[k] !== undefined) next[k] = patch[k];
+  // a page brought back into Canon is read again, whatever it read as before
+  if (patch && patch.unread && patch.unread.length) next.read = Object.fromEntries(Object.entries(meta.read || {}).filter(([k]) => !patch.unread.includes(k)));
+  if (JSON.stringify(next) !== JSON.stringify(meta)) writeJSON(file, next);
+  return true;
+});
+
+// The shelf's books as Canon reads them, in shelf order (reading order): a
+// book's story chapters, then its Notes; a notebook's pages by their titles
+const CANON_STORY = ['chapter', 'unnumbered', 'prologue', 'epilogue'];
+function canonSources(canonId) {
+  const shelf = (readJSON(LIBRARY_FILE, { shelves: [] }).shelves || []).find((s) => s.canonId === canonId);
+  const out = [];
+  for (const bookId of shelf ? shelf.bookIds : []) {
+    const meta = readJSON(path.join(bookDir(bookId), 'book.json'), null);
+    if (!meta || !Array.isArray(meta.chapterOrder)) continue;
+    const notebook = meta.format === 'notebook';
+    const read = (file) => { try { return fs.readFileSync(file, 'utf8'); } catch { return ''; } };
+    let n = 0;
+    for (const chId of meta.chapterOrder) {
+      const kind = (meta.chapterKinds || {})[chId] || 'chapter';
+      if (!notebook && !CANON_STORY.includes(kind)) continue;
+      const title = (meta.chapterTitles || {})[chId];
+      const label = notebook ? title || 'Page' : kind === 'chapter' ? 'Ch ' + (++n) : kind === 'unnumbered' ? title || 'Chapter' : kind[0].toUpperCase() + kind.slice(1);
+      out.push({ bookId, chId, book: meta.title, label, notebook, html: read(path.join(bookDir(bookId), 'chapters', libName(chId) + '.html')) });
+    }
+    if (!notebook) out.push({ bookId, chId: 'notes', book: meta.title, label: 'Notes', notes: true, html: read(path.join(bookDir(bookId), 'notes.html')) });
+  }
+  return out;
+}
+
+// the engine's way to one Canon's files (the cache is this device's own)
+function canonIO(canonId) {
+  const cacheFile = path.join(app.getPath('userData'), 'canon-cache', libName(canonId), 'index.json');
+  return {
+    sources: () => canonSources(canonId),
+    meta: () => readJSON(canonFile(canonId, 'canon.json'), { v: 1 }),
+    saveMeta: (meta) => writeJSON(canonFile(canonId, 'canon.json'), meta),
+    entries: () => canonEntryFiles(canonId).map(({ id, text }) => ({ id, text })),
+    saveEntry: (id, text) => writeFileDurable(canonFile(canonId, 'entries', libName(id) + '.md'), text),
+    notSlips: () => readJSON(canonFile(canonId, 'not-slips.json'), []),
+    cache: () => readJSON(cacheFile, null),
+    saveCache: (cache) => { fs.mkdirSync(path.dirname(cacheFile), { recursive: true }); writeFileDurable(cacheFile, JSON.stringify(cache)); },
+    knownWords: async (words) => {
+      const res = await spellRequest({ type: 'check', words });
+      return res.ok ? res.result : Object.fromEntries(words.map((w) => [w, true])); // no dictionary: nothing is misspelt
+    }
+  };
+}
+
+// The Continuity Pass. Each source's slips go to the window as they're found.
+// A quiet check (mode 'quiet', after the writer has paused) first reads the
+// chapter into Canon if it changed, then checks only the paragraphs it
+// hasn't checked this session; that memory is kept here, not on disk.
+let canonStopped = false;
+const canonQuietDone = new Map(); // canonId/bookId/chId → Set of paragraph hashes
+const canonSend = (e, msg) => { if (!e.sender.isDestroyed()) e.sender.send('canon', msg); };
+ipcMain.handle('canon:check', async (e, opts) => {
+  canonStopped = false;
+  const reader = canonReader({ urgent: opts.mode !== 'quiet' });
+  const engine = Canon.createEngine({ io: canonIO(opts.canonId), reader });
+  if (opts.mode !== 'quiet') {
+    return engine.check({ ...opts, stop: () => canonStopped,
+      onSource: (src, slips, n, of) => canonSend(e, { type: 'checked', run: opts.run, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, n, of, slips }) });
+  }
+  const key = [opts.canonId, opts.bookId, opts.chId].join('/');
+  const read = readJSON(canonFile(opts.canonId, 'canon.json'), {}).read || {};
+  if (reader && !canonReading && Object.keys(read).length) {
+    canonReading = engine.readShelf({ only: opts.bookId + '/' + opts.chId, stop: () => canonStopped });
+    try { await canonReading; } catch (err) { if (err.code !== 'stopped') logError('canon quiet read', err); } finally { canonReading = null; }
+  }
+  const done = canonQuietDone.get(key) || new Set();
+  const skip = opts.skip ? Canon.norm(opts.skip) : null;
+  const checked = Canon.sourceParas((opts.html || {})[opts.chId] || '').filter((p) => !done.has(p.hash) && Canon.norm(p.text) !== skip).map((p) => p.hash);
+  const res = await engine.check({ ...opts, done, stop: () => canonStopped });
+  canonQuietDone.set(key, new Set([...done, ...checked]));
+  return { ...res, checked };
+});
+ipcMain.handle('canon:stop', () => {
+  canonStopped = true;
+  if (canonRunning) { canonRunning(); canonRunning = null; }
+  return true;
+});
+
+// Read the Shelf (and every read after it): only what changed is read again.
+// One read at a time; progress goes to the window as it goes.
+let canonReading = null;
+ipcMain.handle('canon:readShelf', async (e, canonId, opts = {}) => {
+  const reader = canonReader();
+  if (!reader) return { error: 'no-reader' };
+  if (canonReading) return { error: 'busy' };
+  canonStopped = false;
+  canonReading = Canon.createEngine({ io: canonIO(canonId), reader })
+    .readShelf({ again: !!opts.again, stop: () => canonStopped, onProgress: (p) => canonSend(e, { type: 'progress', canonId, ...p }) });
+  try {
+    return await canonReading;
+  } catch (err) {
+    if (err.code === 'stopped') return { error: 'stopped' };
+    logError('canon read', err);
+    return { error: 'failed' };
+  } finally { canonReading = null; }
+});
+
+// Changing a fact across the series: the passages to review (the window
+// applies each one the writer accepts, through the chapter write path)
+ipcMain.handle('canon:passages', (_e, opts) => { canonStopped = false; return Canon.createEngine({ io: canonIO(opts.canonId), reader: canonReader({ urgent: true }) }).passages(opts); });
+
+// The writer's IDE (docs/semantics/IDE.md): who is where, the passages
+// naming an entry, and words found anywhere on the shelf. Built from the
+// files each time, written nowhere.
+const canonEngine = (canonId) => Canon.createEngine({ io: canonIO(canonId) });
+ipcMain.handle('canon:index', (_e, canonId) => canonEngine(canonId).index());
+ipcMain.handle('canon:mentions', (_e, canonId, entryId, opts) => canonEngine(canonId).mentionsOf(entryId, opts || {}));
+ipcMain.handle('canon:search', async (_e, canonId, q, seq) => ({ seq, passages: await canonEngine(canonId).search(String(q || '')) }));
+
+// Not a slip: remembered against the sentence, so an edit brings it back
+ipcMain.handle('canon:notSlip', (_e, canonId, record) => {
+  const file = canonFile(canonId, 'not-slips.json');
+  const list = readJSON(file, []);
+  if (!list.some((n) => n.fact === record.fact && n.sentence === record.sentence)) writeJSON(file, [...list, record]);
+  return true;
+});
+ipcMain.handle('canon:unNotSlip', (_e, canonId, record) => {
+  const file = canonFile(canonId, 'not-slips.json');
+  const list = readJSON(file, []);
+  const kept = list.filter((n) => !(n.fact === record.fact && n.sentence === record.sentence));
+  if (kept.length !== list.length) writeJSON(file, kept);
+  return true;
+});
+
+// ---- Canon's reader: the model on this computer (canon-worker.js) ----
+// Two readers to choose from, each one GGUF file pinned to a commit with its
+// size and sha256. Weights live in userData/models, never in the library.
+const READERS = {
+  careful: { file: 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf', size: 2497281120, sha256: '3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597',
+    url: 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf', licence: 'Apache-2.0' },
+  quick: { file: 'qwen2.5-1.5b-instruct-q4_k_m.gguf', size: 1117320736, sha256: '6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e',
+    url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf', licence: 'Apache-2.0' }
+};
+// a development build can be pointed at another catalogue (the e2e test
+// serves a small file from its own server); a packaged NEO never looks
+function canonReaders() {
+  if (app.isPackaged || !process.env.NEO_CANON_READERS) return READERS;
+  // a test file that isn't there (or doesn't read) is no reason for Canon to break
+  try { return JSON.parse(fs.readFileSync(process.env.NEO_CANON_READERS, 'utf8')); } catch (err) { logError('NEO_CANON_READERS', err); return READERS; }
+}
+const modelsDir = () => path.join(app.getPath('userData'), 'models');
+// the reader on this computer: the careful one if both are
+function canonInstalled() {
+  const all = canonReaders();
+  return ['careful', 'quick'].find((tier) => all[tier] && fileSize(path.join(modelsDir(), all[tier].file)) === all[tier].size) || null;
+}
+const fileSize = (file) => { try { return fs.statSync(file).size; } catch { return -1; } };
+// picked from memory: 16 GB and up the careful reader, 8 GB the quick one
+function canonRecommend() {
+  const gb = os.totalmem() / 2 ** 30;
+  return gb >= 15 ? 'careful' : gb >= 7.5 ? 'quick' : 'short';
+}
+
+// The download: our own, on Electron's net.fetch (the system's proxy and
+// certificates). It writes <file>.part, picks up a .part left by a pause or
+// a quit with a Range request, hashes as it goes and renames only when size
+// and sha256 both match. Errors come back with a code: offline, damaged,
+// aborted, http.
+async function downloadFile({ url, dest, size, sha256, fetchFn, signal, onProgress }) {
+  const crypto = require('crypto');
+  const part = dest + '.part';
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const fail = (code, err) => Object.assign(new Error(code + (err ? ': ' + (err.message || err) : '')), { code });
+  let got = Math.max(0, fileSize(part));
+  if (got > size) { fs.rmSync(part, { force: true }); got = 0; }
+  let hash = crypto.createHash('sha256');
+  if (got) await new Promise((resolve, reject) => fs.createReadStream(part).on('data', (d) => hash.update(d)).on('end', resolve).on('error', reject));
+  if (got < size) {
+    let res;
+    try {
+      res = await fetchFn(url, { headers: got ? { Range: `bytes=${got}-` } : {}, signal });
+    } catch (err) {
+      throw fail(signal && signal.aborted ? 'aborted' : 'offline', err);
+    }
+    if (got && res.status === 200) { got = 0; hash = crypto.createHash('sha256'); } // the server started over
+    else if (res.status !== 200 && res.status !== 206) throw fail('http', new Error(String(res.status)));
+    const fd = fs.openSync(part, got ? 'a' : 'w');
+    try {
+      const body = res.body.getReader();
+      for (;;) {
+        const { done, value } = await body.read();
+        if (done) break;
+        fs.writeSync(fd, value);
+        hash.update(value);
+        got += value.length;
+        if (onProgress) onProgress(got, size);
+      }
+      fs.fsyncSync(fd);
+    } catch (err) {
+      throw fail(signal && signal.aborted ? 'aborted' : 'offline', err);
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+  if (got !== size || hash.digest('hex') !== sha256) {
+    fs.rmSync(part, { force: true });
+    throw fail('damaged');
+  }
+  fs.renameSync(part, dest);
+}
+
+// one download at a time; its state goes to every window as it moves
+let canonDl = { state: 'idle' };
+const canonBroadcast = (msg) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('canon', msg); };
+const canonDlState = () => ({ state: canonDl.state, tier: canonDl.tier, got: canonDl.got || 0, total: canonDl.total || 0, eta: canonDl.eta == null ? null : canonDl.eta, error: canonDl.error || null });
+function canonWanted(tier) {
+  const s = readSettings();
+  if ((s.readerWanted || null) === (tier || null)) return;
+  if (tier) s.readerWanted = tier; else delete s.readerWanted;
+  writeSettings(s);
+}
+async function canonDownload(tier) {
+  const r = canonReaders()[tier];
+  if (!r || canonDl.state === 'downloading') return false;
+  canonWanted(tier);
+  const ctrl = new AbortController();
+  canonDl = { state: 'downloading', tier, ctrl, got: Math.max(0, fileSize(path.join(modelsDir(), r.file + '.part'))), total: r.size, eta: null, seen: [] };
+  const started = Date.now();
+  let told = 0;
+  const tell = (force) => { if (force || Date.now() - told >= 500) { told = Date.now(); canonBroadcast({ type: 'download', ...canonDlState() }); } };
+  tell(true);
+  try {
+    await downloadFile({ url: r.url, dest: path.join(modelsDir(), r.file), size: r.size, sha256: r.sha256, signal: ctrl.signal,
+      fetchFn: (url, opts) => require('electron').net.fetch(url, opts),
+      onProgress: (got) => {
+        // about how long, from the last ten seconds of it (none before)
+        const now = Date.now();
+        canonDl.got = got;
+        canonDl.seen.push([now, got]);
+        while (canonDl.seen.length > 2 && now - canonDl.seen[0][0] > 10000) canonDl.seen.shift();
+        const [t0, g0] = canonDl.seen[0];
+        canonDl.eta = now - started >= 10000 && got > g0 ? Math.round(((r.size - got) * (now - t0)) / (got - g0) / 1000) : null;
+        tell();
+      } });
+    canonDl = { state: 'done', tier };
+    canonWanted(null);
+  } catch (err) {
+    if (err.code === 'aborted') canonDl = { state: 'paused', tier, got: Math.max(0, fileSize(path.join(modelsDir(), r.file + '.part'))), total: r.size };
+    else {
+      if (err.code !== 'offline' && err.code !== 'damaged') logError('canon download', err);
+      canonDl = { state: 'error', tier, error: err.code === 'damaged' ? 'damaged' : 'offline' };
+      if (err.code === 'damaged') canonWanted(null);
+    }
+  }
+  tell(true);
+  return true;
+}
+ipcMain.handle('canon:download', (_e, tier) => { canonDownload(tier); return true; });
+ipcMain.handle('canon:pauseDownload', () => {
+  if (canonDl.state !== 'downloading') return false;
+  canonWanted(null); // a paused download waits for the writer, even across a restart
+  canonDl.ctrl.abort();
+  return true;
+});
+// a download the writer started and didn't pause carries on after a restart
+function canonResumeDownload() {
+  const tier = readSettings().readerWanted;
+  if (tier && canonReaders()[tier] && !canonInstalled()) canonDownload(tier);
+}
+
+// The worker, started the first time a reader is wanted, never at launch.
+// It runs at the lowest priority with two cores left for the writing room.
+let canonChild = null;
+let canonSeq = 0;
+const canonWaiting = new Map();
+let canonLoaded = null; // the model file the worker has loaded
+function canonWorker(msg) {
+  return new Promise((resolve) => {
+    if (!canonChild) {
+      try {
+        canonChild = utilityProcess.fork(path.join(__dirname, 'canon-worker.js'), [], { serviceName: 'NEO reader' });
+        const child = canonChild;
+        child.on('spawn', () => { try { os.setPriority(child.pid, 19); } catch { /* best effort */ } });
+        canonChild.on('message', (m) => {
+          const done = canonWaiting.get(m.id);
+          if (done) { canonWaiting.delete(m.id); done(m); }
+        });
+        canonChild.on('exit', () => {
+          canonChild = null;
+          canonLoaded = null;
+          for (const done of canonWaiting.values()) done({ ok: false, error: 'gone' });
+          canonWaiting.clear();
+        });
+      } catch (err) {
+        logError('canon reader', err);
+        canonChild = null;
+        resolve({ ok: false, error: 'gone' });
+        return;
+      }
+    }
+    const id = ++canonSeq;
+    canonWaiting.set(id, resolve);
+    canonChild.postMessage({ ...msg, id });
+  });
+}
+let canonRunning = null; // the prompt being answered, so typing can stop it
+async function canonAsk(msg, urgent = false) {
+  const tier = canonInstalled();
+  const file = tier && path.join(modelsDir(), canonReaders()[tier].file);
+  if (!file) throw Object.assign(new Error('no reader'), { code: 'gone' });
+  if (canonLoaded !== file) {
+    const r = await canonWorker({ type: 'load', chat: file, threads: Math.max(1, os.cpus().length - 2) });
+    if (!r.ok) { logError('canon reader', new Error(r.error)); throw Object.assign(new Error(r.error), { code: 'gone' }); }
+    canonLoaded = file;
+  }
+  // (a pass the writer started isn't stopped by their typing)
+  const id = canonSeq + 1;
+  if (!urgent) canonRunning = () => canonWorker({ type: 'abort', target: id });
+  const r = await canonWorker({ type: 'prompt', ...msg });
+  if (!urgent) canonRunning = null;
+  if (r.ok) return r.result;
+  throw Object.assign(new Error(r.error), r.error === 'aborted' || r.error === 'gone' ? { code: r.error } : {});
+}
+
+// Typing pauses the reader: the prompt being answered stops within a token
+// and is asked again after ten seconds without a key (canon:typing).
+// NEO_CANON_RESUME_MS shortens the wait for tests and the demo; a packaged
+// NEO never looks.
+let canonPausedUntil = 0;
+let canonPausedTold = false;
+const CANON_RESUME_MS = 10000;
+const canonResumeMs = () => (!app.isPackaged && process.env.NEO_CANON_RESUME_MS && +process.env.NEO_CANON_RESUME_MS >= 0 ? +process.env.NEO_CANON_RESUME_MS : CANON_RESUME_MS);
+ipcMain.on('canon:typing', () => {
+  canonPausedUntil = Date.now() + canonResumeMs();
+  if (canonRunning) { canonRunning(); canonRunning = null; }
+  if (!canonPausedTold && canonReading) { canonPausedTold = true; canonBroadcast({ type: 'paused' }); }
+});
+async function canonQuiet() {
+  for (let wait; (wait = canonPausedUntil - Date.now()) > 0;) {
+    if (canonStopped) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(1000, wait)));
+  }
+  if (canonPausedTold) { canonPausedTold = false; canonBroadcast({ type: 'resumed' }); }
+}
+const canonStopError = () => Object.assign(new Error('stopped'), { code: 'stopped' });
+function canonPausable(reader) {
+  const wrap = (fn) => async (...args) => {
+    for (;;) {
+      await canonQuiet();
+      if (canonStopped) throw canonStopError();
+      try {
+        return await fn(...args);
+      } catch (err) {
+        if (canonStopped) throw canonStopError();
+        if (err && err.code === 'aborted') continue; // asked again once it's quiet
+        throw err;
+      }
+    }
+  };
+  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)) };
+}
+
+// For tests and development a fake reader answers from a file, as slowly as
+// NEO_CANON_FAKE_MS asks; a packaged NEO never looks.
+function canonFake() {
+  const fake = Canon.fakeReader(JSON.parse(fs.readFileSync(process.env.NEO_CANON_FAKE, 'utf8')));
+  const ms = +process.env.NEO_CANON_FAKE_MS || 0;
+  if (!ms) return fake;
+  const slow = (fn) => (...args) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => { canonRunning = null; resolve(fn(...args)); }, ms);
+    canonRunning = () => { clearTimeout(t); reject(Object.assign(new Error('aborted'), { code: 'aborted' })); };
+  });
+  return { ...fake, propose: slow(fake.propose.bind(fake)), judge: slow(fake.judge.bind(fake)), refers: slow(fake.refers.bind(fake)) };
+}
+// A pass the writer started (canon:check, not a quiet one) runs at once:
+// it doesn't wait out the ten seconds after a key, and a key doesn't stop it
+function canonUrgent(reader) {
+  const wrap = (fn) => async (...args) => {
+    for (;;) {
+      if (canonStopped) throw canonStopError();
+      try { return await fn(...args); } catch (err) {
+        if (canonStopped) throw canonStopError();
+        if (err && err.code === 'aborted') continue;
+        throw err;
+      }
+    }
+  };
+  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)) };
+}
+function canonReader({ urgent = false } = {}) {
+  const tier = canonInstalled();
+  if (!tier) return null;
+  const hold = urgent ? canonUrgent : canonPausable;
+  if (!app.isPackaged && process.env.NEO_CANON_FAKE) return hold(canonFake());
+  return hold(Canon.localReader({ id: tier + '-' + canonReaders()[tier].sha256.slice(0, 8), tier, ask: (m) => canonAsk(m, urgent) }));
+}
+function canonReaderStatus() {
+  const all = canonReaders();
+  return {
+    installed: canonInstalled(),
+    recommend: canonRecommend(),
+    catalogue: Object.fromEntries(Object.entries(all).map(([tier, r]) => [tier, { size: r.size, licence: r.licence }])),
+    download: canonDlState(),
+    quietMs: !app.isPackaged && +process.env.NEO_CANON_QUIET_MS ? +process.env.NEO_CANON_QUIET_MS : null
+  };
+}
+ipcMain.handle('canon:readerStatus', () => canonReaderStatus());
+
+// ---------------------------------------------------------------------------
 // Application menu — Help and Format live here, out of the writing room
 // ---------------------------------------------------------------------------
 function sendToWindow(msg) {
   const w = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
   if (w) w.webContents.send('menu', msg);
 }
+
+// Go to Anything (docs/semantics/IDE.md §4) finds the menu's commands by
+// their path ("File › Export › Paperback for KDP…") and runs one as if it
+// were picked: separators, unlabelled roles and disabled items are left out
+function menuCommands(items = (Menu.getApplicationMenu() || { items: [] }).items, trail = [], out = []) {
+  for (const it of items) {
+    const label = (it.label || '').replace(/&(?!&)/g, '');
+    if (it.type === 'separator' || !it.visible || !label) continue;
+    if (it.submenu) menuCommands(it.submenu.items, [...trail, label], out);
+    else if (it.enabled) out.push({ path: [...trail, label].join(' › '), label, accelerator: it.accelerator || '', enabled: true, item: it });
+  }
+  return out;
+}
+ipcMain.handle('menu:items', () => menuCommands().map(({ item: _item, ...x }) => x));
+ipcMain.handle('menu:run', (e, where) => {
+  const hit = menuCommands().find((x) => x.path === where);
+  if (!hit) return false;
+  hit.item.click(undefined, BrowserWindow.fromWebContents(e.sender), e.sender);
+  return true;
+});
 
 // the Format menu's ticks: whether the caret is in a poetry paragraph, and
 // whether typewriter scrolling is on
@@ -2240,6 +2774,18 @@ ipcMain.on('typewriter:state', (_e, on) => {
   on = !!on;
   if (on === typewriterState) return;
   typewriterState = on;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
+// Edit → Check Continuity When I Pause shows this device's choice
+// (hidden until some shelf keeps a Canon)
+let canonQuietState = true;
+let canonKept = false;
+ipcMain.on('canon:quietState', (_e, on, kept) => {
+  on = !!on;
+  kept = !!kept;
+  if (on === canonQuietState && kept === canonKept) return;
+  canonQuietState = on;
+  canonKept = kept;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
 // View → Vim Keys shows whether they're on
@@ -2311,7 +2857,7 @@ function buildMenu() {
     ...(isMac ? [{
       role: 'appMenu',
       submenu: [
-        { role: 'about', label: t('About NEO') },
+        { role: 'about', label: t('About NEO Canon') },
         { type: 'separator' },
         { role: 'services', label: t('Services') },
         { type: 'separator' },
@@ -2412,6 +2958,19 @@ function buildMenu() {
           // key and one press did both (#282).
           registerAccelerator: false,
           click: () => sendToWindow({ type: 'spellcheck' })
+        },
+        {
+          label: t('Continuity Pass'),
+          accelerator: "CmdOrCtrl+'",
+          registerAccelerator: false, // the window answers the key itself, like ⌘;
+          click: () => sendToWindow({ type: 'continuity' })
+        },
+        {
+          label: t('Check Continuity When I Pause'),
+          type: 'checkbox',
+          visible: canonKept,
+          checked: canonQuietState,
+          click: () => sendToWindow({ type: 'canonQuiet' })
         },
         {
           label: t('Spellcheck Language'),
@@ -2539,6 +3098,18 @@ function buildMenu() {
           registerAccelerator: false, // the window answers / and ? itself (isHelpShortcut)
           click: () => sendToWindow({ type: 'help' })
         },
+        {
+          label: t('Go to Anything…'),
+          accelerator: 'CmdOrCtrl+K',
+          registerAccelerator: false, // the window answers the key itself, like ⌘;
+          click: () => sendToWindow({ type: 'goto' })
+        },
+        {
+          label: t('World Map'),
+          accelerator: 'CmdOrCtrl+Shift+M',
+          registerAccelerator: false, // the window answers it (a shelf without a Canon has no map)
+          click: () => sendToWindow({ type: 'worldMap' })
+        },
         { type: 'separator' },
         {
           label: t('Full Screen'),
@@ -2622,7 +3193,7 @@ function buildMenu() {
         },
         { type: 'separator' },
         {
-          label: t('About NEO'),
+          label: t('About NEO Canon'),
           click: () => sendToWindow({ type: 'about' })
         },
         {
@@ -2864,7 +3435,7 @@ function lookForUpdate() {
 
 // what's on GitHub, for the fallback path and the release link
 async function latestReleaseFromGitHub() {
-  const res = await fetch('https://api.github.com/repos/hughhowey/neo/releases/latest', {
+  const res = await fetch('https://api.github.com/repos/bfdcampos/neo-canon/releases/latest', {
     headers: { 'User-Agent': 'NEO-App' }
   });
   if (!res.ok) throw new Error('GitHub API returned ' + res.status);
@@ -2962,7 +3533,7 @@ app.whenReady().then(() => {
     if (process.platform === 'darwin' && fs.existsSync(devIcon)) {
       if (app.dock) app.dock.setIcon(devIcon);
       app.setAboutPanelOptions({
-        applicationName: 'NEO',
+        applicationName: 'NEO Canon',
         applicationVersion: app.getVersion(),
         iconPath: devIcon
       });
@@ -3012,6 +3583,7 @@ app.whenReady().then(() => {
     try { initSpell(); } catch (err) { logError('spell', err); }
     try { buildMenu(); } catch (err) { logError('menu', err); }
     try { dailyBackup(); } catch (err) { logError('backup', err); }
+    try { canonResumeDownload(); } catch (err) { logError('canon download', err); }
     // NEO left open for days still makes each day's backup (and retries one
     // that failed); an existing day's zip makes this a no-op
     setInterval(() => { dailyBackup().catch(() => {}); }, 60 * 60 * 1000).unref?.();
@@ -3021,7 +3593,7 @@ app.whenReady().then(() => {
     logError('startup', err);
     try {
       dialog.showErrorBox(t('NEO failed to start'),
-        t('Please report this at github.com/hughhowey/neo/issues:') + '\n\n' + String((err && err.stack) || err));
+        t('Please report this at github.com/bfdcampos/neo-canon/issues:') + '\n\n' + String((err && err.stack) || err));
     } catch { /* nothing left to try */ }
   }
   app.on('activate', () => {

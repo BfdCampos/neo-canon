@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <!-- only NEO's own script files run: nothing pasted or read from a book can -->
   <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'" />
-  <title>NEO</title>
+  <title>NEO Canon</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -118,6 +118,7 @@
         <div class="tab active" role="tab" tabindex="0" aria-selected="true" data-tab="manuscript" data-i18n>Manuscript</div>
         <div class="tab" role="tab" tabindex="0" aria-selected="false" data-tab="notes" data-i18n>Notes</div>
         <div class="tab" role="tab" tabindex="0" aria-selected="false" data-tab="outline" data-i18n>Outline</div>
+        <div class="tab canon" role="tab" tabindex="0" aria-selected="false" data-tab="canon" data-i18n hidden>Canon</div>
         <div class="tab darlings" role="tab" tabindex="0" aria-selected="false" data-tab="darlings" data-i18n data-i18n-title title="Drag any selection here. It's saved, not gone.">Darlings</div>
       </div>
       <div id="counters">
@@ -147,6 +148,8 @@
 
   <script src="i18n.js"></script>
   <script src="covers.js"></script>
+  <script src="canon.js"></script>
+  <script src="map.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

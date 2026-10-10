@@ -1,0 +1,61 @@
+{
+  "about": "A held-out shelf for scripts/canon-eval.js (a different story from scripts/fixtures/canon, so the gates aren't fitted to one book). The facts that are true, the five seeded slips and the decoys. The first slip (Clover's 'his', Book 1 Ch 1) comes before the passage that says she is a cow.",
+  "entries": [
+    { "id": "mara-quell", "name": "Mara Quell", "kind": "person", "facts": [
+      { "attr": "sex", "value": "female", "as": "woman", "state": "verified" },
+      { "attr": "eyes", "value": "green", "state": "verified" },
+      { "attr": "birthplace", "value": "Dunmore", "state": "verified" },
+      { "attr": "home", "value": "Kellsharrow", "state": "verified" },
+      { "attr": "sibling", "value": "Jory Quell", "as": "younger", "state": "verified" },
+      { "attr": "eyes", "value": "blue", "state": "unverified", "said": true }
+    ] },
+    { "id": "jory-quell", "name": "Jory Quell", "kind": "person", "facts": [
+      { "attr": "sex", "value": "male", "as": "brother", "state": "verified" },
+      { "attr": "sibling", "value": "Mara Quell", "as": "elder", "state": "verified" }
+    ] },
+    { "id": "teodor-brisk", "name": "Teodor Brisk", "kind": "person", "facts": [
+      { "attr": "sex", "value": "male", "state": "verified" },
+      { "attr": "parent", "value": "Ansel Brisk", "state": "verified" }
+    ] },
+    { "id": "ansel-brisk", "name": "Ansel Brisk", "kind": "person", "facts": [
+      { "attr": "sex", "value": "male", "state": "verified" },
+      { "attr": "child", "value": "Teodor Brisk", "state": "verified" }
+    ] },
+    { "id": "clover", "name": "Clover", "kind": "creature", "facts": [
+      { "attr": "species", "value": "cattle", "state": "verified" },
+      { "attr": "sex", "value": "female", "as": "cow", "state": "verified" },
+      { "attr": "owner", "value": "Mara Quell", "state": "verified" },
+      { "attr": "sex", "value": "male", "as": "bull", "state": "unverified", "said": true },
+      { "attr": "owner", "value": "Ansel Brisk", "state": "unverified", "said": true },
+      { "attr": "state", "value": "in calf", "state": "unverified", "plan": true }
+    ] },
+    { "id": "hector", "name": "Hector", "kind": "creature", "facts": [
+      { "attr": "species", "value": "cattle", "state": "verified" },
+      { "attr": "sex", "value": "male", "as": "bull", "state": "verified" },
+      { "attr": "owner", "value": "Teodor Brisk", "state": "verified" }
+    ] },
+    { "id": "kellsharrow", "name": "Kellsharrow", "kind": "place", "facts": [] },
+    { "id": "dunmore", "name": "Dunmore", "kind": "place", "facts": [] }
+  ],
+  "alsoTrue": {
+    "mara-quell": [{ "attr": "title", "value": "keeper" }],
+    "jory-quell": [{ "attr": "home", "value": "Kellsharrow" }]
+  },
+  "slips": [
+    { "chapter": "k1", "sentence": "Clover lowered his head and walked into the byre ahead of her, as though the byre had been her own idea.", "span": "his", "to": "her", "entry": "clover", "attr": "sex", "strength": "strong" },
+    { "chapter": "d1", "sentence": "Mara’s blue eyes narrowed against the glare.", "span": "blue", "to": "green", "entry": "mara-quell", "attr": "eyes", "strength": "strong" },
+    { "chapter": "d2", "sentence": "Mara, the elder of the two Quells, had always kept the logbook.", "span": "elder", "to": "younger", "entry": "mara-quell", "attr": "sibling", "strength": "weak" },
+    { "chapter": "d2", "sentence": "Then she took the coast road home to Kelsharrow, alone, with the logbook in her coat.", "span": "Kelsharrow", "to": "Kellsharrow", "entry": "kellsharrow", "attr": "name", "strength": "strong" },
+    { "chapter": "d3", "sentence": "She slid the halter off the bull and let the beast graze at the roadside while she sat on the wall and ate her bread.", "span": "bull", "to": "cow", "entry": "clover", "attr": "sex", "strength": "weak" }
+  ],
+  "decoys": [
+    "Hector shook his horns at the gate and stood there, steaming, until they went away.",
+    "“Clover’s mine by rights,” Ansel said.",
+    "“That Clover of yours is a bull in all but name,” said Teodor, coming up behind him, and the men laughed.",
+    "“Your eyes are blue as the bay tonight,” Jory said when she came back, which was what he always said, and was never true.",
+    "Above the headland the sky went the brown of a cow’s flank, and then darker, and the light came on above them, steady now, turning without a catch.",
+    "Clever as she was, Mara could not mend the lens alone.",
+    "Ansel Brisk, the younger of the two Brisk men, came over the headland in the afternoon to borrow a lantern.",
+    "Jory stood beside Teodor Brisk at the rail of the harbour that evening and told him about the lens."
+  ]
+}
