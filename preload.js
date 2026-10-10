@@ -69,6 +69,10 @@ contextBridge.exposeInMainWorld('neo', {
   canonReadShelf: (canonId, opts) => ipcRenderer.invoke('canon:readShelf', canonId, opts),
   canonNotSlip: (canonId, record) => ipcRenderer.invoke('canon:notSlip', canonId, record),
   canonUnNotSlip: (canonId, record) => ipcRenderer.invoke('canon:unNotSlip', canonId, record),
+  canonDownload: (tier) => ipcRenderer.invoke('canon:download', tier),
+  canonPauseDownload: () => ipcRenderer.invoke('canon:pauseDownload'),
+  canonTyping: () => ipcRenderer.send('canon:typing'),
+  canonQuietState: (on) => ipcRenderer.send('canon:quietState', on),
   onCanon: (cb) => ipcRenderer.on('canon', (_e, msg) => cb(msg)),
 
   poetryState: (on) => ipcRenderer.send('poetry:state', on),

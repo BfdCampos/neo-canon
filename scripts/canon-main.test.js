@@ -34,10 +34,12 @@ function loadMain(dir) {
   vm.runInContext(fs.readFileSync(path.join(root, 'main.js'), 'utf8'), context, { filename: path.join(root, 'main.js') });
   vm.runInContext('LIBRARY_DIR = libraryRoot; LIBRARY_FILE = require("path").join(libraryRoot, "library.json");', context);
   // answers come from another realm: plain copies compare as values
-  return (name, ...args) => {
+  const call = (name, ...args) => {
     const out = handlers.get(name)(null, ...args);
     return out === undefined ? out : JSON.parse(JSON.stringify(out));
   };
+  call.context = context;
+  return call;
 }
 
 function library() {
@@ -115,5 +117,54 @@ describe('canon files', { concurrency: 1 }, () => {
       assert.deepEqual(meta.out, {});
       assert.deepEqual(meta.read, {});
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // The reader's download (P0 #3): a local server that cuts the connection
+  // halfway; the next try picks up the .part with a Range request
+  test('the reader downloads, resumes a cut-off file, and throws away a damaged one', async () => {
+    const http = require('node:http');
+    const crypto = require('node:crypto');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-dl-'));
+    const body = crypto.randomBytes(300000);
+    const sha = crypto.createHash('sha256').update(body).digest('hex');
+    const ranges = [];
+    let cut = true;
+    const server = http.createServer((req, res) => {
+      const m = /bytes=(\d+)-/.exec(req.headers.range || '');
+      const from = m ? +m[1] : 0;
+      ranges.push(from);
+      res.writeHead(m ? 206 : 200, { 'Content-Length': body.length - from });
+      if (cut) { cut = false; res.write(body.subarray(from, 120000)); setTimeout(() => res.destroy(), 50); return; }
+      res.end(body.subarray(from));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${server.address().port}/reader.gguf`;
+    try {
+      const { downloadFile } = loadMain(dir).context;
+      const dest = path.join(dir, 'models', 'reader.gguf');
+      const seen = [];
+      const get = (sha256) => downloadFile({ url, dest, size: body.length, sha256, fetchFn: fetch, onProgress: (got) => seen.push(got) });
+      await assert.rejects(get(sha), (err) => err.code === 'offline');
+      assert.equal(fs.statSync(dest + '.part').size, 120000);
+      await get(sha);
+      assert.deepEqual(ranges, [0, 120000]);
+      assert.ok(fs.readFileSync(dest).equals(body));
+      assert.ok(!fs.existsSync(dest + '.part'));
+      assert.equal(seen[seen.length - 1], body.length);
+      // the wrong checksum: thrown away, nothing left behind
+      fs.rmSync(dest);
+      await assert.rejects(get('0'.repeat(64)), (err) => err.code === 'damaged');
+      assert.ok(!fs.existsSync(dest) && !fs.existsSync(dest + '.part'));
+      // pressing Pause: an abort, the .part kept for later
+      cut = false;
+      const ctrl = new AbortController();
+      const slow = (u, opts) => fetch(u, opts).then((res) => { ctrl.abort(); return res; });
+      await assert.rejects(downloadFile({ url, dest, size: body.length, sha256: sha, fetchFn: slow, signal: ctrl.signal }), (err) => err.code === 'aborted');
+      // and nobody there at all
+      await assert.rejects(downloadFile({ url: 'http://127.0.0.1:9/x', dest, size: body.length, sha256: sha, fetchFn: fetch }), (err) => err.code === 'offline');
+    } finally {
+      server.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
