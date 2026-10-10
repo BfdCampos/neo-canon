@@ -2209,15 +2209,18 @@ function canonDir(canonId) {
 const canonFile = (canonId, ...parts) => path.join(canonDir(canonId), ...parts.map(libName));
 const fileStamp = (file) => { try { const st = fs.statSync(file); return st.mtimeMs + ':' + st.size; } catch { return null; } };
 
-function canonEntries(canonId, folder = 'entries') {
+// each entry file: its id is its file name; one Canon can't read says
+// which line, and the name and kind it could find
+function canonEntryFiles(canonId, folder = 'entries') {
   const dir = canonFile(canonId, folder);
   let names = [];
   try { names = fs.readdirSync(dir).filter((f) => f.endsWith('.md')); } catch { return []; }
-  return names.map((f) => {
-    const file = path.join(dir, f);
-    const text = fs.readFileSync(file, 'utf8');
+  return names.map((f) => ({ id: f.slice(0, -3), file: path.join(dir, f), text: fs.readFileSync(path.join(dir, f), 'utf8') }));
+}
+function canonEntries(canonId, folder = 'entries') {
+  return canonEntryFiles(canonId, folder).map(({ id, file, text }) => {
     const data = Canon.parseEntry(text);
-    return { id: f.slice(0, -3), stamp: fileStamp(file), ...(data.error ? { error: data.error } : { data }) };
+    return { id, stamp: fileStamp(file), ...(data.error ? data : { data: { ...data, id } }) };
   });
 }
 
@@ -2268,7 +2271,7 @@ ipcMain.handle('canon:saveEntry', (_e, canonId, entry, stamp) => {
   const now = fileStamp(file);
   if (now !== (stamp || null)) {
     const data = now ? Canon.parseEntry(fs.readFileSync(file, 'utf8')) : { error: 'gone' };
-    return { conflict: true, entry: data.error ? null : data, stamp: now };
+    return { conflict: true, entry: data.error ? null : { ...data, id: entry.id }, stamp: now };
   }
   const text = Canon.serialiseEntry(entry);
   let old = null;
@@ -2277,14 +2280,18 @@ ipcMain.handle('canon:saveEntry', (_e, canonId, entry, stamp) => {
   return { ok: true, stamp: fileStamp(file) };
 });
 
-// Set Aside an entry, or bring it back: the file moves, nothing is deleted
+// Set Aside an entry, or bring it back: the file moves, nothing is deleted.
+// Set aside beside one of the same name, it takes the next free one (and
+// answers with it); brought back onto a name in use, it stays where it is.
 function canonMove(canonId, entryId, from, to) {
   const src = canonFile(canonId, from, libName(entryId) + '.md');
-  const dest = canonFile(canonId, to, entryId + '.md');
+  let id = entryId;
+  if (to === 'set-aside') for (let n = 2; fs.existsSync(canonFile(canonId, to, id + '.md')); n++) id = entryId + '-' + n;
+  const dest = canonFile(canonId, to, id + '.md');
   if (!fs.existsSync(src) || fs.existsSync(dest)) return false;
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   renameIntoPlace(src, dest);
-  return true;
+  return id;
 }
 ipcMain.handle('canon:setAside', (_e, canonId, entryId) => canonMove(canonId, entryId, 'entries', 'set-aside'));
 ipcMain.handle('canon:restore', (_e, canonId, entryId) => canonMove(canonId, entryId, 'set-aside', 'entries'));
@@ -2329,7 +2336,7 @@ function canonIO(canonId) {
     sources: () => canonSources(canonId),
     meta: () => readJSON(canonFile(canonId, 'canon.json'), { v: 1 }),
     saveMeta: (meta) => writeJSON(canonFile(canonId, 'canon.json'), meta),
-    entries: () => canonEntries(canonId).filter((x) => x.data).map((x) => ({ id: x.id, text: Canon.serialiseEntry(x.data) })),
+    entries: () => canonEntryFiles(canonId).map(({ id, text }) => ({ id, text })),
     saveEntry: (id, text) => writeFileDurable(canonFile(canonId, 'entries', libName(id) + '.md'), text),
     notSlips: () => readJSON(canonFile(canonId, 'not-slips.json'), []),
     cache: () => readJSON(cacheFile, null),

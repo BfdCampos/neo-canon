@@ -96,6 +96,7 @@ describe('canon files', { concurrency: 1 }, () => {
       // an entry Canon can't read is listed, and left alone
       fs.writeFileSync(path.join(dir, id, 'entries', 'odd.md'), 'scribbles');
       assert.equal(call('canon:open', id).entries.find((x) => x.id === 'odd').error, 'unreadable');
+      assert.equal(call('canon:open', id).entries.find((x) => x.id === 'odd').line, 1);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -105,12 +106,17 @@ describe('canon files', { concurrency: 1 }, () => {
       const call = loadMain(dir);
       const id = 'canon-the-ashfall-road-shelf-ash';
       call('canon:saveEntry', id, Canon.newEntry('Rook', 'creature'), null);
-      assert.equal(call('canon:setAside', id, 'rook'), true);
+      assert.equal(call('canon:setAside', id, 'rook'), 'rook');
       assert.ok(fs.existsSync(path.join(dir, id, 'set-aside', 'rook.md')));
       assert.equal(call('canon:open', id).setAside[0].id, 'rook');
       assert.equal(call('canon:setAside', id, 'rook'), false);
-      assert.equal(call('canon:restore', id, 'rook'), true);
+      // a second Rook set aside beside the first takes the next free name
+      call('canon:saveEntry', id, Canon.newEntry('Rook', 'creature'), null);
+      assert.equal(call('canon:setAside', id, 'rook'), 'rook-2');
+      assert.equal(call('canon:restore', id, 'rook'), 'rook');
       assert.ok(fs.existsSync(path.join(dir, id, 'entries', 'rook.md')));
+      assert.equal(call('canon:restore', id, 'rook-2'), 'rook-2');
+      assert.equal(call('canon:open', id).entries.find((x) => x.id === 'rook-2').data.id, 'rook-2'); // the file's name is its id
       assert.throws(() => call('canon:setAside', id, '../rook'), /Invalid library name/);
       call('canon:saveMeta', id, { out: {}, read: { x: 1 } });
       const meta = JSON.parse(fs.readFileSync(path.join(dir, id, 'canon.json'), 'utf8'));

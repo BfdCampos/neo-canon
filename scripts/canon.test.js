@@ -131,11 +131,39 @@ test('an entry file round-trips byte for byte', () => {
   assert.deepEqual(Canon.parseEntry(Canon.serialiseEntry(fresh)), fresh);
 });
 
-test('an entry Canon can\'t read is reported, never guessed at', () => {
-  for (const bad of ['', 'no front matter', '---\nname: X\n---\n', BRAMBLE.replace('- Species: horse · verified', '- Species horse'),
-    BRAMBLE.replace('  - Written in Canon\n- Sibling', '  - written somewhere\n- Sibling'), '---\nid: x\nname: X\n---\n- Sex: female · yours\n']) {
-    assert.equal(Canon.parseEntry(bad).error, 'unreadable', JSON.stringify(bad.slice(0, 40)));
+test('an entry Canon can\'t read is reported with its line, never guessed at', () => {
+  for (const [bad, line] of [['', 1], ['no front matter', 1], ['---\nid: x\n---\n', 2], ['---\nid: x\nname: X\nnot a key\n---\n', 4]]) {
+    const r = Canon.parseEntry(bad);
+    assert.equal(r.error, 'unreadable', JSON.stringify(bad.slice(0, 40)));
+    assert.equal(r.line, line, JSON.stringify(bad.slice(0, 40)));
   }
+  assert.deepEqual(Canon.parseEntry('---\nid: x\nname: Bramble\nkind: creature\nnot a key\n---\n'), { error: 'unreadable', line: 5, name: 'Bramble', kind: 'creature' });
+});
+
+test('a hand-edited entry reads: BOM, CRLF, trailing spaces, * bullets, tabs, capitals; odd lines are kept', () => {
+  const messy = '\uFEFF' + BRAMBLE.replace('· verified\n', '· Verified  \n').replace('- Sex: female (mare) · yours', '* Sex: female (mare) · yours')
+    .replace('  - Written in Canon\n- Sibling', '\t- Written in Canon\n- Sibling').replace('- Owner:', 'She bites. (my note)\n- Owner:').replace(/\n/g, '\r\n');
+  const e = Canon.parseEntry(messy);
+  assert.equal(e.error, undefined);
+  const clean = Canon.parseEntry(BRAMBLE);
+  assert.deepEqual(e.facts.map((f) => [f.attr, f.value, f.state, f.sources.length]), clean.facts.map((f) => [f.attr, f.value, f.state, f.sources.length]));
+  assert.deepEqual(e.facts[2].notes, ['She bites. (my note)']);
+  assert.match(Canon.serialiseEntry(e), /\(younger\) · verified\n {2}- Ember and Thorn, Ch 1: "Oren's younger sister" \{book:book-ember-and-thorn-k3, ch:c1\}\nShe bites\. \(my note\)\n- Owner:/);
+  // a line before any fact is kept too, and the file still round-trips
+  const top = BRAMBLE.replace('## Facts\n', '## Facts\nWritten from memory.\n');
+  assert.equal(Canon.serialiseEntry(Canon.parseEntry(top)), top);
+  // a name with a line break in it, or an alias with a comma, stays one line
+  const x = Canon.newEntry('Bram\nble', 'creature');
+  x.aliases = ['Hale, Jr.', 'the grey'];
+  x.facts.push(Canon.handFact('Sex: mare'));
+  x.facts[0].sources.push({ label: 'B, Ch 1', quote: 'one\ntwo', book: 'b', ch: 'c' });
+  const text = Canon.serialiseEntry(x);
+  assert.match(text, /^name: Bram ble$/m);
+  assert.match(text, /^aliases: \["Hale, Jr\.", the grey\]$/m);
+  const back = Canon.parseEntry(text);
+  assert.equal(back.error, undefined);
+  assert.deepEqual(back.aliases, ['Hale, Jr.', 'the grey']);
+  assert.equal(back.facts[0].sources[1].quote, 'one two');
 });
 
 test('values come into the vocabulary', () => {
@@ -222,8 +250,10 @@ test('sex and species words: appositives are strong, "the stallion" in a mare\'s
 test('eyes, hair, birthplace and kin', async () => {
   assert.deepEqual(await slipsIn('Ilsa’s brown eyes narrowed.'), ['brown→grey ilsa-varr/eyes strong']);
   assert.deepEqual(await slipsIn('Ilsa’s eyes were green as glass.'), ['green→grey ilsa-varr/eyes strong']);
-  assert.deepEqual(await slipsIn('Oren pushed the fair hair out of his eyes.'), ['fair→black oren-hale/hair strong']);
-  for (const fine of ['Ilsa’s grey eyes narrowed.', 'Ilsa turned her eyes to the green hills.', 'Ilsa looked into Oren’s brown eyes.', 'The brown eyes of the dog followed Ilsa.']) {
+  assert.deepEqual(await slipsIn('Oren pushed his fair hair out of his eyes.'), ['fair→black oren-hale/hair strong']);
+  assert.deepEqual(await slipsIn('Her eyes were green as glass, and Ilsa knew it.'), []); // the name comes after
+  assert.deepEqual(await slipsIn('Ilsa blinked, her brown eyes wet.'), ['brown→grey ilsa-varr/eyes strong']);
+  for (const fine of ['Ilsa’s grey eyes narrowed.', 'Ilsa saw the child’s brown eyes.', 'Ilsa saw brown eyes in the dark.', 'Oren pushed the fair hair out of his eyes.', 'Ilsa looked into their brown eyes.', 'Ilsa turned her eyes to the green hills.', 'Ilsa looked into Oren’s brown eyes.', 'The brown eyes of the dog followed Ilsa.']) {
     assert.deepEqual(await slipsIn(fine), [], fine);
   }
   assert.deepEqual(await slipsIn('Ilsa was born in Corwick.'), ['Corwick→Saltmere ilsa-varr/birthplace strong']);
@@ -253,4 +283,76 @@ test('the slip carries what the popover shows', async () => {
   const { slips: none } = await Canon.checkSources({ sources: [{ bookId: 'b', chId: 'c', html: '<p>Rain fell. Bramble tossed his head.</p>' }], entries: world(),
     notSlips: [{ fact: 'bramble/sex', sentence: s.sentenceHash }] });
   assert.deepEqual(none, []);
+});
+
+// QA (docs/semantics/QA-M0-M4.md): what must never be flagged, and what must
+test('decoys the strong checkers leave alone (a wrong flag is worse than a missed one)', async () => {
+  for (const fine of ['Bramble’s rider lost his hat.', 'Bramble, a stallion’s rival, bolted.', 'Bramble, the man who sold bread, waved.',
+    'Ilsa fed Bramble, the dog and the hens.', 'Oren said, \'Bramble tossed his head\' and left.', 'A bramble tossed his hat into the hedge.',
+    'Ilsa, the mare’s rider, waved.', 'Rook, the woman’s horse, waited.']) {
+    assert.deepEqual(await slipsIn(fine), [], fine);
+  }
+  assert.deepEqual(await slipsIn('Bramble raised His head.'), ['His→Her bramble/sex strong']);
+  assert.deepEqual(await slipsIn('BRAMBLE tossed his head.'), ['his→her bramble/sex strong']);
+  assert.deepEqual(await slipsIn('Bramble — stallion, eleven.'), ['stallion→mare bramble/sex strong']);
+  assert.deepEqual(await slipsIn('Ilsa was the only man on the wall.'), ['man→woman ilsa-varr/sex strong']);
+  // the stallion's mane: the word, not its 's
+  assert.deepEqual(await slipsIn('Tamsin did not argue with Bramble. She stroked the stallion’s neck.', { reader: yes }), ['stallion→mare bramble/sex weak']);
+  // a name typed in another Unicode form still counts
+  const zoe = [Canon.newEntry('Zoë', 'person')];
+  zoe[0].facts.push(Canon.handFact('Sex: woman'));
+  assert.deepEqual(await slipsIn('Zoë lost his way.', { entries: zoe }), ['his→her zoe/sex strong']);
+  assert.equal(Canon.gateQuote('mare', 'the grey mares ran'), null);
+  assert.equal(Canon.gateQuote('the', 'other'), null);
+  assert.equal(Canon.gateQuote('mare', 'the mares and the mare'), 'mare');
+});
+
+test('values outside the lexicon are kept as written and check nothing; two of the writer\'s own that clash check nothing', async () => {
+  assert.deepEqual(['Eyes: violet', 'Sex: nonbinary', 'Gender: they/them', 'Pronouns: she/her', 'Eyes: grey (storm grey)'].map((x) => {
+    const f = Canon.handFact(x);
+    return [f.attr, f.value, f.as];
+  }), [['eyes', 'violet', ''], ['sex', 'nonbinary', ''], ['sex', 'they/them', ''], ['sex', 'female', ''], ['eyes', 'grey', 'storm grey']]);
+  const ash = Canon.newEntry('Ash', 'person');
+  ash.facts.push(Canon.handFact('Pronouns: they/them'), Canon.handFact('Eyes: violet'));
+  assert.deepEqual(await slipsIn('Ash tossed his head. Ash’s brown eyes narrowed. Ash lost her hat.', { entries: [ash] }), []);
+  const both = world();
+  both[0].facts.push(Canon.handFact('Sex: stallion'));
+  assert.deepEqual(await slipsIn('Bramble tossed his head. Bramble flattened her ears.', { entries: both }), []);
+  assert.equal(Canon.slug('李雷'), '李雷');
+  assert.equal(Canon.slug('Æthelflæd'), 'æthelflæd');
+});
+
+// one paragraph read with the fake reader, into an empty Canon
+async function readWith(text, facts, { files = {}, judge = {} } = {}) {
+  const io = {
+    sources: () => [{ bookId: 'b', chId: 'c', book: 'B', label: 'Ch 1', html: `<p>${text}</p>` }],
+    meta: () => ({}), saveMeta() {}, notSlips: () => [], cache: () => null, saveCache() {},
+    entries: () => Object.entries(files).map(([id, t]) => ({ id, text: t })),
+    saveEntry: (id, t) => { files[id] = t; }
+  };
+  await Canon.createEngine({ io, reader: Canon.fakeReader({ propose: [{ para: text.slice(0, 12), facts }], judge }) }).readShelf();
+  return files;
+}
+const factsOf = (files, id) => files[id] ? Canon.parseEntry(files[id]).facts.map((f) => `${f.attr} ${f.value} ${f.state}`) : [];
+
+test('checking by rule needs the word to be about the entry; a pronoun alone checks nothing', async () => {
+  const p = (entity, attr, value, quote, kind = 'creature') => ({ entity, kind, attr, value, quote });
+  let f = await readWith('Bramble stood beside the stallion.', [p('Bramble', 'sex', 'stallion', 'Bramble stood beside the stallion')]);
+  assert.deepEqual(factsOf(f, 'bramble'), ['sex male unverified']);
+  f = await readWith('Tamsin led her own horse, Bramble, up the bank.', [p('Bramble', 'sex', 'female', 'Tamsin led her own horse, Bramble'), p('Tamsin', 'sex', 'female', 'Tamsin led her own horse', 'person')]);
+  assert.deepEqual(factsOf(f, 'bramble'), []);
+  assert.deepEqual(factsOf(f, 'tamsin'), ['sex female unverified']); // her own horse: hers, but a pronoun is for the writer to confirm
+  f = await readWith('Oren sold Rook to Tamsin Hale.', [p('Tamsin Hale', 'sibling', 'Oren', 'Oren sold Rook to Tamsin Hale', 'person'), p('Rook', 'species', 'horse', 'Oren sold Rook')]);
+  assert.deepEqual(factsOf(f, 'tamsin-hale'), ['sibling Oren unverified']); // kin is never checked by rule: it waits for the reader or the writer
+  assert.deepEqual(factsOf(f, 'rook'), []);
+  f = await readWith('Bramble, the grey mare, would not cross.', [p('Bramble', 'sex', 'mare', 'Bramble, the grey mare'), p('Bramble', 'species', 'horse', 'Bramble, the grey mare')]);
+  assert.deepEqual(factsOf(f, 'bramble'), ['sex female verified', 'species horse verified']);
+});
+
+test('an entry Canon can\'t read keeps its name: Read the Shelf makes no second one', async () => {
+  const files = { bramble: '﻿---\nid: bramble\nname: Bramble\nkind: creature\n(a note in the wrong place)\n---\n# Bramble\n' };
+  const was = files.bramble;
+  await readWith('Bramble, the grey mare, would not cross.', [{ entity: 'Bramble', kind: 'creature', attr: 'sex', value: 'mare', quote: 'Bramble, the grey mare' }], { files });
+  assert.deepEqual(Object.keys(files), ['bramble']);
+  assert.equal(files.bramble, was);
 });

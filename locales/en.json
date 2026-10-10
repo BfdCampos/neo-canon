@@ -89,5 +89,17 @@
   "about {n} hours": {
     "one": "about an hour",
     "other": "about {n} hours"
+  },
+  "{n} entries": {
+    "one": "{n} entry",
+    "other": "{n} entries"
+  },
+  "{n} facts": {
+    "one": "{n} fact",
+    "other": "{n} facts"
+  },
+  "{n} need you": {
+    "one": "{n} needs you",
+    "other": "{n} need you"
   }
 }

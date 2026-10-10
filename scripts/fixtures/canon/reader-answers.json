@@ -64,6 +64,7 @@
     "ilsa varr|title|captain": "yes",
     "ilsa varr|birthplace|saltmere": "yes",
     "oren hale|sex|male": "yes",
+    "tamsin hale|sibling|oren hale": "yes",
     "bramble|owner|tamsin hale": "yes",
     "rook|owner|oren hale": "yes",
     "oren hale|state|lost his left hand": "yes",

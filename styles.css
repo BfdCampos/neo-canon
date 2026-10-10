@@ -2106,10 +2106,10 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
   background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #ddd; font-size: 12px; outline: none;
 }
 .cn-find:focus { border-color: var(--accent); }
-.cn-kind-head { padding: 14px 18px 4px; font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; color: #666; }
+.cn-kind-head { padding: 14px 18px 4px; font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
 .nav-item.cn-item .n-row { cursor: pointer; }
 .nav-item.cn-broken .n-label { font-style: italic; color: #777; }
-.cn-restore { background: none; border: none; color: #666; font-size: 11px; opacity: 0; }
+.cn-restore { background: none; border: none; color: var(--muted); font-size: 11px; opacity: 0; }
 .cn-item:hover .cn-restore, .cn-restore:focus-visible { opacity: 1; }
 .cn-restore:hover { color: var(--accent); }
 .cn-new {
@@ -2136,7 +2136,7 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 .st-verified .cn-dot { background: #8a8478; border-color: #8a8478; }
 .st-yours .cn-dot { border-radius: 1px 50% 1px 50%; transform: rotate(45deg); background: var(--accent); border-color: var(--accent); }
 .st-disagree .cn-dot { background: linear-gradient(90deg, #8a8478 50%, transparent 50%); }
-.cn-fl { color: #6f6a60; }
+.cn-fl { color: #8a8478; margin-right: 0.35em; }
 .cn-ctl { margin-left: auto; display: flex; gap: 12px; opacity: 0; transition: opacity 0.12s; }
 .cn-fact:hover .cn-ctl, .cn-ctl:focus-within { opacity: 1; }
 .cn-src { margin: 2px 0 0 18px; font-size: 0.86em; color: #5f5a50; }
@@ -2146,8 +2146,8 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 .cn-changed, .cn-warn { color: #b0683c; }
 .cn-warn { margin-left: 18px; font-size: 12px; font-family: -apple-system, sans-serif; }
 .cn-add { margin: 4px 0 0 18px; opacity: 0; }
-.cn-entry:hover .cn-add, .cn-add:focus-visible { opacity: 1; }
-.cn-add-input { margin: 4px 0 0 18px; width: 60%; font: inherit; padding: 2px 6px; border: 1px solid #d6d0c2; border-radius: 4px; background: transparent; color: inherit; outline: none; }
+.cn-entry:hover .cn-add, .cn-entry:focus-within .cn-add, .cn-add:focus-visible { opacity: 1; }
+.cn-add-input { margin: 4px 0 0 18px; width: 60%; font: inherit; padding: 2px 6px; border: 1px solid rgba(138,132,120,0.5); border-radius: 4px; background: transparent; color: inherit; outline: none; }
 .cn-words { min-height: 3em; outline: none; white-space: pre-wrap; }
 .cn-words:empty::before { content: attr(data-ph); color: #b9b4a8; font-style: italic; }
 .cn-src span.cn-where { text-decoration: none; }

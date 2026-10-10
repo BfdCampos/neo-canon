@@ -1,8 +1,9 @@
 // End-to-end tests for Canon on a copy of the Ashfall Road fixture.
 // Run with `npm run test:canon` (xvfb-run -a npx electron --no-sandbox
-// scripts/canon.e2e.js where there's no display). Screenshots of the tab, a
-// slip's popover, the reader's download and Read the Shelf at work go to
-// docs/semantics/screens/.
+// scripts/canon.e2e.js where there's no display). With CANON_SHOTS=1,
+// screenshots of the tab, a slip's popover, the reader's download, Read the
+// Shelf at work, the review of a change and a notebook go to
+// docs/semantics/screens/ (without it, nothing tracked is written).
 
 'use strict';
 
@@ -70,6 +71,7 @@ const until = async (code, ms = 8000) => {
   throw new Error('timed out waiting for ' + code);
 };
 const shot = async (name) => {
+  if (!process.env.CANON_SHOTS) return;
   fs.mkdirSync(SCREENS, { recursive: true });
   const img = await wc.capturePage();
   fs.writeFileSync(path.join(SCREENS, name), img.toPNG());
@@ -91,6 +93,8 @@ test('Keep a Canon for This Shelf takes up the Canon folder and the books gain t
   await js(`backToShelf()`);
   await js(`keepCanon(library.shelves[0])`);
   assert.equal(JSON.parse(fs.readFileSync(libFile, 'utf8')).shelves[0].canonId, CANON);
+  // from the shelf, the shelf's first book opens on its Canon tab
+  await until(`book && book.id === library.shelves[0].bookIds[0] && currentTab === 'canon'`);
   assert.ok(fs.existsSync(path.join(LIB, CANON, 'canon.json')));
   assert.ok(fs.statSync(path.join(LIB, CANON, 'entries')).isDirectory());
   await js(`openBook('${SALT}')`);
@@ -113,6 +117,41 @@ test('the Canon tab, kept by hand: a new entry and a fact of the writer\'s', asy
   await js(`$('#nav-pane').classList.add('open')`);
   await tick(400);
   await shot('canon-tab-by-hand.png');
+});
+
+test('by hand: a value outside the lexicon, two values at once, a name already taken, a file Canon can\'t read', async () => {
+  const entries = path.join(LIB, CANON, 'entries');
+  await js(`canonEdit('ash', () => Canon.newEntry('Ash', 'person')).then(() => { canonShown = 'ash'; renderCanon(); })`);
+  await until(`!!document.querySelector('#canon-view .cn-entry .cn-add')`);
+  const addFact = async (text) => {
+    await js(`document.querySelector('#canon-view .cn-add').click()`);
+    await js(`(() => { const i = document.querySelector('#canon-view .cn-add-input'); i.value = ${JSON.stringify(text)}; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); })()`);
+  };
+  await addFact('Eyes: violet');
+  await until(`canon.entries.get('ash').data.facts.length === 1`);
+  assert.equal(await js(`document.querySelector('#canon-view .cn-fact .cn-fv').textContent`), 'violet');
+  await until(`!!document.querySelector('#canon-view .cn-add')`);
+  await addFact('Eyes: grey');
+  await until(`!!document.querySelector('.modal-backdrop:not(#firstrun) .fr-choice')`);
+  assert.match(await js(`document.querySelector('.modal-backdrop:not(#firstrun) .fr-choice').closest('.modal').querySelector('h2').textContent`), /Ash already has Eyes: violet/);
+  await js(`[...document.querySelectorAll('.modal-backdrop:not(#firstrun) .fr-choice')].find((b) => /Keep Both/.test(b.textContent)).click()`);
+  await until(`document.querySelectorAll('#canon-view .cn-warn').length === 2`);
+  assert.match(fs.readFileSync(path.join(entries, 'ash.md'), 'utf8'), /- Eyes: violet · yours\n {2}- Written in Canon\n- Eyes: grey · yours/);
+  // a second Ash is not made: the one there is shown
+  await js(`canonShown = null; renderCanon(); setTimeout(() => canonNewEntry(document.querySelector('#nav-list .cn-new')))`);
+  await until(`!!document.querySelector('.modal-backdrop:not(#firstrun) input')`);
+  await js(`document.querySelector('.modal-backdrop:not(#firstrun) input').value = 'ASH'; document.querySelector('.modal-backdrop:not(#firstrun) .m-ok').click()`);
+  await until(`canonShown === 'ash'`);
+  assert.match(await js(`$('#hint').textContent`), /already an entry called ASH/);
+  // a hand-edited file with a broken line: listed by its name, the line named
+  fs.writeFileSync(path.join(entries, 'odd.md'), '---\nid: odd\nname: Old Wenna\nkind: person\nwho is she?\n---\n');
+  await js(`canonRefreshNow()`);
+  await until(`[...document.querySelectorAll('#nav-list .cn-item .n-label')].some((x) => x.textContent === 'Old Wenna')`);
+  await js(`canonShown = 'odd'; renderCanon()`);
+  await until(`/line 5 of this entry’s file \\(odd\\.md\\)/.test(document.querySelector('#canon-view').textContent)`);
+  for (const f of ['ash.md', 'odd.md']) fs.rmSync(path.join(entries, f));
+  await js(`canonShown = null; canonRefreshNow()`);
+  await until(`!canon.entries.has('ash') && !canon.entries.has('odd')`);
 });
 
 let tier;
@@ -179,6 +218,11 @@ test('Read the Shelf (the fake reader): progress, a pause while typing, then ent
   await js(`$('#nav-pane').classList.add('open')`);
   await tick(400);
   await shot('canon-tab.png');
+  // a source in a book's Notes opens Notes with the quote lit
+  await js(`[...document.querySelectorAll('#canon-side .cs-where-btn')].find((b) => /Notes/.test(b.textContent)).click()`);
+  await until(`currentTab === 'notes' && CSS.highlights.has('neo-canon-quote')`);
+  assert.equal(await js(`[...CSS.highlights.get('neo-canon-quote')][0].toString()`), 'Bramble is in foal by the end of book 2?');
+  await js(`switchTab('canon')`);
 });
 
 const chapterFiles = () => ['c1', 'c2', 'c3'].map((c) => fs.readFileSync(path.join(LIB, SALT, 'chapters', c + '.html'), 'utf8'));
@@ -214,14 +258,18 @@ test('Keep: mare shows the change, Apply makes it as one undoable edit', async (
   const para = `[...document.querySelectorAll('.chapter[data-id="c1"] .chapter-body p')].find((p) => p.textContent.includes('tossed')).textContent`;
   assert.match(await js(para), /Bramble tossed her head/);
   assert.equal(await js(`CSS.highlights.get('neo-slip').size`), 4);
+  assert.equal(await js(`document.querySelectorAll('#canon-side .cs-slip').length`), 4);
+  // ⌘Z brings the words back, and the mark and the list with them
   await js(`document.execCommand('undo')`);
   assert.match(await js(para), /Bramble tossed his head/);
+  await until(`CSS.highlights.get('neo-slip').size === 5 && document.querySelectorAll('#canon-side .cs-slip').length === 5`);
+  assert.match(await js(`document.querySelector('#canon-side .cs-slip q').textContent`), /^Bramble tossed his head and pulled$/);
 });
 
 test('Not a slip is remembered against the sentence', async () => {
   await js(`canonPopOpen(canonSlips.find((s) => s.span === 'brown'), 300, 300)`);
   await js(`[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Not a slip').click()`);
-  await until(`canonSlips.length === 3`);
+  await until(`canonSlips.length === 4`);
   const notSlips = JSON.parse(fs.readFileSync(path.join(LIB, CANON, 'not-slips.json'), 'utf8'));
   assert.deepEqual(notSlips.map((n) => n.fact), ['ilsa-varr/eyes', 'ilsa-varr/eyes']);
   assert.equal(notSlips[1].text, 'Ilsa’s brown eyes narrowed.');

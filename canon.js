@@ -90,7 +90,7 @@
   // by a dash (dialogue set the European way).
   function speechSpans(text) {
     const spans = [];
-    const re = /“[^”]*(?:”|$)|"[^"]*(?:"|$)|«[^»]*(?:»|$)|„[^“”]*(?:[“”]|$)|(?<![\p{L}\p{N}])‘(?:[^’]|’(?=\p{L}))*(?:’|$)/gu;
+    const re = /“[^”]*(?:”|$)|"[^"]*(?:"|$)|«[^»]*(?:»|$)|„[^“”]*(?:[“”]|$)|(?<![\p{L}\p{N}])‘(?:[^’]|’(?=\p{L}))*(?:’|$)|(?<![\p{L}\p{N}])'(?=\p{L})(?:[^']|'(?=\p{L}))*'(?!\p{L})/gu;
     let m;
     while ((m = re.exec(text))) { spans.push([m.index, m.index + m[0].length]); if (!m[0].length) re.lastIndex++; }
     const dash = /^\s*[—–]\s*[^—–]*/.exec(text);
@@ -138,27 +138,31 @@
     }
     const full = new Set(entries.map((e) => e.name));
     const out = [];
+    // (in either Unicode form, so a typed Zoë finds a pasted one)
+    const push = (phrase, id, via, exact) => { for (const p of new Set([phrase.normalize('NFC'), phrase.normalize('NFD')])) out.push({ phrase: p, id, via, exact }); };
     for (const e of entries) {
-      out.push({ phrase: e.name, id: e.id, via: 'name', exact: true });
-      for (const a of e.aliases || []) out.push({ phrase: a, id: e.id, via: 'alias', exact: false });
+      push(e.name, e.id, 'name', true);
+      for (const a of e.aliases || []) push(a, e.id, 'alias', false);
       if (e.kind === 'person') {
-        for (const p of nameParts(e.name)) if (count.get(p) === 1 && !full.has(p) && p !== e.name) out.push({ phrase: p, id: e.id, via: 'part', exact: true });
+        for (const p of nameParts(e.name)) if (count.get(p) === 1 && !full.has(p) && p !== e.name) push(p, e.id, 'part', true);
       }
     }
     return out.filter((x) => x.phrase).sort((a, b) => b.phrase.length - a.phrase.length);
   }
 
-  // Every place the text names an entry: [{ id, start, end, via }]
+  // Every place the text names an entry: [{ id, start, end, via }]. A name
+  // counts as written or in capitals (BRAMBLE), never in lower case: a
+  // bramble in the hedge is no horse.
   function mentions(text, index) {
     const found = [];
     const low = text.toLowerCase();
     const taken = new Uint8Array(text.length);
     for (const m of index) {
-      const hay = m.exact ? text : low;
-      const needle = m.exact ? m.phrase : m.phrase.toLowerCase();
-      for (let at = hay.indexOf(needle); at !== -1; at = hay.indexOf(needle, at + 1)) {
+      const needle = m.phrase.toLowerCase();
+      for (let at = low.indexOf(needle); at !== -1; at = low.indexOf(needle, at + 1)) {
         const end = at + needle.length;
         if (isLetter(text[at - 1]) || isLetter(text[end])) continue;
+        if (m.exact && ![m.phrase, m.phrase.toUpperCase()].includes(text.slice(at, end))) continue;
         if (taken.subarray(at, end).some((x) => x)) continue;
         taken.fill(1, at, end);
         found.push({ id: m.id, start: at, end, via: m.via });
@@ -174,7 +178,10 @@
     const q = norm(quote).replace(/^["'\s]+|["'\s]+$/g, '');
     if (q.length < 3 || q.split(' ').length > 30) return null;
     const src = normMap(text);
-    const at = src.text.indexOf(q);
+    // whole words: "mare" isn't in "the grey mares"
+    const cut = (at) => (isLetter(q[0]) && isLetter(src.text[at - 1])) || (isLetter(q[q.length - 1]) && isLetter(src.text[at + q.length]));
+    let at = src.text.indexOf(q);
+    while (at !== -1 && cut(at)) at = src.text.indexOf(q, at + 1);
     if (at === -1) return null;
     return String(text).slice(src.map[at], src.map[at + q.length - 1] + 1);
   }
@@ -201,7 +208,7 @@
     state: { label: 'State' },
     other: { label: 'Other' }
   };
-  const LABEL_ATTR = { gender: 'sex', eye: 'eyes', 'eye colour': 'eyes', 'eye color': 'eyes', 'hair colour': 'hair', 'hair color': 'hair', born: 'birthplace', birthplace: 'birthplace', 'born at': 'birthplace' };
+  const LABEL_ATTR = { gender: 'sex', pronouns: 'sex', eye: 'eyes', 'eye colour': 'eyes', 'eye color': 'eyes', 'hair colour': 'hair', 'hair color': 'hair', born: 'birthplace', birthplace: 'birthplace', 'born at': 'birthplace' };
   for (const [attr, a] of Object.entries(ATTRS)) { LABEL_ATTR[attr] = attr; LABEL_ATTR[a.label.toLowerCase()] = attr; }
   const KINDS = ['person', 'creature', 'place', 'thing', 'group', 'other'];
   const STATES = ['verified', 'unverified', 'yours', 'disagree', 'set aside', 'not right'];
@@ -226,8 +233,11 @@
   const KIN_SWAP = { younger: 'elder', elder: 'younger' };
 
   const wordsOf = (s) => norm(s).split(/[^\p{L}\p{M}'-]+/u).filter(Boolean);
-  const slug = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'entry';
+  // a file name: accents off, any script's letters kept (李雷 stays 李雷)
+  const slug = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').normalize('NFC').toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'entry';
+  // one line in the file, whatever was typed or pasted
+  const one = (s) => String(s == null ? '' : s).replace(/\s*[\r\n\u2028\u2029]+\s*/g, ' ');
   const attrOf = (label) => LABEL_ATTR[norm(label)] || null;
   const labelOf = (f) => (f.attr === 'other' && f.label) || ATTRS[f.attr].label;
 
@@ -240,11 +250,16 @@
     if (attr === 'sex') {
       const word = w.find((x) => SEX_WORDS[x]);
       if (word) return { value: SEX_WORDS[word][0], as: word };
+      // "Pronouns: she/her" is female; "they/them" isn't either
+      const by = new Set(w.map((x) => PRONOUNS[x]));
+      if (by.size === 1 && !by.has(undefined)) return { value: [...by][0], as: '' };
       return ['female', 'male'].includes(norm(v)) ? { value: norm(v), as: '' } : null;
     }
     if (attr === 'eyes' || attr === 'hair') {
       const word = w.find((x) => COLOURS[x]);
-      return word ? { value: COLOURS[word], as: word === COLOURS[word] ? '' : word } : null;
+      // the writer's own description is kept: grey (storm grey)
+      const own = String(as || '').trim();
+      return word ? { value: COLOURS[word], as: own && norm(own) !== COLOURS[word] ? own : word === COLOURS[word] ? '' : word } : null;
     }
     if (attr === 'species') {
       const word = wordsOf(v).find((x) => SPECIES[x]) || wordsOf(as).find((x) => SPECIES[x]);
@@ -254,13 +269,14 @@
     return v ? { value: v, as: String(as || '').trim() } : null;
   }
 
-  // a fact the writer typed ("Sex: mare"): theirs, written in Canon
+  // A fact the writer typed ("Sex: mare"): theirs, written in Canon. A
+  // value outside the lexicon (Eyes: violet, Sex: nonbinary, they/them) is
+  // kept as written; it raises no slips (`lexical`).
   function handFact(text) {
-    const m = /^\s*([^:]+?)\s*:\s*(.+?)(?:\s*\(([^()]*)\))?\s*$/.exec(String(text || ''));
+    const m = /^\s*([^:]+?)\s*:\s*(.+?)(?:\s*\(([^()]*)\))?\s*$/.exec(one(text));
     if (!m) return null;
     const attr = attrOf(m[1]) || 'other';
-    const n = normaliseFact(attr, m[2], m[3]);
-    if (!n) return null;
+    const n = normaliseFact(attr, m[2], m[3]) || { value: m[2].trim(), as: (m[3] || '').trim() };
     return { attr, label: attr === 'other' ? m[1] : undefined, value: n.value, as: n.as, state: 'yours', sources: [{ written: true }] };
   }
 
@@ -271,65 +287,87 @@
   // One Markdown file per entry (ARCHITECTURE §2.2). One line is one thing;
   // "## In my words" and all after it is the writer's and kept byte for byte.
   function newEntry(name, kind, id) {
-    return { id: id || slug(name), name: String(name).trim(), kind: KINDS.includes(kind) ? kind : 'other', aliases: [], extra: [], facts: [], setAside: [], words: '' };
+    return { id: id || slug(name), name: one(name).trim(), kind: KINDS.includes(kind) ? kind : 'other', aliases: [], extra: [], facts: [], setAside: [], lead: { top: [], facts: [], aside: [] }, words: '' };
   }
 
-  const FACT_LINE = /^- (.+?): (.*?)(?: \(([^()]*)\))? · (verified|unverified|yours|disagree|set aside|not right)$/;
-  const SOURCE_LINE = /^ {2}- (.*?): "(.*)" \{([^{}]*)\}$/;
+  // Written by hand in any editor, so a byte-order mark, Windows line ends,
+  // trailing spaces, * bullets, tabs and a capitalised state all read. A line
+  // Canon doesn't know (a note under a fact) is kept where it was, never
+  // dropped; only broken front matter makes the file unreadable, and then
+  // the answer says which line.
+  const FACT_LINE = /^[-*] (.+?): (.*?)(?: \(([^()]*)\))? · (verified|unverified|yours|disagree|set aside|not right)$/i;
+  const SOURCE_LINE = /^(?: {2,}|\t+)[-*] (.*?): "(.*)" \{([^{}]*)\}$/;
+  const WRITTEN_LINE = /^(?: {2,}|\t+)[-*] Written in Canon$/i;
   function parseEntry(text) {
-    text = String(text || '').replace(/\r\n/g, '\n');
+    text = String(text || '').replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+    const bad = (line) => {
+      const name = /^name: *(.+?) *$/m.exec(text);
+      const kind = /^kind: *(\w+)/m.exec(text);
+      return { error: 'unreadable', line, name: name ? name[1] : '', kind: kind && KINDS.includes(kind[1]) ? kind[1] : 'other' };
+    };
     const fm = /^---\n([\s\S]*?)\n---\n/.exec(text);
-    if (!fm) return { error: 'unreadable' };
+    if (!fm) return bad(1);
     const e = { ...newEntry('x', 'other'), id: '', name: '' };
-    for (const line of fm[1].split('\n')) {
+    const fmLines = fm[1].split('\n');
+    for (const [i, raw] of fmLines.entries()) {
+      const line = raw.trimEnd();
       const m = /^([\w-]+): ?(.*)$/.exec(line);
-      if (!m) return { error: 'unreadable' };
+      if (!m) { if (!line) continue; return bad(i + 2); }
       if (m[1] === 'id') e.id = m[2].trim();
       else if (m[1] === 'name') e.name = m[2].trim();
-      else if (m[1] === 'kind') e.kind = m[2].trim();
-      else if (m[1] === 'aliases') e.aliases = m[2].replace(/^\[|\]$/g, '').split(',').map((s) => s.trim()).filter(Boolean);
+      else if (m[1] === 'kind') e.kind = KINDS.includes(m[2].trim().toLowerCase()) ? m[2].trim().toLowerCase() : 'other';
+      else if (m[1] === 'aliases') e.aliases = (m[2].trim().replace(/^\[|\]$/g, '').match(/"[^"]*"|[^,]+/g) || []).map((s) => s.trim().replace(/^"|"$/g, '').trim()).filter(Boolean);
       else e.extra.push([m[1], m[2]]);
     }
-    if (!e.id || !e.name) return { error: 'unreadable' };
+    if (!e.name) return bad(2);
+    if (!e.id) e.id = slug(e.name);
     let rest = text.slice(fm[0].length);
     const words = /(?:^|\n)## In my words\n/.exec(rest);
     if (words) { e.words = rest.slice(words.index + words[0].length); rest = rest.slice(0, words.index); }
     let list = null;
-    for (const line of rest.split('\n')) {
-      if (!line.trim() || /^# /.test(line)) continue;
-      if (line === '## Facts') { list = e.facts; continue; }
-      if (line === '## Set aside') { list = e.setAside; continue; }
-      const f = FACT_LINE.exec(line);
-      if (f && list) {
+    let lead = e.lead.top;
+    for (const raw of rest.split('\n')) {
+      const line = raw.trimEnd();
+      if (!line || /^# /.test(line)) continue;
+      if (/^## Facts$/i.test(line)) { list = e.facts; lead = e.lead.facts; continue; }
+      if (/^## Set aside$/i.test(line)) { list = e.setAside; lead = e.lead.aside; continue; }
+      const f = list && FACT_LINE.exec(line);
+      if (f) {
         const attr = attrOf(f[1]) || 'other';
-        list.push({ attr, label: attr === 'other' ? f[1] : undefined, value: f[2], as: f[3] || '', state: f[4], sources: [] });
+        list.push({ attr, label: attr === 'other' ? f[1] : undefined, value: f[2], as: f[3] || '', state: f[4].toLowerCase(), sources: [] });
         continue;
       }
       const last = list && list[list.length - 1];
-      if (last && line === '  - Written in Canon') { last.sources.push({ written: true }); continue; }
-      const s = SOURCE_LINE.exec(line);
-      if (!s || !last) return { error: 'unreadable' };
-      const src = { label: s[1], quote: s[2] };
-      for (const part of s[3].split(',').map((x) => x.trim())) {
-        const [k, ...v] = part.split(':');
-        if (k === 'book' || k === 'ch') src[k] = v.join(':');
-        else if (k === 'said') src.said = v.length ? v.join(':') : true;
-        else if (k === 'plan' || k === 'changed') src[k] = true;
-      }
-      last.sources.push(src);
+      const s = last && SOURCE_LINE.exec(line);
+      if (last && WRITTEN_LINE.test(line)) last.sources.push({ written: true });
+      else if (s) {
+        const src = { label: s[1], quote: s[2] };
+        for (const part of s[3].split(',').map((x) => x.trim())) {
+          const [k, ...v] = part.split(':');
+          if (k === 'book' || k === 'ch') src[k] = v.join(':').trim();
+          else if (k === 'said') src.said = v.length ? v.join(':') : true;
+          else if (k === 'plan' || k === 'changed') src[k] = true;
+        }
+        last.sources.push(src);
+      } else if (last) (last.notes = last.notes || []).push(raw);
+      else lead.push(raw);
     }
     return e;
   }
 
   function serialiseEntry(e) {
     const factLines = (facts) => facts.flatMap((f) => [
-      `- ${labelOf(f)}: ${f.value}${f.as ? ` (${f.as})` : ''} · ${f.state}`,
+      `- ${one(labelOf(f))}: ${one(f.value)}${f.as ? ` (${one(f.as)})` : ''} · ${f.state}`,
       ...f.sources.map((s) => s.written ? '  - Written in Canon'
-        : `  - ${s.label}: "${s.quote}" {book:${s.book}, ch:${s.ch}${s.said ? (s.said === true ? ', said' : `, said:${s.said}`) : ''}${s.plan ? ', plan' : ''}${s.changed ? ', changed' : ''}}`)
+        : `  - ${one(s.label)}: "${one(s.quote)}" {book:${s.book}, ch:${s.ch}${s.said ? (s.said === true ? ', said' : `, said:${one(s.said)}`) : ''}${s.plan ? ', plan' : ''}${s.changed ? ', changed' : ''}}`),
+      ...(f.notes || [])
     ]);
-    const lines = ['---', `id: ${e.id}`, `name: ${e.name}`, `kind: ${e.kind}`, `aliases: [${e.aliases.join(', ')}]`,
-      ...e.extra.map(([k, v]) => `${k}: ${v}`), '---', `# ${e.name}`, '', '## Facts', ...factLines(e.facts)];
-    if (e.setAside.length) lines.push('', '## Set aside', ...factLines(e.setAside));
+    const lead = e.lead || {};
+    const alias = (a) => (a.includes(',') ? `"${one(a)}"` : one(a));
+    const lines = ['---', `id: ${e.id}`, `name: ${one(e.name)}`, `kind: ${e.kind}`, `aliases: [${e.aliases.map(alias).join(', ')}]`,
+      ...e.extra.map(([k, v]) => `${k}: ${one(v)}`), '---', `# ${one(e.name)}`, '', ...(lead.top || []), ...((lead.top || []).length ? [''] : []),
+      '## Facts', ...(lead.facts || []), ...factLines(e.facts)];
+    if (e.setAside.length || (lead.aside || []).length) lines.push('', '## Set aside', ...(lead.aside || []), ...factLines(e.setAside));
     lines.push('', '## In my words');
     return lines.join('\n') + '\n' + (e.words || '');
   }
@@ -349,6 +387,21 @@
     f.state = notRight ? 'not right' : 'set aside';
     e.setAside.push(f);
   }
+  // A new value from the writer: the old one (for a single attribute, every
+  // other value) goes to Set aside with its passages; the new one is theirs.
+  function replaceFact(e, f, old) {
+    const same = (x, y) => x.attr === y.attr && norm(x.value) === norm(y.value) && x.label === y.label;
+    const single = ATTRS[f.attr] && ATTRS[f.attr].single;
+    for (let i = e.facts.length - 1; i >= 0; i--) {
+      const x = e.facts[i];
+      if (!same(x, f) && ((old && same(x, old)) || (single && x.attr === f.attr))) setAsideFact(e, i, false);
+    }
+    const had = e.facts.find((x) => same(x, f));
+    if (!had) { e.facts.push(f); return; }
+    had.state = 'yours';
+    if (f.as) had.as = f.as;
+    if (!had.sources.some((x) => x.written)) had.sources.push({ written: true });
+  }
   function restoreFact(e, i) {
     const [f] = e.setAside.splice(i, 1);
     f.state = 'yours';
@@ -364,16 +417,25 @@
     if (!ATTRS[f.attr] || !ATTRS[f.attr].slips || !['verified', 'yours'].includes(f.state)) return false;
     return f.state === 'yours' || f.sources.some((s) => !s.written && !s.said && !s.plan && !s.changed && !((out || {})[s.book] || []).includes(s.ch));
   }
-  // each entry's firm facts by attribute (the writer's win), relations listed
+  // a value the checkers know the words for (female, grey); Eyes: violet
+  // and Sex: they/them are recorded, never checked
+  const lexical = (f) => f.attr === 'sex' ? ['female', 'male'].includes(f.value)
+    : f.attr === 'eyes' || f.attr === 'hair' ? Object.values(COLOURS).includes(f.value) : true;
+  // Each entry's firm facts by attribute (the writer's win), relations
+  // listed. Two values the writer both wrote (mare and stallion) check
+  // nothing until one goes: Canon doesn't pick.
   function worldOf(entries, out) {
     const world = new Map();
     for (const e of entries) {
       const k = { e, rel: [] };
+      const clash = new Set();
       for (const f of e.facts) {
-        if (!firmFact(f, out)) continue;
+        if (!firmFact(f, out) || !lexical(f)) continue;
         if (!ATTRS[f.attr].single) k.rel.push(f);
+        else if (k[f.attr] && k[f.attr].state === 'yours' && f.state === 'yours' && norm(k[f.attr].value) !== norm(f.value)) clash.add(f.attr);
         else if (!k[f.attr] || f.state === 'yours') k[f.attr] = f;
       }
+      for (const a of clash) delete k[a];
       world.set(e.id, k);
     }
     return world;
@@ -432,11 +494,13 @@
 
       for (const m of inS) {
         const k = world.get(m.id);
-        // E … his: the nearest owning pronoun after a sexed entry, in its clause
-        if (k.sex) {
+        // E … his: the nearest owning pronoun after a sexed entry, in its
+        // clause; not after E's (in "Bramble's rider lost his hat" the
+        // rider owns the hat)
+        if (k.sex && !/^['’]s\b/.test(text.slice(m.end))) {
           for (let i = after(m.end), n = 0, from = m.end; i >= 0 && i < words.length && n < 6; i++, n++) {
             const w = words[i];
-            if (/[,;:—–()"“”]/.test(text.slice(from, w.start)) || named(w) || (/^\p{Lu}/u.test(w.w) && w.w !== 'I')) break;
+            if (/[,;:—–()"“”]/.test(text.slice(from, w.start)) || named(w) || (/^\p{Lu}/u.test(w.w) && w.w !== 'I' && !PRONOUNS[w.lw])) break;
             from = w.end;
             if (CLAUSE.has(w.lw)) break;
             const kind = pronounAt(words, i, text);
@@ -445,10 +509,26 @@
             break;
           }
         }
-        // E, the grey mare: an appositive naming its sex or species
-        const j = after(m.end);
-        if (j >= 0 && /^,\s+$/.test(text.slice(m.end, words[j].start)) && ['the', 'a', 'an'].includes(words[j].lw)) {
-          const noun = words.slice(j + 1, j + 4).find((w) => SEX_WORDS[w.lw] || SPECIES[w.lw]);
+        // E, the grey mare / E — mare / E was the only woman: an
+        // appositive or a predicate naming its sex or species. The noun
+        // heads the phrase (not "a stallion's rival"), an appositive's
+        // closes it (not "the man who sold bread") and doesn't start a list
+        // ("Bramble, the dog and the hens"), and it fits what E is: a mare
+        // is no person, a woman no creature.
+        let j = after(m.end);
+        const sep = j >= 0 ? text.slice(m.end, words[j].start) : '';
+        const is = j >= 0 && /^\s+$/.test(sep) && (words[j].lw === 'is' || words[j].lw === 'was');
+        if (is) j++;
+        const det = (w) => w && (['the', 'a', 'an', 'his', 'her', 'their'].includes(w.lw) || /^\p{Lu}.*['’]s$/u.test(w.w));
+        const art = det(words[j]);
+        if (j >= 0 && (is ? art : /^,\s+$/.test(sep) ? art : /^\s*[—–]\s*$/.test(sep))) {
+          const from = art ? j + 1 : j;
+          const n = words.slice(from, from + 3).findIndex((w) => SEX_WORDS[w.lw] || SPECIES[w.lw]);
+          let noun = n >= 0 ? words[from + n] : null;
+          const tail = noun ? text.slice(noun.end) : '';
+          if (noun && (words.slice(from, from + n + 1).some((w) => /['’]s$/.test(w.w)) || (!is && (!/^\s*(?:[,;:.!?)—–]|$)/.test(tail) || /^\s*,\s*(?:and|or|nor)\b/i.test(tail))))) noun = null;
+          const animal = noun && SEX_WORDS[noun.lw] ? !!SEX_WORDS[noun.lw][2] : !!noun;
+          if (noun && ((k.e.kind === 'person' && animal) || (k.e.kind === 'creature' && !animal))) noun = null;
           if (noun) {
             const sw = SEX_WORDS[noun.lw];
             if (sw && k.sex && sw[0] !== k.sex.value) add({ kind: 'noun', strength: 'strong', id: m.id, attr: 'sex', fact: k.sex, start: noun.start, end: noun.end, to: keepCase(noun.w, sw[1]) });
@@ -484,17 +564,23 @@
           const seen = all.filter((m) => m.start >= sents[Math.max(0, si - 3)].start && m.end <= w.start && world.get(m.id).species && world.get(m.id).species.value === sw[2]);
           const last = seen.length && world.get(seen[seen.length - 1].id);
           if (last && last.sex && last.sex.value !== sw[0] && !seen.some((m) => world.get(m.id).sex && world.get(m.id).sex.value === sw[0])) {
-            add({ kind: 'noun', strength: 'weak', id: last.e.id, attr: 'sex', fact: last.sex, start: w.start, end: w.end, to: keepCase(w.w, last.sex.as && SEX_WORDS[last.sex.as] && SEX_WORDS[last.sex.as][2] === sw[2] ? last.sex.as : sw[1]) });
+            add({ kind: 'noun', strength: 'weak', id: last.e.id, attr: 'sex', fact: last.sex, start: w.start, end: w.start + w.w.replace(/['’]s$/, '').length, to: keepCase(w.w, last.sex.as && SEX_WORDS[last.sex.as] && SEX_WORDS[last.sex.as][2] === sw[2] ? last.sex.as : sw[1]) });
           }
         }
         // brown eyes / eyes were brown, of the one entry the sentence names
         if (['eyes', 'eye', 'hair'].includes(w.lw)) {
           const attr = w.lw === 'hair' ? 'hair' : 'eyes';
           const ids = [...new Set(inS.map((m) => m.id))];
-          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (ids.length === 1 && inS[0].end <= w.start && inS[0]);
-          const k = owner && world.get(owner.id);
           let c = i > 0 && COLOURS[words[i - 1].lw] && /^[\s-]+$/.test(text.slice(words[i - 1].end, w.start)) ? words[i - 1] : null;
           if (!c && words[i + 1] && COPULA.has(words[i + 1].lw)) c = words.slice(i + 2, i + 5).find((x) => COLOURS[x.lw]);
+          // whose: the name's possessive right before ("Ilsa's brown eyes"),
+          // or the one entry the sentence names when "her"/"his" agrees with
+          // it; "the child's brown eyes" and "brown eyes in the dark" are no one's
+          const det = words[(c && c.end <= w.start ? i - 1 : i) - 1];
+          const sole = ids.length === 1 && inS[0].end <= w.start && world.get(inS[0].id);
+          const agrees = det && sole && (det.lw === 'her' || det.lw === 'his') && (!sole.sex || PRONOUNS[det.lw] === sole.sex.value);
+          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]);
+          const k = owner && world.get(owner.id);
           if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, k[attr].as || k[attr].value) });
         }
         // born in a place that isn't the one in Canon
@@ -607,11 +693,28 @@
     const names = [stripTitles(name), ...nameParts(name), ...(e ? [e.name, ...e.aliases, ...nameParts(e.name)] : [])].map(norm);
     return names.some((x) => hasWord(norm(quote), x) || hasWord(norm(text), x));
   }
-  // the value is in the quote itself, or a word the lexicon ties to it
-  function valueInQuote(f, quote) {
+  // Does the text say this of this entry, by the slip checker's own rules?
+  // Run against the opposite of the fact, the checker must flag a word in
+  // it, for this entry, that means the fact's value: "Bramble, the grey
+  // mare" says Bramble is a mare; "Bramble stood beside the stallion" says
+  // nothing of Bramble, and "Tamsin led her own horse" nothing of the horse.
+  const TIED = { sex: (w, kind) => kind === 'pronoun' ? PRONOUNS[w] : SEX_WORDS[w] && SEX_WORDS[w][0], species: (w) => SPECIES[w], eyes: (w) => COLOURS[w], hair: (w) => COLOURS[w] };
+  // (`loose`, for letting a reading in to be checked: a pronoun, and the
+  // weak cases too, like "He" opening the next sentence)
+  function tiedTo(e, f, text, entries, loose) {
+    if (!TIED[f.attr] || !entries.includes(e)) return false;
+    const world = new Map(entries.map((x) => [x.id, { e: x, rel: [] }]));
+    world.get(e.id)[f.attr] = { value: '\u0000', as: '', sources: [] };
+    return paraCandidates(text, mentionIndex(entries), world, []).some((c) => c.id === e.id && c.attr === f.attr &&
+      (loose || (c.strength === 'strong' && c.kind !== 'pronoun')) && TIED[f.attr](text.slice(c.start, c.end).toLowerCase().replace(/['’]s$/, ''), c.kind) === f.value);
+  }
+
+  // the value is in the quote itself, or a word the lexicon ties to it (a
+  // pronoun only when it's the entry's own: "Bramble tossed her head")
+  function valueInQuote(f, quote, e, entries) {
     const w = new Set(wordsOf(quote).map((x) => x.replace(/'s$/, '')));
     const any = (test) => [...w].some(test);
-    if (f.attr === 'sex') return any((x) => (SEX_WORDS[x] && SEX_WORDS[x][0] === f.value) || PRONOUNS[x] === f.value);
+    if (f.attr === 'sex') return any((x) => SEX_WORDS[x] && SEX_WORDS[x][0] === f.value) || (!!e && tiedTo(e, f, quote, entries, true));
     // a colour counts for eyes or hair only beside the word (grey eyes, grey-eyed), not a grey coat
     if (f.attr === 'eyes' || f.attr === 'hair') return any((x) => COLOURS[x] === f.value) && any((x) => (f.attr === 'eyes' ? /^eye[sd]?$|-eyed$/ : /^hair(ed)?$|-haired$/).test(x));
     if (f.attr === 'species') return any((x) => SPECIES[x] === f.value);
@@ -642,6 +745,7 @@
     const quote = gateQuote(prop.quote, full);
     if (!quote || !reaches(entries, prop.entity, quote, prev + '\n' + para.text)) return;
     let e = findEntry(entries, prop.entity);
+    if (e && e.locked) return;
     if (!e) {
       const name = stripTitles(prop.entity);
       let id = slug(name);
@@ -654,7 +758,7 @@
     if (!n) return;
     const ref = ATTRS[prop.attr].ref && findEntry(entries, n.value);
     const f = { attr: prop.attr, label: prop.attr === 'other' ? prop.label || 'Other' : undefined, value: ref ? ref.name : n.value, as: n.as, state: 'unverified', sources: [] };
-    if (!valueInQuote(f, quote)) return;
+    if (!valueInQuote(f, quote, e, entries)) return;
     const where = quoteIn(quote, para.text);
     const source = { label: `${src.book}, ${src.label}`, quote, book: src.bookId, ch: src.chId };
     if (where.said) source.said = prop.said || true;
@@ -671,19 +775,12 @@
   const live = (s) => !s.written && !s.changed;
   const solid = (f) => f.state === 'yours' || f.sources.some((s) => live(s) && !s.said && !s.plan);
 
-  // Checking by rule: the quote names the entity and holds a closed-lexicon
-  // word for the value, and isn't speech or a plan (§8 cut 2). The rest is
-  // asked of the reader, the same way, one fact at a time.
-  function ruleSupported(e, f, idx) {
-    return f.sources.some((s) => {
-      if (!live(s) || s.said || s.plan || !mentions(s.quote, idx).some((m) => m.id === e.id)) return false;
-      const w = wordsOf(s.quote).map((x) => x.replace(/'s$/, ''));
-      if (f.attr === 'sex') return w.some((x) => SEX_WORDS[x] && SEX_WORDS[x][0] === f.value);
-      if (f.attr === 'eyes' || f.attr === 'hair') return w.some((x) => COLOURS[x] === f.value);
-      if (f.attr === 'species') return w.some((x) => SPECIES[x] === f.value);
-      if (f.attr === 'sibling') return w.some((x) => KIN[x] === f.as) && nameParts(f.value).some((p) => w.includes(norm(p)));
-      return false;
-    });
+  // Checking by rule: the quote, not speech or a plan, ties a lexicon word
+  // for the value to the entry the way a strong slip would (§8 cut 2; a
+  // pronoun alone never checks a fact). Everything else, kin included, is
+  // asked of the reader, one fact at a time; unsure stays unchecked.
+  function ruleSupported(e, f, entries) {
+    return f.sources.some((s) => live(s) && !s.said && !s.plan && tiedTo(e, f, s.quote, entries, false));
   }
 
   /* ---------- the engine ---------- */
@@ -694,7 +791,9 @@
   //   meta() / saveMeta(m), entries() → [{ id, text }] / saveEntry(id, text),
   //   notSlips(), cache() / saveCache(c) (this device only), knownWords(words)
   function createEngine({ io, reader = null }) {
-    const loadEntries = async () => (await io.entries()).map((x) => parseEntry(x.text)).filter((e) => !e.error);
+    // the file's name is the entry's id, whatever its front matter says
+    const parsed = async () => (await io.entries()).map((x) => ({ ...parseEntry(x.text), id: x.id }));
+    const loadEntries = async () => (await parsed()).filter((e) => !e.error);
     return {
       // the Continuity Pass: one book's chapters (or the shelf's), with the
       // window's unsaved text standing in for the files (`html` by chapter)
@@ -723,12 +822,13 @@
         const old = (!again && (await io.cache())) || {};
         const cache = old.reader === reader.id && old.prompt === PROMPT ? old : { v: 1, reader: reader.id, prompt: PROMPT, proposals: {}, judged: {} };
         const cacheWas = JSON.stringify(cache);
-        const files = await io.entries();
+        const files = await parsed();
         const entries = [];
         const before = new Map();
-        for (const x of files) {
-          const e = parseEntry(x.text);
-          if (e.error) continue; // a file Canon can't read is left as it is
+        for (const e of files) {
+          // a file Canon can't read is left as it is, but its name stays
+          // taken: what's read about it waits until the file reads again
+          if (e.error) { entries.push({ ...newEntry(e.name || e.id, e.kind, e.id), locked: true }); continue; }
           entries.push(e);
           before.set(e.id, serialiseEntry(e));
         }
@@ -782,10 +882,10 @@
           if (!stopped) meta.read[key] = textHash(src.html);
         }
         // a new entry never takes the name of a file Canon couldn't read
-        for (const e of entries) if (!before.has(e.id) && taken.has(e.id)) e.id += '-' + entries.length;
+        for (const e of entries) if (!e.locked && !before.has(e.id) && taken.has(e.id)) e.id += '-' + entries.length;
+        for (let i = entries.length - 1; i >= 0; i--) if (entries[i].locked) entries.splice(i, 1);
 
         // passages edited away, values that disagree, then checking
-        const idx = mentionIndex(entries);
         const order = new Map(sources.map((s, i) => [s.bookId + '/' + s.chId, i]));
         const firstAt = (f) => Math.min(Infinity, ...f.sources.filter((s) => !s.written).map((s) => order.has(s.book + '/' + s.ch) ? order.get(s.book + '/' + s.ch) : Infinity));
         const paraOf = (s) => (texts.get(s.book + '/' + s.ch) || '').split('\n').find((t) => norm(t).includes(norm(s.quote))) || s.quote;
@@ -821,7 +921,7 @@
         for (const e of entries) {
           for (const f of e.facts) {
             if (f.state !== 'unverified' || !solid(f)) continue; // speech and plans stay unchecked
-            if (ruleSupported(e, f, idx)) { f.state = 'verified'; continue; }
+            if (ruleSupported(e, f, entries)) { f.state = 'verified'; continue; }
             const s = f.sources.find((x) => live(x) && !x.said && !x.plan);
             check.push({ e, f, s, jk: factKey(e, f) + '|' + textHash(norm(s.quote)) });
           }
@@ -963,7 +1063,7 @@
     textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
     inSpans, nameParts, WORD,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
-    newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, restoreFact,
+    newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, replaceFact, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader
   };
 });
