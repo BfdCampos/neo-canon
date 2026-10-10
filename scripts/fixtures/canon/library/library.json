@@ -1,0 +1,18 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-ash",
+      "name": "The Ashfall Road",
+      "bookIds": [
+        "book-ember-and-thorn-ember1",
+        "book-the-salt-crown-salt2",
+        "book-field-notes-notes3"
+      ],
+      "canonId": "canon-the-ashfall-road-shelf-ash"
+    }
+  ]
+}

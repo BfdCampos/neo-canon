@@ -1,0 +1,76 @@
+{
+  "about": "The fake reader for Canon's tests: what a model would propose for each paragraph (matched by the start of its text), and its answers when asked to judge a fact or say who a word means. It makes the mistakes the probe saw (PROBE.md) on purpose, so the gates are tested against them.",
+  "propose": [
+    { "para": "Rain had come to Corwick", "facts": [
+      { "entity": "Corwick", "kind": "place", "quote": "Rain had come to Corwick three days early" },
+      { "entity": "Ilsa Varr", "kind": "person", "attr": "sex", "value": "female", "asWritten": "woman", "quote": "Captain Ilsa Varr was the only woman on the wall that night" },
+      { "entity": "Ilsa Varr", "kind": "person", "attr": "title", "value": "Captain", "quote": "Captain Ilsa Varr was the only woman on the wall" }
+    ] },
+    { "para": "Captain Varr’s eyes were", "facts": [
+      { "entity": "Ilsa Varr", "kind": "person", "attr": "eyes", "value": "grey", "quote": "Captain Varr's eyes were the grey of wet slate" },
+      { "note": "misquoted: not in the chapter", "entity": "Ilsa Varr", "kind": "person", "attr": "eyes", "value": "grey", "quote": "Ilsa's eyes were grey as slate" }
+    ] },
+    { "para": "They came out of the rain", "facts": [
+      { "entity": "Tamsin Hale", "kind": "person", "attr": "sex", "value": "female", "asWritten": "sister", "quote": "The girl was Tamsin Hale, Oren’s younger sister" },
+      { "entity": "Tamsin Hale", "kind": "person", "attr": "sibling", "value": "Oren Hale", "asWritten": "younger", "quote": "Tamsin Hale, Oren’s younger sister" }
+    ] },
+    { "para": "Oren Hale did the talking", "facts": [
+      { "entity": "Oren Hale", "kind": "person", "attr": "sex", "value": "male", "quote": "Oren Hale did the talking. He always did." }
+    ] },
+    { "para": "The ford below Corwick", "facts": [
+      { "entity": "Bramble", "kind": "creature", "attr": "species", "value": "horse", "quote": "Bramble, the grey mare, would not cross the ford." },
+      { "entity": "Bramble", "kind": "creature", "attr": "sex", "value": "female", "asWritten": "mare", "quote": "Bramble, the grey mare, would not cross the ford." },
+      { "note": "the probe's mislabel: a colour and a sex word given as the species", "entity": "Bramble", "kind": "creature", "attr": "species", "value": "grey mare", "quote": "Bramble, the grey mare" }
+    ] },
+    { "para": "Tamsin rode her most days", "facts": [
+      { "entity": "Bramble", "kind": "creature", "attr": "owner", "value": "Tamsin Hale", "quote": "Tamsin rode her most days." }
+    ] },
+    { "para": "Oren came down the bank", "facts": [
+      { "entity": "Rook", "kind": "creature", "attr": "species", "value": "horse", "asWritten": "stallion", "quote": "Rook, a black stallion" },
+      { "entity": "Rook", "kind": "creature", "attr": "sex", "value": "male", "asWritten": "stallion", "quote": "Rook, a black stallion" },
+      { "entity": "Rook", "kind": "creature", "attr": "owner", "value": "Oren Hale", "quote": "Oren came down the bank behind them on Rook" },
+      { "note": "a value its quote doesn't hold", "entity": "Rook", "kind": "creature", "attr": "sex", "value": "female", "asWritten": "mare", "quote": "Rook, a black stallion" }
+    ] },
+    { "para": "“That’s no mare, that’s a gelding", "facts": [
+      { "note": "the horse-trader's lie, in speech", "entity": "Bramble", "kind": "creature", "attr": "sex", "value": "male", "asWritten": "gelding", "quote": "That’s no mare, that’s a gelding", "said": "the horse-trader" }
+    ] },
+    { "para": "Ilsa Varr held the bank", "facts": [
+      { "entity": "Oren Hale", "kind": "person", "attr": "state", "value": "lost his left hand", "quote": "his left hand was gone at the wrist" }
+    ] },
+    { "para": "They made camp that night at the Saltmere", "facts": [
+      { "entity": "Saltmere", "kind": "place", "quote": "the Saltmere crossroads" }
+    ] },
+    { "para": "Oren met the convoy at Saltmere", "facts": [
+      { "entity": "Oren Hale", "kind": "person", "attr": "state", "value": "fights with his right hand alone", "quote": "He had learned to fight with his right hand alone" }
+    ] },
+    { "para": "Bramble is in foal", "facts": [
+      { "note": "a question in the notes: a plan, not a fact", "entity": "Bramble", "kind": "creature", "attr": "state", "value": "in foal", "quote": "Bramble is in foal by the end of book 2?" }
+    ] },
+    { "para": "Bramble — mare, eleven", "facts": [
+      { "entity": "Bramble", "kind": "creature", "attr": "sex", "value": "female", "asWritten": "mare", "quote": "Bramble — mare, eleven, bad-tempered with strangers." },
+      { "entity": "Rook", "kind": "creature", "attr": "sex", "value": "male", "asWritten": "stallion", "quote": "Rook — stallion, Oren’s." },
+      { "entity": "Rook", "kind": "creature", "attr": "owner", "value": "Oren Hale", "quote": "Rook — stallion, Oren’s." }
+    ] },
+    { "para": "Ilsa: grey eyes", "facts": [
+      { "entity": "Ilsa Varr", "kind": "person", "attr": "eyes", "value": "grey", "quote": "Ilsa: grey eyes" },
+      { "entity": "Ilsa Varr", "kind": "person", "attr": "birthplace", "value": "Saltmere", "quote": "born in Saltmere" }
+    ] },
+    { "para": "What if Ilsa had green eyes", "facts": [
+      { "note": "the Maybe page is left out of Canon: never asked", "entity": "Ilsa Varr", "kind": "person", "attr": "eyes", "value": "green", "quote": "What if Ilsa had green eyes" },
+      { "entity": "Ilsa Varr", "kind": "person", "attr": "birthplace", "value": "Corwick", "quote": "was born in Corwick" }
+    ] }
+  ],
+  "judge": {
+    "ilsa varr|title|captain": "yes",
+    "ilsa varr|birthplace|saltmere": "yes",
+    "oren hale|sex|male": "yes",
+    "bramble|owner|tamsin hale": "yes",
+    "rook|owner|oren hale": "yes",
+    "oren hale|state|lost his left hand": "yes",
+    "oren hale|state|fights with his right hand alone": "yes"
+  },
+  "refers": [
+    { "sentence": "Tamsin, the elder of the two Hales", "span": "elder", "entity": "Tamsin Hale", "answer": "yes" },
+    { "sentence": "Tamsin swung down from the stallion", "span": "stallion", "entity": "Bramble", "answer": "yes" }
+  ]
+}
