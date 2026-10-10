@@ -3431,7 +3431,7 @@ function lookForUpdate() {
 
 // what's on GitHub, for the fallback path and the release link
 async function latestReleaseFromGitHub() {
-  const res = await fetch('https://api.github.com/repos/hughhowey/neo/releases/latest', {
+  const res = await fetch('https://api.github.com/repos/bfdcampos/neo-canon/releases/latest', {
     headers: { 'User-Agent': 'NEO-App' }
   });
   if (!res.ok) throw new Error('GitHub API returned ' + res.status);
@@ -3589,7 +3589,7 @@ app.whenReady().then(() => {
     logError('startup', err);
     try {
       dialog.showErrorBox(t('NEO failed to start'),
-        t('Please report this at github.com/hughhowey/neo/issues:') + '\n\n' + String((err && err.stack) || err));
+        t('Please report this at github.com/bfdcampos/neo-canon/issues:') + '\n\n' + String((err && err.stack) || err));
     } catch { /* nothing left to try */ }
   }
   app.on('activate', () => {
