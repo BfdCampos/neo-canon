@@ -2301,6 +2301,8 @@ ipcMain.handle('canon:saveMeta', (_e, canonId, patch) => {
   const meta = readJSON(file, { v: 1 });
   const next = { ...meta };
   for (const k of ['out', 'settings']) if (patch && patch[k] !== undefined) next[k] = patch[k];
+  // a page brought back into Canon is read again, whatever it read as before
+  if (patch && patch.unread && patch.unread.length) next.read = Object.fromEntries(Object.entries(meta.read || {}).filter(([k]) => !patch.unread.includes(k)));
   if (JSON.stringify(next) !== JSON.stringify(meta)) writeJSON(file, next);
   return true;
 });

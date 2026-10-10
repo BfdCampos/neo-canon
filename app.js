@@ -63,6 +63,7 @@ const STORY_KINDS = ['chapter', 'unnumbered', 'prologue', 'epilogue'];
 // what comes after the story, where a new chapter never goes
 const BACK_KINDS = ['epilogue', 'acknowledgments', 'about'];
 function chapterKind(chId, meta = book) {
+  if (meta && meta.format === 'notebook') return 'unnumbered'; // a notebook's pages go by their titles
   const k = meta && meta.chapterKinds && meta.chapterKinds[chId];
   if (k && CHAPTER_KINDS.includes(k)) return k;
   // NEO 1.0 kept a prologue and an epilogue as roles of the first and last
@@ -1129,10 +1130,12 @@ async function renderShelves() {
         e.preventDefault();
         const pick = await popMenu(e.clientX, e.clientY, [
           { label: t('New Book'), value: 'book' },
-          { label: t('New Script'), value: 'script' }
+          { label: t('New Script'), value: 'script' },
+          { label: t('New Notebook'), value: 'notebook' }
         ], { from: blank });
         if (pick === 'book') createBookOnShelf(shelf);
         else if (pick === 'script') createScriptOnShelf(shelf);
+        else if (pick === 'notebook') createNotebookOnShelf(shelf);
       });
     }
 
@@ -1840,7 +1843,7 @@ function coverMode(meta) {
 }
 
 function dressTile(el, meta) {
-  if (isScript(meta)) return; // a script wears its card (scriptTile)
+  if (isScript(meta) || isNotebook(meta)) return; // a script wears its card (scriptTile), a notebook its cloth
   el.classList.remove('has-cover');
   const mode = coverMode(meta);
   if (mode === 'image') {
@@ -1874,6 +1877,7 @@ function bookTile(meta, opts = {}) {
     <div class="b-progress" hidden><div></div></div>`;
   el.querySelector('.b-author').textContent = meta.author || '';
   if (isScript(meta)) scriptTile(el, meta);
+  else if (isNotebook(meta)) notebookTile(el, meta);
   else {
     dressTile(el, meta);
     el.querySelector('.b-painting').hidden = !(meta.coverArt && meta.coverArt.status === 'pending');
@@ -1882,7 +1886,7 @@ function bookTile(meta, opts = {}) {
       await refreshCover(meta, el);
     };
   }
-  if (meta.wordGoal > 0) {
+  if (meta.wordGoal > 0 && !isNotebook(meta)) {
     const bar = el.querySelector('.b-progress');
     bar.hidden = false;
     const pct = Math.min(100, Math.round(((meta.wordCount || 0) / meta.wordGoal) * 100));
@@ -1951,7 +1955,8 @@ function bookTile(meta, opts = {}) {
       : navigator.platform.toLowerCase().includes('win') ? t('Move to Recycle Bin') : t('Move to Trash');
     const canCopy = !!window.neo.duplicateBook && !isPageMeta(meta);
     // the cover's own choices, gathered in one place
-    const coverItems = script ? [] : [
+    const notebook = isNotebook(meta);
+    const coverItems = script || notebook ? [] : [
       ...(NO_HOVER ? [] : [{ label: meta.coverImage ? t('Replace cover art…') : t('Set cover art…'), value: 'cover' }]),
       { label: t('New cover'), value: 'refresh' },
       ...(!window.Capacitor ? [{ label: t('Save cover as image…'), value: 'saveCover' }] : []),
@@ -1967,8 +1972,8 @@ function bookTile(meta, opts = {}) {
         : { label: t('Export…'), value: 'export' });
       if (canCopy) options.push({ label: t('Duplicate'), desc: t('A copy of the whole book on this shelf, to keep as a backup or try another version.'), value: 'duplicate' });
       if (coverItems.length) options.push({ label: t('Cover'), desc: t('A new cover, your own art, or a saved image.'), value: 'coverMenu' });
+      if (!notebook) options.push({ label: t('Set word goal…'), desc: t('Adds the subtle progress bar to the cover.'), value: 'goal' });
       options.push(
-        { label: t('Set word goal…'), desc: t('Adds the subtle progress bar to the cover.'), value: 'goal' },
         { label: t('Remove from bookshelf'), desc: t('Takes it off your shelves. The files stay safe in your NEO Library folder on disk.'), value: 'remove' },
         { label: trashLabel, desc: window.Capacitor ? t('Moves the book folder to Deleted Books in your NEO Library, where you can recover it.') : t('Sends the book folder to your system trash, where you can recover it.'), danger: true, value: 'trash' }
       );
@@ -1980,7 +1985,7 @@ function bookTile(meta, opts = {}) {
       if (startPart) items.push({ label: t('Start a part here'), value: 'part' }, '-');
       items.push({ label: t('Export…'), value: 'export' });
       if (canCopy) items.push({ label: t('Duplicate'), value: 'duplicate' });
-      items.push({ label: t('Set word goal…'), value: 'goal' });
+      if (!notebook) items.push({ label: t('Set word goal…'), value: 'goal' });
       if (coverItems.length) items.push({ label: t('Cover') + '  ›', value: 'coverMenu' });
       items.push('-', { label: t('Remove from bookshelf'), value: 'remove' }, { label: trashLabel, value: 'trash', danger: true });
       const x = e.clientX;
@@ -2008,7 +2013,7 @@ function bookTile(meta, opts = {}) {
         { label: 'PDF (.pdf)', value: 'pdf' },
         { label: t('Word (.docx)'), value: 'docx' }, { label: t('EPUB (.epub)'), value: 'epub' },
         ...(window.Capacitor || isPageMeta(meta) ? [] : [{ label: t('Paperback for KDP…'), value: 'paperback' }])
-      ]);
+      ].filter((f) => !notebook || NOTEBOOK_FORMATS.includes(f.value)));
       if (!fmt) return;
       if (window.Capacitor || fmt === 'paperback') {
         await openBook(meta.id);
@@ -2663,7 +2668,7 @@ function renderChapters() {
     if (chId === solo) body.setAttribute('aria-label', book.title ? shownTitle(book.title) : t('The story'));
     else body.setAttribute('aria-labelledby', head.id);
     body.spellcheck = false; // NEO runs its own spellcheck pass
-    if (!story) body.classList.add('no-cap');
+    if (!story || isNotebook()) body.classList.add('no-cap');
     // a script's lines are set as they print (styles.css, SCREENPLAYS)
     if (isScript()) body.classList.add('script-body', $('#paper').classList.contains('narrow') ? 'sp-narrow' : 'sp-geom', 'no-cap');
     body.innerHTML = chapterHTML[chId] || '<p><br></p>';
@@ -2743,6 +2748,7 @@ async function deleteChapterToDarlings(chId, quiet = false) {
 // line in the outline: what it is (a chapter, a part, one of the pages a
 // book carries), or Delete. Resolves to the choice once it's made.
 async function chapterMenu(chId, x = 0, y = 0, from = null) {
+  if (isNotebook()) return notebookPageMenu(chId, x, y, from);
   const kind = chapterKind(chId);
   const words = countWords(chapterText(chId));
   const otherContents = book.chapterOrder.some((c) => c !== chId && chapterKind(c) === 'contents');
@@ -5822,6 +5828,7 @@ function spToFdx(lines, title = {}) {
 // ---- end of screenplay rules ----
 
 const isScript = (meta = book) => !!meta && meta.format === 'screenplay';
+const isNotebook = (meta = book) => !!meta && meta.format === 'notebook';
 const SP_CLASSES = SP_TYPES.filter((x) => x !== 'action').map((x) => 'sp-' + x);
 const SP_NAMES = {
   heading: tk('Scene Heading'), action: tk('Action'), character: tk('Character'), paren: tk('Parenthetical'),
@@ -6574,13 +6581,18 @@ function spEditorMode() {
   $('#nav-pane').classList.toggle('script', on);
   // novel and script each keep their own page zoom: entering one applies its own
   applyPageZoom();
+  // a notebook is notes: Pages, and no Outline or Notes of its own
+  const nb = isNotebook();
+  $('#editor-view').classList.toggle('notebook-mode', nb);
   const tabM = $('.tab[data-tab="manuscript"]');
-  if (tabM) setText(tabM, on ? t('Script') : t('Manuscript'));
+  if (tabM) setText(tabM, on ? t('Script') : nb ? t('Pages') : t('Manuscript'));
   const tabO = $('.tab[data-tab="outline"]');
-  if (tabO) tabO.hidden = false; // a script's outline is its scenes, as cards
+  if (tabO) tabO.hidden = nb; // a script's outline is its scenes, as cards
+  const tabN = $('.tab[data-tab="notes"]');
+  if (tabN) tabN.hidden = nb;
   const add = $('#nav-add');
   if (add) add.hidden = on;
-  if (!on) setText($('#nav-head span'), t('Chapters'));
+  if (!on) setText($('#nav-head span'), nb ? t('Pages') : t('Chapters'));
   spTitlePage(on);
   spApplyStyle();
   // the pane stays open beside a script, unless the writer unpinned it there
@@ -6978,6 +6990,47 @@ function scriptTile(el, meta) {
   el.querySelector('.st-author').textContent = meta.author || '';
 }
 
+// A notebook: world-building notes, a book folder with "format":
+// "notebook" whose chapters are pages with free titles ("Horses"). It feeds
+// its shelf's Canon; it has no outline, no Notes, no goal, no numbering, and
+// is left out of a bound book. On the shelf: a cloth field notebook.
+const NOTEBOOK_FORMATS = ['txt', 'md', 'html', 'docx'];
+async function createNotebookOnShelf(shelf) {
+  const meta = await window.neo.createBook({ author: displayAuthor() });
+  const chId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  await window.neo.writeChapter(meta.id, chId, '<p><br></p>');
+  meta.format = 'notebook';
+  meta.title = t('Notebook');
+  meta.chapterOrder = [chId];
+  meta.chapterTitles = { [chId]: t('First page') };
+  meta.tabNames = { notes: 'Notes', outline: 'Outline' };
+  await writeBookMeta(meta.id, meta);
+  await placeTitle(shelf, meta.id);
+  await writeLibrary(library);
+  await openBook(meta.id);
+}
+function notebookTile(el, meta) {
+  el.classList.add('nb-tile');
+  el.innerHTML = `<span class="nb-band"></span><div class="nb-label"></div><span class="nb-ribbon"></span>`;
+  el.querySelector('.nb-label').textContent = isUntitled(meta.title) ? t('Notebook') : meta.title;
+}
+// right-click a page in the Pages pane: leave it out of Canon, export it, delete it
+async function notebookPageMenu(chId, x, y, from) {
+  const items = [];
+  if (CANON_ON && canonIdFor(book.id)) items.push({ label: t('Leave Out of Canon'), value: 'out', checked: canonIsOut(chId) }, '-');
+  if (countWords(chapterText(chId))) items.push({ label: t('Export Page…'), value: 'export' }, '-');
+  items.push({ label: t('Delete'), value: 'delete', danger: true });
+  const choice = await popMenu(x, y, items, { title: chapterName(chId), from: from || document.querySelector(`.nav-item[data-id="${chId}"] .n-row`) });
+  if (choice === 'out') canonToggleOut(chId);
+  if (choice === 'export') {
+    const fmt = await optionModal(t('Export “{title}”', { title: escHtml(chapterName(chId)) }), null, [
+      { label: t('Text (.txt)'), value: 'txt' }, { label: t('Markdown (.md)'), value: 'md' }, { label: t('HTML (.html)'), value: 'html' }, { label: t('Word (.docx)'), value: 'docx' }]);
+    if (fmt) await doExport(fmt, chId);
+  }
+  if (choice === 'delete') await deleteChapterToDarlings(chId);
+  return null;
+}
+
 /* ================================================================== */
 /*  PLACEHOLDERS + STICKIES                                            */
 /* ================================================================== */
@@ -7213,8 +7266,9 @@ function renderNav() {
     return;
   }
   navRefreshPending = false;
-  $('#nav-head > span').textContent = currentTab === 'canon' ? t('Canon') : t('Chapters');
+  $('#nav-head > span').textContent = currentTab === 'canon' ? t('Canon') : isNotebook() ? t('Pages') : t('Chapters');
   $('#nav-add').hidden = currentTab === 'canon';
+  $('#nav-add').lastElementChild.textContent = isNotebook() ? t('Page') : t('Chapter');
   if (currentTab === 'canon') { renderCanonNav(); return; }
   if (isScript()) { renderScriptNav(); return; }
   const list = $('#nav-list');
@@ -7252,11 +7306,11 @@ function renderNav() {
     const chTitle = story ? (book.chapterTitles || {})[chId] : '';
     const item = document.createElement('div');
     item.className = `nav-item kind-${kind}` + (story ? '' : ' nav-page') + (inPart && kind !== 'part' ? ' in-part' : '') +
-      (chId === currentChapterId ? ' current' : '') + (chId === justAddedEntry ? ' just-added' : '');
+      (chId === currentChapterId ? ' current' : '') + (chId === justAddedEntry ? ' just-added' : '') + (CANON_ON && canonIsOut(chId) ? ' cn-out' : '');
     item.dataset.id = chId;
     item.innerHTML = `<div class="n-row" title="${t('Drag to reorder chapters')}"><span class="n-label"></span>
       <span style="display:flex;align-items:center">${story ? `<span class="n-words">${fmtNum(words)}</span>` : ''}${flagged ? `<span class="n-flag" title="${t('Unresolved placeholder')}"></span>` : ''}</span></div>`;
-    item.querySelector('.n-label').textContent = chId === solo
+    item.querySelector('.n-label').textContent = isNotebook() ? chapterName(chId) : chId === solo
       ? (book.title ? shownTitle(book.title) : t('The story'))
       : (chTitle ? `${chapterMark(chId)} · ${chTitle}` : chapterName(chId));
 
@@ -7278,7 +7332,9 @@ function renderNav() {
       chapterMenu(chId, e.clientX, e.clientY, rowEl);
     });
 
-    if (story && IS_POCKET) {
+    if (isNotebook()) {
+      // a page has no outline note: a notebook is notes already
+    } else if (story && IS_POCKET) {
       // on a phone this pane is for hopping: a tap anywhere on the box
       // goes there. The note is read here and written in the Outline.
       const note = document.createElement('div');
@@ -15472,7 +15528,7 @@ async function shelfBookData(shelf, opts = {}) {
   const metas = [];
   for (const id of shelf.bookIds) {
     const m = await window.neo.readBookMeta(id);
-    if (m && (bound || !isPageMeta(m))) metas.push(m);
+    if (m && !isNotebook(m) && (bound || !isPageMeta(m))) metas.push(m);
   }
   const cover = metas.find((m) => m.kind === 'cover') || null;
   const author = (cover && cover.author) || shelfAuthorName(shelf);
@@ -15763,6 +15819,7 @@ async function doExport(format, chId = null) {
   if (format === 'paperback') { await printPaperback(); return; }
   // a script leaves as a PDF set the way scripts print, or as Fountain
   if (isScript()) { await spExport(['pdf', 'fdx'].includes(format) ? format : 'fountain'); return; }
+  if (isNotebook() && !NOTEBOOK_FORMATS.includes(format)) { toast(t('A notebook leaves as text, Markdown, HTML or Word.')); return; }
   flushAllSaves();
   const one = chId ? chapterExportData(chId) : null;
   if (chId && !one) return;
@@ -16195,8 +16252,36 @@ function canonTabUpdate() {
   const tab = $('.tab[data-tab="canon"]');
   if (tab) tab.hidden = !id;
   if (!id || (canon && canon.id !== id)) { canon = null; canonShown = null; }
+  // a notebook's pages left out of Canon wear their ring once it's known
+  if (id && isNotebook()) canonLoad().then((c) => { if (c && currentTab !== 'canon') renderNav(); });
   if (canonPassOn) canonPassOff(); // a pass belongs to the book it was run on
   else if (canonSlips.length) canonQuietClear(() => true);
+}
+
+// Leave Out of Canon: a notebook page (or a book's Notes, 'notes') that is
+// an exploration, not the world yet. canon.json's `out` holds it, so the
+// book's own files never change; brought back in, it's read again.
+const canonIsOut = (chId) => !!(canon && book && canon.id === canonIdFor(book.id) && ((canon.meta.out || {})[book.id] || []).includes(chId));
+async function canonToggleOut(chId) {
+  if (!(await canonLoad())) return;
+  const out = { ...(canon.meta.out || {}) };
+  const list = new Set(out[book.id] || []);
+  const leaving = !list.has(chId);
+  if (leaving) list.add(chId); else list.delete(chId);
+  if (list.size) out[book.id] = [...list]; else delete out[book.id];
+  await window.neo.canonSaveMeta(canon.id, { out, unread: leaving ? [] : [book.id + '/' + chId] });
+  canon.meta.out = out;
+  renderNav();
+  toast(leaving ? t('Canon leaves this out. Nothing in it is a fact, and nothing in it is checked.') : t('Canon will read this again at the next pause.'));
+}
+if (CANON_ON) {
+  $('.tab[data-tab="notes"]').addEventListener('contextmenu', async (e) => {
+    if (!book || !canonIdFor(book.id)) return;
+    e.preventDefault();
+    await canonLoad();
+    const pick = await popMenu(e.clientX, e.clientY, [{ label: t('Leave Out of Canon'), value: 'out', checked: canonIsOut('notes') }], { title: tabName('notes') });
+    if (pick === 'out') canonToggleOut('notes');
+  });
 }
 
 // One change to one entry, saved. When the file changed underneath (a text

@@ -362,6 +362,56 @@ test('Bramble is now a stallion: the review list, snapshots first, each change a
   assert.equal(await js(`$('#editor-view').classList.contains('canon-side')`), false);
 });
 
+const menuPick = (label) => js(`[...document.querySelectorAll('.pop-menu button')].find((b) => b.textContent.includes(${JSON.stringify(label)})).click()`);
+test('notebooks: New Notebook on the shelf, a cloth tile, Pages and nothing else of a book\'s', async () => {
+  await js(`backToShelf()`);
+  await until(`!$('#bookshelf-view').hidden && !!document.querySelector('.shelf .new-book')`);
+  await js(`(() => { const b = document.querySelector('.shelf .new-book'); const r = b.getBoundingClientRect(); b.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 10, clientY: r.top + 10 })); })()`);
+  await until(`[...document.querySelectorAll('.pop-menu button')].some((b) => b.textContent === 'New Notebook')`);
+  await menuPick('New Notebook');
+  await until(`book && book.format === 'notebook' && !$('#editor-view').hidden`);
+  const nb = await js(`book.id`);
+  const meta = JSON.parse(fs.readFileSync(path.join(LIB, nb, 'book.json'), 'utf8'));
+  assert.equal(meta.format, 'notebook');
+  assert.deepEqual(Object.values(meta.chapterTitles), ['First page']);
+  assert.deepEqual(await js(`[...document.querySelectorAll('.tab')].filter((t) => !t.hidden).map((t) => t.textContent)`), ['Pages', 'Canon', 'Darlings']);
+  assert.equal(await js(`document.querySelector('.chapter-body').classList.contains('no-cap')`), true);
+  await js(`(() => { const b = document.querySelector('.chapter-body'); b.innerHTML = '<p>Saltmere — a fishing town on the grey coast. Ilsa Varr was born here.</p>'; b.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await js(`$('#nav-pane').classList.add('open'); renderNav()`);
+  await tick(400);
+  await shot('canon-notebook-page.png');
+  // on the shelf: distinct from books and scripts, no progress bar
+  await js(`backToShelf()`);
+  await until(`document.querySelectorAll('.book.nb-tile').length === 2`);
+  assert.equal(await js(`[...document.querySelectorAll('.book.nb-tile')].map((x) => x.textContent).join()`), 'Field Notes,Notebook');
+  assert.equal(await js(`[...document.querySelectorAll('.book.nb-tile .b-progress, .book.nb-tile .b-refresh')].length`), 0);
+  await tick(300);
+  await shot('canon-notebook-shelf.png');
+});
+
+test('Leave Out of Canon: a page right-clicked, a hollow ring, canon.json\'s out; brought back, read again', async () => {
+  await js(`openBook('${NOTES}')`);
+  await until(`book && book.id === '${NOTES}' && canon && canon.id === '${CANON}'`);
+  await until(`document.querySelector('.nav-item[data-id="p3"]').classList.contains('cn-out')`); // the fixture's Maybe page
+  const canonJson = () => JSON.parse(fs.readFileSync(path.join(LIB, CANON, 'canon.json'), 'utf8'));
+  await js(`setTimeout(() => notebookPageMenu('p3', 300, 300))`);
+  await until(`[...document.querySelectorAll('.pop-menu button')].some((b) => b.textContent.includes('Leave Out of Canon') && b.classList.contains('on'))`);
+  await menuPick('Leave Out of Canon');
+  await until(`!document.querySelector('.nav-item[data-id="p3"]').classList.contains('cn-out')`);
+  assert.deepEqual(canonJson().out, {});
+  await js(`setTimeout(() => notebookPageMenu('p1', 300, 300))`);
+  await until(`!!document.querySelector('.pop-menu')`);
+  await menuPick('Leave Out of Canon');
+  await until(`document.querySelector('.nav-item[data-id="p1"]').classList.contains('cn-out')`);
+  assert.deepEqual(canonJson().out, { [NOTES]: ['p1'] });
+  assert.equal(canonJson().read[`${NOTES}/p1`] !== undefined, true); // left out, its reading stays until it's brought back
+  await js(`setTimeout(() => notebookPageMenu('p1', 300, 300))`);
+  await until(`!!document.querySelector('.pop-menu')`);
+  await menuPick('Leave Out of Canon');
+  await until(`!document.querySelector('.nav-item[data-id="p1"]').classList.contains('cn-out')`);
+  assert.equal(canonJson().read[`${NOTES}/p1`], undefined); // brought back: read again at the next pause
+});
+
 /* ---------- runner ---------- */
 
 async function main() {

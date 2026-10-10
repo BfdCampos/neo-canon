@@ -2229,3 +2229,24 @@ body.light .canon-pop button { color: #555; border-color: #ccc; }
 #canon-side .cs-applied, #canon-side .cs-edited, #canon-side .cs-skipped { opacity: 0.6; }
 #canon-side .cs-done { color: var(--accent); font-size: 12.5px; padding: 4px 4px 10px; }
 .canon-pop .cp-ask { margin: 10px 0 2px; font-size: 12.5px; line-height: 1.45; max-width: 340px; }
+/* Canon: a notebook on the shelf, a cloth field notebook: shorter and
+   narrower than a book, an elastic band down the right edge, a ribbon at
+   the foot, its title on a paper label. No cover art, no progress bar. */
+.book.nb-tile {
+  width: 94px; height: 136px; align-self: flex-end; display: block; overflow: visible; border-radius: 3px 7px 7px 3px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0,0,0,0.12) 0 1px, transparent 1px 3px),
+    linear-gradient(90deg, #26302a, #33413a 30%, #2d3a33);
+  box-shadow: inset 3px 0 6px -3px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.05), 2px 3px 8px rgba(0,0,0,0.5);
+}
+.nb-tile .nb-band { position: absolute; right: 11px; top: -1px; bottom: -1px; width: 5px; background: linear-gradient(90deg, #0d0d0d, #2b2b2b 50%, #0d0d0d); box-shadow: 0 0 2px rgba(0,0,0,0.7); }
+.nb-tile .nb-label {
+  position: absolute; left: 11px; right: 24px; top: 26%; padding: 7px 5px; border-radius: 1px;
+  background: #ece5d3; color: #2a2620; font-family: var(--body-font); font-size: 9.5px; line-height: 1.25;
+  text-align: center; overflow-wrap: anywhere; box-shadow: 0 1px 2px rgba(0,0,0,0.45); pointer-events: none;
+}
+.nb-tile .nb-ribbon { position: absolute; left: 38%; bottom: -11px; width: 6px; height: 16px; background: #8c2f2a; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); }
+/* a page left out of Canon: a small hollow ring beside its title, on hover */
+.nav-item.cn-out .n-label::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 7px; border: 1.2px solid var(--muted); border-radius: 50%; vertical-align: 1px; opacity: 0; transition: opacity 0.12s; }
+.nav-item.cn-out:hover .n-label::after, .nav-item.cn-out:focus-within .n-label::after { opacity: 1; }
