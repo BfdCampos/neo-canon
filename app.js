@@ -16086,6 +16086,7 @@ window.neo.onMenu(async (msg) => {
     return;
   }
   if (msg.type === 'help') showHelp();
+  if (msg.type === 'goto') goOpen();
   if (msg.type === 'about') showAbout();
   if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'update') updateMessage(msg);
@@ -16178,6 +16179,347 @@ window.neo.onMenu(async (msg) => {
     applyFonts();
   }
 });
+
+/* ================================================================== */
+/*  GO TO ANYTHING — ⌘K (Ctrl+K; View → Go to Anything…)              */
+/*  One field over the page finds a chapter, a passage or a menu      */
+/*  command, and on a shelf that keeps a Canon an entry or a fact      */
+/*  (docs/semantics/IDE.md §4). It writes nothing; the last picks are  */
+/*  this device's (neo.goRecent). Works with Canon off and in Pocket.  */
+/* ================================================================== */
+
+const GO_WEIGHT = { entry: 1, command: 0.9, chapter: 0.85, fact: 0.8, passage: 0.6 };
+const goFold = (s) => String(s == null ? '' : s).normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+  .replace(/[‘’‚′]/g, "'").replace(/[“”„«»]/g, '"').replace(/[‐-―]/g, '-').replace(/…/g, '...').replace(/\s+/g, ' ').trim();
+const goWordAt = (w) => new RegExp(`(?:^|[^\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'u');
+// How well a text answers the query, from 0 to 1: the whole text (1), its
+// start (0.8), the start of one of its words (0.6), anywhere (0.5), each
+// word of the query starting a word of the text in order ("pap kdp", 0.4),
+// or its letters in order (0.1 to 0.25, the closer together the better)
+function goScore(query, text) {
+  const q = goFold(query);
+  const x = goFold(text);
+  if (!q || !x) return 0;
+  if (x === q) return 1;
+  if (x.startsWith(q)) return 0.8;
+  if (goWordAt(q).test(x)) return 0.6;
+  if (x.includes(q)) return 0.5;
+  const words = q.split(' ');
+  if (words.length > 1) {
+    let rest = x;
+    for (const w of words) {
+      const m = goWordAt(w).exec(rest);
+      if (!m) { rest = null; break; }
+      rest = rest.slice(m.index + m[0].length);
+    }
+    if (rest !== null) return 0.4;
+  }
+  const letters = q.replace(/ /g, '');
+  let i = 0;
+  let first = -1;
+  let last = -1;
+  for (let j = 0; j < x.length && i < letters.length; j++) {
+    if (x[j] !== letters[i]) continue;
+    if (first < 0) first = j;
+    last = j;
+    i++;
+  }
+  return i < letters.length ? 0 : 0.1 + 0.15 * (letters.length / (last - first + 1));
+}
+// Items ({ key, group, texts, entry? }) that answer, best first: the best of
+// their texts times their group's weight, plus a little for a recent pick.
+// A fact (or an alias) that answers lifts its entry to the top, which is
+// how "grey mare" finds Bramble.
+function goRank(query, items, recent = []) {
+  const out = new Map();
+  const lifts = [];
+  for (const it of items) {
+    let best = 0;
+    let hit = -1;
+    it.texts.forEach((s, i) => { const v = goScore(query, s); if (v > best) { best = v; hit = i; } });
+    if (!best) continue;
+    const r = recent.indexOf(it.key);
+    out.set(it.key, { ...it, hit, score: best * GO_WEIGHT[it.group] + (r < 0 ? 0 : 0.15 * (1 - r / 8)) });
+    if (it.group === 'fact' && it.entry) lifts.push([it.entry, best]);
+  }
+  for (const [key, best] of lifts) {
+    const e = items.find((x) => x.key === key);
+    const had = out.get(key);
+    if (e) out.set(key, { ...(had || { ...e, hit: -1 }), score: Math.max(had ? had.score : 0, best + 0.25) });
+  }
+  return [...out.values()].sort((a, b) => b.score - a.score);
+}
+// Shelf passages come back after the window's own results; a reply to an
+// older question is dropped
+const goFresh = (seq, reply) => !!reply && reply.seq === seq;
+// a few words either side of text[a, b)
+function goSnippet(text, a, b, n = 8) {
+  const before = new RegExp(`(?:\\S*\\s+){0,${n}}\\S*$`).exec(text.slice(0, a))[0];
+  const after = new RegExp(`^\\S*(?:\\s+\\S+){0,${n}}`).exec(text.slice(b))[0];
+  const open = before.length < a ? '…' : '';
+  return { snippet: open + before + text.slice(a, b) + after + (b + after.length < text.length ? '…' : ''), at: open.length + before.length, span: text.slice(a, b) };
+}
+// (the rules above are plain functions: scripts/go.test.js)
+
+let go = null; // the open palette
+const GO_GROUP = () => ({ entry: t('Entry'), fact: t('Fact'), chapter: t('Chapter'), passage: t('Passage'), command: t('Command') });
+function goRecent() {
+  try { const r = JSON.parse(localStorage.getItem('neo.goRecent')); return Array.isArray(r) ? r : []; } catch { return []; }
+}
+function goRemember(it) {
+  const keep = { key: it.key, group: it.group, title: it.title, sub: it.sub, to: it.to, texts: it.texts };
+  try { localStorage.setItem('neo.goRecent', JSON.stringify([keep, ...goRecent().filter((x) => x.key !== it.key)].slice(0, 8))); } catch { /* a convenience only */ }
+}
+const goAccel = (a) => !a ? '' : IS_MAC ? a.replace(/CmdOrCtrl\+|Cmd\+|Command\+/g, '⌘').replace(/Shift\+/g, '⇧').replace(/Alt\+|Option\+/g, '⌥').replace(/Ctrl\+/g, '⌃')
+  : a.replace(/CmdOrCtrl|Cmd|Command/g, 'Ctrl');
+
+// what there is to find, gathered as the palette opens
+function goItems() {
+  const items = [];
+  if (book && !$('#editor-view').hidden) {
+    for (const chId of book.chapterOrder) {
+      const title = ((book.chapterTitles || {})[chId] || '').trim();
+      const name = chapterName(chId);
+      items.push({ key: `ch:${book.id}/${chId}`, group: 'chapter', texts: [title || name, name], title: title || name, sub: title && title !== name ? name : '', to: { bookId: book.id, chId } });
+    }
+  }
+  const c = CANON_ON && book && canon && canon.id === canonIdFor(book.id) ? canon : null;
+  if (c) {
+    const kinds = CANON_KIND();
+    for (const x of c.entries.values()) {
+      if (!x.data) continue;
+      const e = x.data;
+      items.push({ key: 'entry:' + e.id, group: 'entry', texts: [e.name, ...e.aliases], title: e.name, sub: kinds[e.kind] || '', to: { id: e.id } });
+      for (const f of e.facts) {
+        const quotes = f.sources.filter((s) => !s.written).map((s) => s.quote);
+        items.push({ key: `fact:${e.id}/${f.attr}/${f.label || ''}/${f.value}`, group: 'fact', entry: 'entry:' + e.id, texts: [`${canonLabel(f)}: ${canonValue(f)}`, f.value, f.as || '', ...quotes],
+          title: `${canonLabel(f)}: ${canonValue(f)}`, sub: e.name, quotes, to: { id: e.id } });
+      }
+    }
+  }
+  for (const m of go.commands) {
+    if (m.path === go.self) continue;
+    const where = m.path.split(' › ').slice(1, -1).join(' › ');
+    items.push({ key: 'cmd:' + m.path, group: 'command', texts: [m.label, m.path.split(' › ').slice(1).join(' › ')], title: m.label, sub: where, accel: goAccel(m.accelerator), to: { path: m.path } });
+  }
+  return items.concat(go.others);
+}
+// (lower case with the quotes straight: the same length, so offsets hold)
+const goLow = (s) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s/g, ' ');
+// the open book's paragraphs (the page as it stands), for passages
+function goParas() {
+  const out = [];
+  if (!book || $('#editor-view').hidden) return out;
+  for (const ch of document.querySelectorAll('#chapters .chapter[data-id]')) {
+    const chId = ch.dataset.id;
+    const label = chapterName(chId);
+    for (const p of ch.querySelectorAll('.chapter-body > p:not(.ghost):not(.scene-break)')) {
+      const text = p.textContent;
+      if (text.trim()) out.push({ bookId: book.id, chId, book: book.title, label, text, low: goLow(text) });
+    }
+  }
+  return out;
+}
+
+async function goOpen() {
+  if (go) { go.input.focus(); return; }
+  if (typeof mapUp === 'function' && mapUp()) { mapFindFocus(); return; }
+  const sel = window.getSelection();
+  const back = { el: document.activeElement, range: sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null };
+  const bd = document.createElement('div');
+  bd.className = 'go-backdrop';
+  const box = document.createElement('div');
+  box.className = 'go-box';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-label', t('Go to Anything'));
+  const input = document.createElement('input');
+  input.className = 'go-input';
+  input.spellcheck = false;
+  input.placeholder = t('Go to a chapter, an entry, a passage or a command');
+  input.setAttribute('aria-label', input.placeholder);
+  const list = document.createElement('div');
+  list.className = 'go-list';
+  list.setAttribute('role', 'listbox');
+  box.append(input, list);
+  bd.appendChild(box);
+  document.body.appendChild(bd);
+  go = { bd, input, list, back, rows: [], at: 0, seq: 0, shelf: [], commands: [], others: [], paras: goParas(), self: '' };
+  input.focus();
+  bd.addEventListener('mousedown', (e) => { if (e.target === bd) goClose(true); });
+  input.addEventListener('input', () => goSearch());
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { e.preventDefault(); goClose(true); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (go.rows.length) { go.at = (go.at + (e.key === 'ArrowDown' ? 1 : go.rows.length - 1)) % go.rows.length; goMark(); }
+    } else if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      if (go.rows[go.at]) goPick(go.rows[go.at], e.metaKey || e.ctrlKey);
+    }
+  });
+  goSearch();
+  const mine = go;
+  // the menu's commands, and the other books' chapters, as they come
+  if (window.neo.menuItems) {
+    window.neo.menuItems().then((cmds) => {
+      if (go !== mine) return;
+      go.commands = cmds;
+      go.self = (cmds.find((m) => m.accelerator === 'CmdOrCtrl+K') || {}).path || '';
+      goSearch();
+    }).catch(() => {});
+  }
+  const shelf = book && !$('#editor-view').hidden && library.shelves.find((s) => s.bookIds.includes(book.id));
+  for (const id of shelf ? shelf.bookIds.filter((x) => x !== book.id) : []) {
+    const meta = await shelfMeta(id).catch(() => null);
+    if (go !== mine) return;
+    if (!meta || !Array.isArray(meta.chapterOrder)) continue;
+    for (const chId of meta.chapterOrder) {
+      const title = ((meta.chapterTitles || {})[chId] || '').trim();
+      const name = chapterName(chId, meta);
+      go.others.push({ key: `ch:${id}/${chId}`, group: 'chapter', texts: [title || name, `${meta.title} ${name}`], title: title || name, sub: meta.title, to: { bookId: id, chId } });
+    }
+  }
+  if (go === mine && input.value) goSearch();
+}
+
+function goClose(restore) {
+  if (!go) return;
+  const g = go;
+  go = null;
+  g.bd.remove();
+  if (!restore) return;
+  // Esc: the caret where it was
+  if (g.back.el && g.back.el.isConnected && g.back.el.focus) g.back.el.focus({ preventScroll: true });
+  if (g.back.range && g.back.range.startContainer.isConnected) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(g.back.range);
+  }
+}
+
+let goSearchT = null;
+function goSearch() {
+  const q = go.input.value.trim();
+  let rows;
+  if (!q) rows = goRecent().filter((x) => x && x.to && x.group);
+  else {
+    rows = goRank(q, goItems(), goRecent().map((x) => x.key));
+    // passages: three letters at least, the open book first, twenty at most
+    if (q.length >= 3) {
+      const low = goLow(q);
+      const mine = [];
+      for (const p of go.paras) {
+        const i = p.low.indexOf(low);
+        if (i < 0) continue;
+        mine.push({ key: `p:${p.bookId}/${p.chId}/${mine.length}`, group: 'passage', title: `${p.book}, ${p.label}`, ...goSnippet(p.text, i, i + low.length), to: null, p });
+        if (mine.length >= 20) break;
+      }
+      const shelf = go.shelf.filter((x) => goFold(x.q) === goFold(q)).slice(0, Math.max(0, 20 - mine.length))
+        .map((x, n) => ({ key: `p:${x.bookId}/${x.chId}/s${n}`, group: 'passage', title: `${x.book}, ${x.label}`, snippet: x.snippet, at: x.at, span: x.span, p: x }));
+      rows = rows.concat([...mine, ...shelf].map((x, n) => ({ ...x, score: 0.6 * GO_WEIGHT.passage - n * 1e-4 }))).sort((a, b) => b.score - a.score);
+      const c = CANON_ON && book && canon && canon.id === canonIdFor(book.id) ? canon : null;
+      if (c && go.asked !== q) {
+        go.asked = q;
+        clearTimeout(goSearchT);
+        const seq = ++go.seq;
+        const mineGo = go;
+        goSearchT = setTimeout(() => {
+          window.neo.canonSearch(c.id, q, seq).then((r) => {
+            if (go !== mineGo || !goFresh(go.seq, r)) return;
+            go.shelf = r.passages.filter((x) => x.bookId !== book.id).map((x) => ({ ...x, q }));
+            goSearch();
+          }).catch(() => {});
+        }, 120);
+      }
+    }
+  }
+  go.rows = rows.slice(0, 40);
+  go.at = 0;
+  goRender(q);
+}
+
+function goRender(q) {
+  const list = go.list;
+  list.textContent = '';
+  const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+  if (q && !go.rows.length) { list.appendChild(el('div', 'go-none', t('Nothing matches “{q}”.', { q }))); return; }
+  const groups = GO_GROUP();
+  go.rows.forEach((it, i) => {
+    const row = el('div', 'go-row');
+    row.setAttribute('role', 'option');
+    const main = el('div', 'go-main');
+    const title = el('span', 'go-title', it.title);
+    if (it.group === 'entry' || it.group === 'fact') {
+      const ent = CANON_ON && canon && (canon.entries.get(it.to.id) || {}).data;
+      if (ent) title.style.setProperty('--kind', `var(--canon-${ent.kind})`);
+      title.classList.add('go-kind');
+    }
+    main.appendChild(title);
+    let sub = it.sub || '';
+    if (it.group === 'entry' && it.hit > 0 && it.texts[it.hit]) sub += (sub ? ' — ' : '') + t('also called “{name}”', { name: it.texts[it.hit] });
+    if (it.group === 'fact' && it.hit >= 3 && it.texts[it.hit]) sub += ' — “' + it.texts[it.hit] + '”';
+    if (it.group === 'passage') {
+      const s = el('span', 'go-sub go-snip');
+      s.append(it.snippet.slice(0, it.at), el('b', '', it.span), it.snippet.slice(it.at + it.span.length));
+      main.appendChild(s);
+    } else if (sub) main.appendChild(el('span', 'go-sub', sub));
+    row.appendChild(main);
+    const side = el('span', 'go-group', groups[it.group] || '');
+    if (it.accel) side.prepend(el('kbd', '', it.accel));
+    row.appendChild(side);
+    row.onmousemove = () => { if (go.at !== i) { go.at = i; goMark(); } };
+    row.onclick = (e) => goPick(it, e.metaKey || e.ctrlKey);
+    list.appendChild(row);
+  });
+  goMark();
+}
+function goMark() {
+  [...go.list.children].forEach((r, i) => { r.classList.toggle('on', i === go.at); r.setAttribute('aria-selected', String(i === go.at)); });
+  const on = go.list.children[go.at];
+  if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
+}
+
+async function goPick(it, aside) {
+  goRemember(it);
+  const to = it.to || {};
+  if (it.group === 'command') { goClose(true); window.neo.menuRun(to.path); return; }
+  goClose(false);
+  if (it.group === 'entry' || it.group === 'fact') {
+    if (!CANON_ON || !canon || !canon.entries.has(to.id)) return;
+    if (aside && it.group === 'entry' && book) {
+      // beside the page, in the right-hand pane (Esc goes back)
+      if (currentTab !== 'manuscript') switchTab('manuscript');
+      canonAside = to.id;
+      $('#side-pane').classList.add('open');
+      canonHereUpdate(true);
+      return;
+    }
+    canonGo(to.id);
+    return;
+  }
+  const where = it.group === 'passage' ? it.p : to;
+  if (!where) return;
+  if (!book || book.id !== where.bookId || $('#editor-view').hidden) {
+    await openBook(where.bookId);
+    await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    if (!book || book.id !== where.bookId) return;
+  }
+  if (it.group === 'passage' && CANON_ON) { canonOpenMention({ bookId: where.bookId, chId: where.chId, notes: !!where.notes, snippet: it.snippet, at: it.at, span: it.span }); return; }
+  if (where.notes) { switchTab('notes'); return; }
+  switchTab('manuscript');
+  focusChapterStart(where.chId);
+  const ch = document.querySelector(`.chapter[data-id="${where.chId}"]`);
+  if (ch) ch.scrollIntoView({ block: 'start' });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || !(e.key === 'k' || e.key === 'K' || e.code === 'KeyK')) return;
+  if (document.querySelector('.modal-backdrop:not([hidden])')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (go) goClose(true); else goOpen();
+}, true);
 
 /* ================================================================== */
 /*  CANON                                                              */

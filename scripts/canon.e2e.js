@@ -74,6 +74,7 @@ const shot = async (name) => {
   const want = process.env.CANON_SHOTS; // 1 for all, or a part of the names wanted
   if (!want || (want !== '1' && !want.split(',').some((w) => name.includes(w)))) return;
   fs.mkdirSync(SCREENS, { recursive: true });
+  await js(`$('#hint').hidden = true`); // a toast left from a step before
   const img = await wc.capturePage();
   fs.writeFileSync(path.join(SCREENS, name), img.toPNG());
 };
@@ -549,6 +550,66 @@ test('In this chapter: absent on a shelf without a Canon; On this page in Notes'
   assert.equal(await js(`document.querySelector('#canon-here').children.length`), 0);
   await js(`library.shelves[0].canonId = '${CANON}'; writeLibrary(library)`);
   await js(`canonTabUpdate()`);
+});
+
+const key = (keyCode, modifiers = []) => { wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
+const CMD = process.platform === 'darwin' ? 'meta' : 'control';
+const goRows = `[...document.querySelectorAll('.go-row')].map((r) => r.querySelector('.go-title').textContent + ' | ' + r.querySelector('.go-group').lastChild.textContent)`;
+test('Go to Anything: ⌘K, "grey mare", Enter: the Canon tab shows Bramble', async () => {
+  await js(`openBook('${SALT}')`);
+  await until(`book && book.id === '${SALT}'`);
+  await js(`switchTab('manuscript')`);
+  key('K', [CMD]);
+  await until(`!!document.querySelector('.go-box .go-input') && document.activeElement === document.querySelector('.go-input')`);
+  assert.equal(await js(`document.querySelector('.go-input').placeholder`), 'Go to a chapter, an entry, a passage or a command');
+  wc.insertText('grey mare');
+  await until(`${goRows}.some((r) => / \\| Passage$/.test(r)) && go.shelf.length > 0`);
+  const rows = await js(goRows);
+  assert.equal(rows[0], 'Bramble | Entry');
+  assert.ok(rows.some((r) => /^Species: horse \| Fact$/.test(r)), rows.join('\n'));
+  await tick(200);
+  await shot('canon-go-anything.png');
+  key('Return');
+  await until(`!go && currentTab === 'canon' && canonShown === 'bramble' && document.querySelector('#canon-view .cn-name')?.textContent === 'Bramble'`);
+  assert.equal(JSON.parse(await js(`localStorage.getItem('neo.goRecent')`))[0].key, 'entry:bramble');
+});
+
+test('Go to Anything: a menu command runs as if picked; Esc puts the caret back; no Canon, no entries', async () => {
+  await js(`switchTab('manuscript')`);
+  const caret = `(() => { const s = getSelection(); return s.rangeCount ? [s.anchorNode.textContent.slice(0, 20), s.anchorOffset, document.activeElement.className] : null; })()`;
+  await js(`(() => { const p = [...document.querySelectorAll('.chapter[data-id="c2"] .chapter-body p')][1]; p.closest('.chapter-body').focus(); const r = document.createRange(); r.setStart(p.firstChild, 7); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()`);
+  const was = await js(caret);
+  key('K', [CMD]);
+  await until(`!!go`);
+  wc.insertText('pap kdp');
+  await until(`${goRows}.length > 0`);
+  assert.equal((await js(goRows))[0], 'Paperback for KDP… | Command');
+  key('Escape');
+  await until(`!go`);
+  assert.deepEqual(await js(caret), was);
+  assert.equal(await js(`$('#editor-view').hidden`), false); // Esc closed the palette, not the book
+  // a command: Take Snapshot, through the menu's own item
+  const snaps = () => fs.readdirSync(path.join(LIB, SALT, 'snapshots')).length;
+  const n = snaps();
+  key('K', [CMD]);
+  await until(`!!go`);
+  wc.insertText('snapshot');
+  await until(`(${goRows}[0] || '') === 'Take Snapshot | Command'`);
+  key('Return');
+  await until(`/Snapshot taken|Nothing has changed since your last snapshot/.test($('#hint').textContent)`);
+  assert.ok(snaps() >= n);
+  // a shelf without a Canon: chapters, passages and commands only
+  await js(`stopCanon(library.shelves[0])`);
+  await js(`canonTabUpdate()`);
+  key('K', [CMD]);
+  await until(`!!go`);
+  wc.insertText('bramble');
+  await until(`${goRows}.some((r) => / \\| Passage$/.test(r))`);
+  const groups = new Set((await js(goRows)).map((r) => r.split(' | ')[1].replace(/^.*?(Chapter|Passage|Command)$/, '$1')));
+  assert.deepEqual([...groups].filter((g) => !['Chapter', 'Passage', 'Command'].includes(g)), []);
+  key('Escape');
+  await until(`!go`);
+  await js(`library.shelves[0].canonId = '${CANON}'; writeLibrary(library).then(() => canonTabUpdate())`);
 });
 
 /* ---------- runner ---------- */

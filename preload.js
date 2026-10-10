@@ -55,6 +55,9 @@ contextBridge.exposeInMainWorld('neo', {
   appVersion: () => ipcRenderer.invoke('app:version'),
   openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
+  // Go to Anything: the menu's commands, and running one
+  menuItems: () => ipcRenderer.invoke('menu:items'),
+  menuRun: (where) => ipcRenderer.invoke('menu:run', where),
   // Canon (canon.js; the CANON block in main.js)
   canonCreate: (shelfId, shelfName) => ipcRenderer.invoke('canon:create', shelfId, shelfName),
   canonOpen: (canonId) => ipcRenderer.invoke('canon:open', canonId),

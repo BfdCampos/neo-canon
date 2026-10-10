@@ -2691,6 +2691,26 @@ function sendToWindow(msg) {
   if (w) w.webContents.send('menu', msg);
 }
 
+// Go to Anything (docs/semantics/IDE.md §4) finds the menu's commands by
+// their path ("File › Export › Paperback for KDP…") and runs one as if it
+// were picked: separators, unlabelled roles and disabled items are left out
+function menuCommands(items = (Menu.getApplicationMenu() || { items: [] }).items, trail = [], out = []) {
+  for (const it of items) {
+    const label = (it.label || '').replace(/&(?!&)/g, '');
+    if (it.type === 'separator' || !it.visible || !label) continue;
+    if (it.submenu) menuCommands(it.submenu.items, [...trail, label], out);
+    else if (it.enabled) out.push({ path: [...trail, label].join(' › '), label, accelerator: it.accelerator || '', enabled: true, item: it });
+  }
+  return out;
+}
+ipcMain.handle('menu:items', () => menuCommands().map(({ item: _item, ...x }) => x));
+ipcMain.handle('menu:run', (e, where) => {
+  const hit = menuCommands().find((x) => x.path === where);
+  if (!hit) return false;
+  hit.item.click(undefined, BrowserWindow.fromWebContents(e.sender), e.sender);
+  return true;
+});
+
 // the Format menu's ticks: whether the caret is in a poetry paragraph, and
 // whether typewriter scrolling is on
 let poetryState = false;
@@ -3048,6 +3068,12 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+/',
           registerAccelerator: false, // the window answers / and ? itself (isHelpShortcut)
           click: () => sendToWindow({ type: 'help' })
+        },
+        {
+          label: t('Go to Anything…'),
+          accelerator: 'CmdOrCtrl+K',
+          registerAccelerator: false, // the window answers the key itself, like ⌘;
+          click: () => sendToWindow({ type: 'goto' })
         },
         { type: 'separator' },
         {
