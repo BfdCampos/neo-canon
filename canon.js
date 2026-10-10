@@ -410,8 +410,14 @@
 
   const wordsOf = (s) => norm(s).split(/[^\p{L}\p{M}'-]+/u).filter(Boolean);
   // a file name: accents off, any script's letters kept (李雷 stays 李雷)
-  const slug = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').normalize('NFC').toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'entry';
+  // (never a name Windows keeps for itself, CON or LPT1, which a synced
+  // library couldn't hold there)
+  const RESERVED = /^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$/;
+  const slug = (s) => {
+    const out = String(s || '').normalize('NFD').replace(/\p{M}/gu, '').normalize('NFC').toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'entry';
+    return RESERVED.test(out) ? out + '-entry' : out;
+  };
   // one line in the file, whatever was typed or pasted
   const one = (s) => String(s == null ? '' : s).replace(/\s*[\r\n\u2028\u2029]+\s*/g, ' ');
   const attrOf = (label) => LABEL_ATTR[norm(label)] || null;
@@ -552,9 +558,16 @@
   // "That's right" makes a fact theirs; Set Aside and Not right move it to
   // the entry's Set aside (nothing is deleted); Restore brings it back theirs.
   function confirmFact(e, i) {
-    const f = e.facts[i];
-    f.state = 'yours';
-    for (const s of f.sources) delete s.changed;
+    let f = e.facts[i];
+    // what a character says, made true by the writer: the writer's fact,
+    // written in Canon; the line stays what it was, theirs (UX-REVIEW #5, #6)
+    if (talkOnly(f)) {
+      f = { attr: f.attr, label: f.label, value: f.value, as: f.as, state: 'yours', sources: [{ written: true }] };
+      e.facts.push(f);
+    } else {
+      f.state = 'yours';
+      for (const s of f.sources) delete s.changed;
+    }
     // the other values (checked or not) step aside
     for (const o of e.facts.filter((x) => x !== f && x.attr === f.attr && x.state !== 'yours' && norm(x.value) !== norm(f.value) && ATTRS[f.attr] && ATTRS[f.attr].single)) setAsideFact(e, e.facts.indexOf(o), false);
   }
@@ -572,8 +585,15 @@
       const x = e.facts[i];
       if (!same(x, f) && ((old && same(x, old)) || (single && x.attr === f.attr))) setAsideFact(e, i, false);
     }
-    const had = e.facts.find((x) => same(x, f));
+    // never a fact resting on what someone says or plans: the new value
+    // cites the writer's choice, not the horse-trader's "gelding" (QA F7)
+    const had = e.facts.find((x) => same(x, f) && !talkOnly(x));
     if (!had) { e.facts.push(f); return; }
+    const talk = had.sources.filter((x) => x.said || x.plan);
+    if (talk.length) {
+      had.sources = had.sources.filter((x) => !x.said && !x.plan);
+      e.facts.push({ attr: had.attr, label: had.label, value: had.value, as: had.as, state: 'unverified', sources: talk });
+    }
     had.state = 'yours';
     if (f.as) had.as = f.as;
     if (!had.sources.some((x) => x.written)) had.sources.push({ written: true });
@@ -587,7 +607,7 @@
     for (const a of [from.name, ...from.aliases]) if (!has(a)) into.aliases.push(a);
     const same = (x, y) => x.attr === y.attr && norm(x.value) === norm(y.value) && x.label === y.label;
     for (const f of from.facts) {
-      const had = into.facts.find((x) => same(x, f));
+      const had = into.facts.find((x) => same(x, f) && talkOnly(x) === talkOnly(f));
       if (!had) {
         const clash = ATTRS[f.attr] && ATTRS[f.attr].single && into.facts.some((x) => x.attr === f.attr && !same(x, f));
         into.facts.push({ ...f, state: clash && f.state !== 'yours' ? 'disagree' : f.state });
@@ -735,8 +755,9 @@
             else if (SPECIES[noun.lw] && k.species && SPECIES[noun.lw] !== k.species.value) add({ kind: 'species', strength: 'strong', id: m.id, attr: 'species', fact: k.species, start: noun.start, end: noun.end, to: keepCase(noun.w, k.species.value) });
           }
         }
-        // Tamsin, the elder: a kin word against the sibling fact (weak)
-        for (const f of k.rel.filter((x) => x.attr === 'sibling' && KIN_SWAP[x.as])) {
+        // Tamsin, the elder: a kin word against the sibling fact (weak);
+        // not after E's ("Mara's elder brother" is the brother's)
+        for (const f of /^['’]s\b/.test(text.slice(m.end)) ? [] : k.rel.filter((x) => x.attr === 'sibling' && KIN_SWAP[x.as])) {
           for (let i = after(m.end), n = 0; i >= 0 && i < words.length && n < 6; i++, n++) {
             const w = words[i];
             const o = inS.find((x) => x.start < w.end && x.end > w.start);
@@ -779,7 +800,9 @@
           const det = words[(c && c.end <= w.start ? i - 1 : i) - 1];
           const sole = ids.length === 1 && inS[0].end <= w.start && world.get(inS[0].id);
           const agrees = det && sole && (det.lw === 'her' || det.lw === 'his') && (!sole.sex || PRONOUNS[det.lw] === sole.sex.value);
-          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]);
+          // or a note's line: "Ilsa: grey eyes, born in Saltmere"
+          const head = c && inS[0] && inS[0].start === s.start && /^\s*(?::|[—–]\s)/.test(text.slice(inS[0].end)) && !inS.some((m) => m !== inS[0] && m.start < c.start) ? inS[0] : null;
+          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head;
           const k = owner && world.get(owner.id);
           if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, k[attr].as || k[attr].value) });
         }
@@ -843,7 +866,8 @@
         const span = p.text.slice(c.start, c.end);
         if (c.strength === 'weak') {
           if (!reader) continue;
-          if (await reader.refers({ sentence: s.text, span, entity: e.name, paragraph: p.text }) !== 'yes') continue;
+          const others = [...new Set(mentions(p.text, idx).map((m) => m.id))].filter((id) => id !== e.id).map((id) => byId.get(id).name);
+          if (await reader.refers({ sentence: s.text, span, entity: e.name, paragraph: p.text, others }) !== 'yes') continue;
         }
         const srcs = c.fact ? c.fact.sources.filter((x) => !x.written) : [];
         slips.push({
@@ -862,7 +886,7 @@
   /* ---------- reading ---------- */
 
   // Bumped when the prompts change, so cached proposals are asked again
-  const PROMPT = 1;
+  const PROMPT = 2;
   const STOP = new Set(['the', 'and', 'his', 'her', 'its', 'their', 'with', 'from', 'that', 'this', 'was', 'were', 'had', 'has', 'for', 'into', 'onto', 'by']);
   const CUE = new Set([...Object.keys(SEX_WORDS), ...Object.keys(COLOURS), ...Object.keys(SPECIES), ...Object.keys(KIN), 'born', 'eyes', 'hair']);
   const stripTitles = (name) => String(name || '').trim().split(/\s+/).filter((w, i, all) => i === all.length - 1 || !TITLES.has(w.toLowerCase().replace(/\.$/, ''))).join(' ');
@@ -882,7 +906,9 @@
   function findEntry(entries, name) {
     const n = norm(stripTitles(name));
     if (!n) return null;
-    const whole = entries.find((e) => norm(e.name) === n || e.aliases.some((a) => norm(a) === n));
+    // "The Salt Law" kept by hand is the reader's "Salt Law", and the other way round
+    const is = (a) => norm(a) === n || norm(stripTitles(a)) === n;
+    const whole = entries.find((e) => is(e.name) || e.aliases.some(is));
     if (whole) return whole;
     const parts = entries.filter((e) => e.kind === 'person' && nameParts(e.name).some((p) => norm(p) === n));
     return parts.length === 1 ? parts[0] : null;
@@ -939,38 +965,118 @@
   // drops it: a quote not in the source (P0 #7), an entity not named in it,
   // its paragraph or the one before (which the reader saw too), a value the
   // quote doesn't hold, a value the writer already said is not right.
-  function accept(entries, prop, src, para, prev, full) {
+  // The shelf's full names: two capitalised words together, neither a
+  // title nor a word the shelf also writes in lower case ("Then Ilsa" is no
+  // name). → Map one part (lower case) → Set of full names
+  function shelfNames(texts) {
+    const lower = new Set();
+    for (const t of texts) for (const m of t.matchAll(/(?<![\p{L}'’])\p{Ll}[\p{L}\p{M}]*/gu)) lower.add(m[0]);
+    const out = new Map();
+    out.lower = lower;
+    out.count = (w) => texts.reduce((n, t) => n + (t.match(new RegExp(`(?<![\\p{L}\\p{M}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{M}])`, 'gu')) || []).length, 0);
+    for (const t of texts) {
+      // (overlapping: "Captain Ilsa Varr" holds "Ilsa Varr")
+      for (const m of t.matchAll(/(?<![\p{L}\p{M}'’-])(\p{Lu}[\p{Ll}\p{M}]{2,})(?=\s+(\p{Lu}[\p{Ll}\p{M}]{2,})(?![\p{L}\p{M}]))/gu)) {
+        const parts = [m[1], m[2]];
+        if (parts.some((w) => TITLES.has(w.toLowerCase()) || lower.has(w.toLowerCase()))) continue;
+        for (const w of parts) {
+          if (!out.has(w.toLowerCase())) out.set(w.toLowerCase(), new Set());
+          out.get(w.toLowerCase()).add(parts.join(' '));
+        }
+      }
+    }
+    return out;
+  }
+
+  // Places the shelf names plainly: a capitalised word after in, at, to,
+  // from, below… three times or more, never written in lower case and no
+  // part of a person's name. (So a misspelling of one can be seen for what
+  // it is, whether or not the reader named the place.)
+  function shelfPlaces(texts, names) {
+    const count = new Map();
+    for (const t of texts) {
+      for (const m of t.matchAll(/(?<![\p{L}\p{M}])(?:in|at|to|from|of|below|above|near|towards?|through|into|past|beyond|outside)\s+(\p{Lu}[\p{Ll}\p{M}]{3,})(?![\p{L}\p{M}'’-])/gu)) {
+        const w = m[1];
+        if (names.lower.has(w.toLowerCase()) || names.has(w.toLowerCase()) || TITLES.has(w.toLowerCase())) continue;
+        count.set(w, (count.get(w) || 0) + 1);
+      }
+    }
+    return [...count].filter(([, n]) => n >= 3).map(([w]) => w);
+  }
+
+  const JOINS = new Set(['of', 'the', 'de', 'du', 'da', 'del', 'la', 'le', 'van', 'von', 'der', 'and', 'on', 'upon']);
+  function accept(entries, prop, src, para, prev, full, names = new Map()) {
     // an entry is someone or something with a name: "the drover" is not one
     if (!prop || !prop.entity || !prop.quote || !/^\p{Lu}/u.test(stripTitles(prop.entity))) return;
     const quote = gateQuote(prop.quote, full);
     if (!quote || !reaches(entries, prop.entity, quote, prev + '\n' + para.text)) return;
     let e = findEntry(entries, prop.entity);
+    // one name for one person: the reader's "Varr" or "Ilsa" is the shelf's
+    // "Ilsa Varr"; "Hale", which two people share, is no one in particular
+    let name = stripTitles(prop.entity);
+    if (!e && !/\s/.test(name) && names.has(name.toLowerCase())) {
+      const all = names.get(name.toLowerCase());
+      if (all.size > 1) return;
+      name = [...all][0];
+      e = findEntry(entries, name);
+    }
     if (e && e.locked) return;
+    let fresh = false;
     if (!e) {
-      const name = stripTitles(prop.entity);
+      // a new name must be in the text as written ("Ponies" from "a string
+      // of ponies" is no one), and not a slip of the pen for one already
+      // there (Corwyck is Corwick misspelt, not a second town)
+      const parts = name.split(/\s+/);
+      if (!parts.every((w) => hasWord(prev + '\n' + para.text, w)) || misspelt(name, entries)) return;
+      // a name's words are capitalised, but for small ones inside it ("House of
+      // Varr"): "Keeper of Kellsharrow light" is a description
+      if (!parts.every((w, i) => /^\p{Lu}/u.test(w) || (i > 0 && i < parts.length - 1 && JOINS.has(w)))) return;
+      // nor a word the shelf writes in lower case too: "She", "Ponies"
+      if (names.lower && parts.length === 1 && (names.lower.has(name.toLowerCase()) || PRONOUNS[name.toLowerCase()])) return;
       let id = slug(name);
       for (let n = 2; entries.some((x) => x.id === id); n++) id = slug(name) + '-' + n;
       e = newEntry(name, prop.kind, id);
       entries.push(e);
+      fresh = true;
     }
-    if (!prop.attr || !ATTRS[prop.attr]) return;
+    // a new entry stays only if what was said of it gets through
+    const drop = () => { if (fresh && !e.facts.length) entries.splice(entries.indexOf(e), 1); };
+    if (!prop.attr) return;
+    if (!ATTRS[prop.attr]) return drop();
     const n = normaliseFact(prop.attr, prop.value, prop.asWritten);
-    if (!n) return;
+    if (!n) return drop();
+    // a single name as a value is the shelf's full one, if only one has it
+    if (ATTRS[prop.attr].ref && !/\s/.test(n.value) && names.has && names.has(n.value.toLowerCase()) && names.get(n.value.toLowerCase()).size === 1) n.value = [...names.get(n.value.toLowerCase())][0];
     const ref = ATTRS[prop.attr].ref && findEntry(entries, n.value);
+    // no one is their own owner, sister or home
+    if (ATTRS[prop.attr].ref && (ref === e || norm(stripTitles(n.value)) === norm(stripTitles(e.name)))) return drop();
     const f = { attr: prop.attr, label: prop.attr === 'other' ? prop.label || 'Other' : undefined, value: ref ? ref.name : n.value, as: n.as, state: 'unverified', sources: [] };
-    if (!valueInQuote(f, quote, e, entries)) return;
+    if (!valueInQuote(f, quote, e, entries)) return drop();
+    // a place someone lives in or was born in, named on the shelf twice or
+    // more, is an entry of its own (so "Corwyck" can be seen for the slip it
+    // is); a name written once may be the slip itself
+    if (!ref && (prop.attr === 'home' || prop.attr === 'birthplace') && names.count && !/\s/.test(f.value) && /^\p{Lu}/u.test(f.value)
+      && !misspelt(f.value, entries) && !(names.lower || new Set()).has(f.value.toLowerCase()) && names.count(f.value) >= 2) {
+      let id = slug(f.value);
+      for (let k = 2; entries.some((x) => x.id === id); k++) id = slug(f.value) + '-' + k;
+      entries.push(newEntry(f.value, 'place', id));
+    }
     const where = quoteIn(quote, para.text);
     const source = { label: `${src.book}, ${src.label}`, quote, book: src.bookId, ch: src.chId };
     if (where.said) source.said = prop.said || true;
     if (where.plan) source.plan = true;
     const same = (a, b) => a.attr === b.attr && norm(a.value) === norm(b.value) && (a.attr !== 'other' || a.label === b.label);
-    if (e.setAside.some((x) => x.state === 'not right' && same(x, f) && x.sources.some((s) => norm(s.quote) === norm(quote)))) return;
-    const had = e.facts.find((x) => same(x, f));
+    if (e.setAside.some((x) => x.state === 'not right' && same(x, f) && x.sources.some((s) => norm(s.quote) === norm(quote)))) return drop();
+    // what someone says, or a plan, is never a source of the story's own
+    // fact, nor joins one: the trader's "that's a gelding" stays his
+    const had = e.facts.find((x) => same(x, f) && talkOnly(x) === !!(source.said || source.plan));
     if (!had) { f.sources.push(source); e.facts.push(f); return; }
     if (!had.as && f.as) had.as = f.as;
     // the same passage twice (a whole sentence and a piece of it) is one source
     if (!had.sources.some((s) => s.book === source.book && s.ch === source.ch && (norm(s.quote).includes(norm(quote)) || norm(quote).includes(norm(s.quote))))) had.sources.push(source);
   }
+  // a fact that rests only on speech or plans (the writer's own never does)
+  const talkOnly = (f) => f.state !== 'yours' && !f.sources.some((s) => s.written) && f.sources.length > 0 && f.sources.every((s) => s.said || s.plan);
 
   const live = (s) => !s.written && !s.changed;
   const solid = (f) => f.state === 'yours' || f.sources.some((s) => live(s) && !s.said && !s.plan);
@@ -981,6 +1087,288 @@
   // asked of the reader, one fact at a time; unsure stays unchecked.
   function ruleSupported(e, f, entries) {
     return f.sources.some((s) => live(s) && !s.said && !s.plan && tiedTo(e, f, s.quote, entries, false));
+  }
+
+  /* ---------- the gates on checking (docs/semantics/ACCURACY.md) ---------- */
+
+  // A fact is checked only by what the text shows deterministically, or by
+  // an explicit yes from the reader to a plain question that it also
+  // answers no to the opposite of. Anything else stays unchecked, and an
+  // unchecked fact raises no slips. A wrong fact marked checked is worse
+  // than a right one left for the writer.
+
+  const PLAN = /\?|\b(?:what if|maybe|perhaps|might|could be)\b/i;
+  const NO_VALUE = { value: '\u0000', as: '', sources: [] };
+
+  // a capitalised word a letter or two from a name it isn't (Corwyck for
+  // Corwick): a value that is one is a slip of the pen, not a place
+  function misspelt(value, entries) {
+    const names = nameTokens(entries);
+    return String(value || '').split(/\s+/).map((w) => w.replace(/[^\p{L}\p{M}'’-]/gu, '').replace(/['’]s$/, '')).some((w) => {
+      const low = w.toLowerCase();
+      if (w.length < 5 || names.some(([n]) => n === low)) return false;
+      return names.some(([n]) => editDistance(low, n) <= (n.length >= 8 ? 2 : 1));
+    });
+  }
+
+  // The shelf's own evidence for each entry's traits: every passage that
+  // ties a word to an entry the way a strong slip would ("Bramble, the grey
+  // mare", "Captain Varr's eyes were the grey of wet slate", "Ilsa: grey
+  // eyes"). Never a pronoun, speech, a question or a maybe, or a sentence
+  // the writer said is not a slip. → Map 'id/attr' → Map value → [where]
+  function shelfEvidence(sources, entries, notSlips = []) {
+    const idx = mentionIndex(entries);
+    const world = new Map(entries.map((x) => [x.id, { e: x, rel: [], sex: NO_VALUE, species: NO_VALUE, eyes: NO_VALUE, hair: NO_VALUE }]));
+    const dismissed = new Set(notSlips.map((n) => n.fact + '|' + n.sentence));
+    const out = new Map();
+    const add = (id, attr, value, w) => {
+      const k = id + '/' + attr;
+      if (!out.has(k)) out.set(k, new Map());
+      const m = out.get(k);
+      if (!m.has(value)) m.set(value, []);
+      if (!m.get(value).some((x) => x.chapter === w.chapter && x.quote === w.quote)) m.get(value).push(w);
+    };
+    sources.forEach((src, order) => {
+      for (const p of sourceParas(src.html)) {
+        const sents = sentences(p.text);
+        for (const c of paraCandidates(p.text, idx, world, [])) {
+          if (c.strength !== 'strong' || c.kind === 'pronoun' || !TIED[c.attr]) continue;
+          const s = sents[c.si];
+          if (PLAN.test(s.text)) continue;
+          const e = world.get(c.id).e;
+          if (dismissed.has(`${e.id}/${c.attr}|${textHash(norm(s.text))}`)) continue;
+          const word = p.text.slice(c.start, c.end).toLowerCase().replace(/['’]s$/, '');
+          const value = TIED[c.attr](word, c.kind);
+          if (!value) continue;
+          // the sentence is the quote, cut to 30 words around the word if longer
+          const words = s.text.split(/\s+/);
+          let quote = s.text;
+          if (words.length > 30) {
+            const at = s.text.slice(0, c.start - s.start).split(/\s+/).length - 1;
+            quote = words.slice(Math.max(0, at - 14), Math.max(0, at - 14) + 30).join(' ');
+          }
+          const w = { chapter: src.bookId + '/' + src.chId, order, quote, src, as: SEX_WORDS[word] || c.attr === 'species' ? word : COLOURS[word] && COLOURS[word] !== word ? word : '' };
+          add(e.id, c.attr, value, w);
+          // a mare is a horse
+          if (c.attr === 'sex' && SEX_WORDS[word] && SEX_WORDS[word][2]) add(e.id, 'species', SEX_WORDS[word][2], { ...w, as: '' });
+        }
+      }
+    });
+    return out;
+  }
+  // of the values the shelf shows for one trait, the one it establishes:
+  // the only one; or one said in two places or more, first, against others
+  // said once each (a slip the writer made once, after the fact was set).
+  // null: the shelf disagrees with itself; undefined: it shows none.
+  function established(ev) {
+    if (!ev || !ev.size) return undefined;
+    if (ev.size === 1) return [...ev.keys()][0];
+    const count = (ws) => new Set(ws.map((w) => w.chapter)).size;
+    const first = (ws) => Math.min(...ws.map((w) => w.order));
+    for (const [v, ws] of ev) {
+      const others = [...ev].filter(([o]) => o !== v);
+      if (count(ws) >= 2 && others.every(([, o]) => count(o) === 1 && first(o) > first(ws))) return v;
+    }
+    return null;
+  }
+
+  // Where each single-valued attribute of an entry stands after a read. The
+  // state of every fact that isn't the writer's is worked out afresh from
+  // its sources, the shelf's evidence and (later) the reader's answers, so
+  // a Canon read with looser gates is put right by the next read.
+  //   The writer's value stands; others wait as disagreeing.
+  //   A trait (sex, species, eyes, hair) is checked only where the shelf
+  //   establishes it; values it doesn't establish wait. If the shelf says
+  //   two things and neither is established, every value waits ("Your
+  //   sources disagree"): no checked fact, no slip, until the writer picks.
+  //   Anything else read with two values: both wait.
+  const evSource = (w) => ({ label: `${w.src.book}, ${w.src.label}`, quote: w.quote, book: w.src.bookId, ch: w.src.chId });
+  const sameSource = (a, b) => a.book === b.book && a.ch === b.ch && (norm(a.quote).includes(norm(b.quote)) || norm(b.quote).includes(norm(a.quote)));
+  function settle(e, evidence, holds = () => true) {
+    for (const f of e.facts) if (f.state === 'verified' || f.state === 'disagree') f.state = 'unverified';
+    for (const attr of Object.keys(ATTRS).filter((a) => ATTRS[a].single)) {
+      // (a relation the text doesn't tie, or a misspelt place, is no rival)
+      const these = e.facts.filter((f) => f.attr === attr && solid(f) && (f.state === 'yours' || holds(e, f)));
+      const mine = new Set(these.filter((f) => f.state === 'yours').map((f) => norm(f.value)));
+      const others = these.filter((f) => f.state !== 'yours');
+      if (!TIED[attr]) {
+        const vals = new Set([...mine, ...others.map((f) => norm(f.value))]);
+        if (vals.size > 1) for (const f of others) if (!mine.has(norm(f.value))) f.state = 'disagree';
+        continue;
+      }
+      const ev = evidence.get(e.id + '/' + attr);
+      const win = established(ev);
+      const add = (value, state) => {
+        const ws = ev.get(value);
+        const n = normaliseFact(attr, value, ws[0].as) || { value, as: '' };
+        const f = { attr, value: n.value, as: n.as, state, sources: ws.slice(0, 3).map(evSource) };
+        e.facts.push(f);
+        return f;
+      };
+      for (const f of others) {
+        if (mine.size) f.state = mine.has(norm(f.value)) && win === norm(f.value) ? 'verified' : mine.has(norm(f.value)) ? 'unverified' : 'disagree';
+        else if (win) f.state = norm(f.value) === win ? 'verified' : 'disagree';
+        else if (win === null || new Set(others.map((x) => norm(x.value))).size > 1) f.state = 'disagree';
+        // checked by the shelf's own words: they are its source too
+        if (f.state === 'verified' && !f.sources.some((s) => live(s) && ev.get(win).some((w) => sameSource(s, evSource(w))))) f.sources.push(evSource(ev.get(win)[0]));
+      }
+      if (mine.size || !others.length || !ev) continue;
+      // a reader's value against the shelf's: the shelf's is listed beside it
+      const has = (v) => others.some((f) => norm(f.value) === v);
+      if (win && !has(win)) add(win, 'verified');
+      if (win === null) for (const v of ev.keys()) if (!has(v)) add(v, 'disagree');
+    }
+  }
+
+  // Relations (owner, kin, spouse, where someone lives or was born) are
+  // where small readers go most wrong: "Captain Varr knelt beside him" made
+  // Tamsin her sister. The sentence holding the quote must name both and
+  // hold a word for the relation between them ('rule' when the words say
+  // which way round, 'linked' when only that they are tied), else nothing.
+  const REL_WORDS = {
+    sibling: ['sister', 'brother', 'sibling', 'siblings', 'twin', 'twins'],
+    parent: ['father', 'mother', 'parent', 'son', 'daughter', 'child', 'children'],
+    child: ['father', 'mother', 'parent', 'son', 'daughter', 'child', 'children'],
+    spouse: ['wife', 'husband', 'married', 'marry', 'wed', 'wedded', 'widow', 'widower', 'spouse'],
+    owner: ['own', 'owned', 'owns', 'owner', 'belonged', 'belongs', 'belong'],
+    home: ['lived', 'lives', 'live', 'living', 'home', 'house', 'dwelt', 'dwells', 'settled'],
+    birthplace: ['born', 'native', 'birthplace']
+  };
+  const KIN_NOUNS = { sister: 'sib', brother: 'sib', twin: 'sib', sibling: 'sib', father: 'up', mother: 'up', parent: 'up', son: 'down', daughter: 'down', child: 'down', wife: 'wed', husband: 'wed' };
+  const PERSON_NOUNS = new Set([...Object.keys(KIN_NOUNS), 'friend', 'servant', 'man', 'woman', 'boy', 'girl', 'master', 'captain', 'aunt', 'uncle', 'cousin', 'niece', 'nephew']);
+  // Kin the shelf states outright between two entries: "Tamsin Hale,
+  // Oren's younger sister", "Teodor Brisk, Ansel's father", a note's "Mara:
+  // …, Jory's younger sister". → [{ id, attr, value, as, quote, src }]
+  // (each then goes through relation() like any reading)
+  function kinEvidence(sources, entries) {
+    const idx = mentionIndex(entries);
+    const byId = new Map(entries.map((e) => [e.id, e]));
+    const out = [];
+    for (const src of sources) {
+      for (const p of sourceParas(src.html)) {
+        for (const s of sentences(p.text)) {
+          if (PLAN.test(s.text)) continue;
+          const S = s.text;
+          const speech = speechSpans(S);
+          const ms = mentions(S, idx).filter((m) => byId.get(m.id).kind === 'person' && !speech.some(([a, b]) => m.start < b && m.end > a));
+          const words = [...S.matchAll(WORD)].map((m) => ({ lw: m[0].toLowerCase().replace(/['’]s$/, ''), poss: /['’]s$/.test(m[0]), start: m.index, end: m.index + m[0].length }));
+          for (const x of ms.filter((m) => /^['’]s\b/.test(S.slice(m.end)))) {
+            const i = words.findIndex((w) => w.end > x.end);
+            const run = words.slice(i + 1, i + 4);
+            const k = run.find((w) => KIN_NOUNS[w.lw]);
+            if (!k || !['sib', 'up', 'down'].includes(KIN_NOUNS[k.lw])) continue;
+            const adj = run.slice(0, run.indexOf(k)).map((w) => KIN[w.lw]).find(Boolean) || '';
+            const y = ms.find((m) => m.id !== x.id && ((m.end <= x.start && (/^\s*(?:,|[—–]|was|is)\s*$/.test(S.slice(m.end, x.start))
+              || (m.start === 0 && /^\s*:/.test(S.slice(m.end)) && !ms.some((o) => o !== m && o !== x && o.start > m.end && o.end <= x.start))))
+              || (m.start >= k.end && /^\s*,?\s*$/.test(S.slice(k.end, m.start)))));
+            if (!y) continue;
+            const kind = KIN_NOUNS[k.lw];
+            const words30 = S.split(/\s+/);
+            out.push({ id: y.id, attr: kind === 'sib' ? 'sibling' : kind === 'up' ? 'parent' : 'child', value: byId.get(x.id).name, as: kind === 'sib' ? adj : '',
+              quote: words30.length <= 30 ? S : words30.slice(0, 30).join(' '), src });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  function relation(e, f, quote, para, entries) {
+    const idx = mentionIndex(entries);
+    const target = findEntry(entries, f.value);
+    const nm = normMap(para);
+    const qa = nm.text.indexOf(norm(quote));
+    if (qa < 0) return null;
+    const a = nm.map[qa];
+    const b = nm.map[qa + norm(quote).length - 1] + 1;
+    const sents = sentences(para).filter((s) => s.end > a && s.start < b);
+    if (!sents.length) return null;
+    const S = para.slice(sents[0].start, sents[sents.length - 1].end);
+    const ms = mentions(S, idx);
+    const isE = (m) => m.id === e.id;
+    const vs = target ? ms.filter((m) => m.id === target.id) : [];
+    if (!target) {
+      // a value with no entry yet: its words as written
+      // (or a part of it the entry's own name doesn't share: "Ansel's" for Ansel Brisk)
+      const own = new Set(nameParts(e.name).map((x) => x.toLowerCase()));
+      for (const w of [f.value, ...(/\s/.test(f.value) ? nameParts(f.value).filter((x) => !own.has(x.toLowerCase())) : [])]) {
+        const re = new RegExp(`(?<![\\p{L}\\p{N}])${String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'gu');
+        for (const m of S.matchAll(re)) if (!vs.some((v) => v.start <= m.index && v.end >= m.index + m[0].length)) vs.push({ id: null, start: m.index, end: m.index + m[0].length });
+      }
+    }
+    const es = ms.filter(isE);
+    if (!es.length || !vs.length || (target && target.id === e.id)) return null;
+    const words = [...S.matchAll(WORD)].map((m) => ({ lw: m[0].toLowerCase().replace(/['’]s$/, ''), poss: /['’]s$/.test(m[0]), start: m.index, end: m.index + m[0].length }));
+    const wi = (pos) => { const i = words.findIndex((w) => w.end > pos); return i < 0 ? words.length : i; };
+    const between = (x, y) => ms.filter((m) => m !== x && m !== y && m.start >= Math.min(x.end, y.end) && m.end <= Math.max(x.start, y.start));
+    const living = (m) => { const o = entries.find((z) => z.id === m.id); return o && (o.kind === 'person' || o.kind === 'creature'); };
+    const possOf = (m) => /^['’]s\b/.test(S.slice(m.end));
+    const gap = (x, y) => S.slice(x.end, y.start);
+    const attr = f.attr;
+    const head = (m) => m.start === 0 && /^\s*(?::|[—–]\s)/.test(S.slice(m.end));
+
+    // which way round, from the words: X's [two words] K, with Y beside it
+    // ("Tamsin Hale, Oren's younger sister"; "Oren's sister, Tamsin"; a
+    // note's "Mara: …, Jory's younger sister")
+    // the noun X's owns: a kin or person word, or a creature's, within
+    // three words ("Oren's younger sister", "Teodor's black bull")
+    const possessed = (x) => {
+      const i = wi(x.end);
+      const run = words.slice(i, i + 4).filter((w) => !w.poss).slice(0, 3);
+      return run.find((w) => KIN_NOUNS[w.lw] || PERSON_NOUNS.has(w.lw)) || run.find((w) => SEX_WORDS[w.lw] || SPECIES[w.lw]) || run[0] || null;
+    };
+    const beside = (x, y, k) => (y.end <= x.start && (/^\s*(?:,|[—–]|was|is|,\s*(?:was|is))\s*$/.test(gap(y, x)) || (head(y) && !between(y, x).some(living))))
+      || (k && y.start >= k.end && /^\s*,?\s*$/.test(S.slice(k.end, y.start)));
+    for (const x of [...ms, ...vs.filter((v) => v.id === null)].filter(possOf)) {
+      const k = possessed(x);
+      const kin = k && KIN_NOUNS[k.lw];
+      for (const y of [...es, ...vs]) {
+        if (y === x || (y.id && y.id === x.id) || !beside(x, y, k)) continue;
+        // y is x's k: which of the two is the entry, which the value
+        const eIs = isE(y) ? 'y' : isE(x) ? 'x' : null;
+        const vIs = vs.includes(y) ? 'y' : vs.some((v) => v.start === x.start) ? 'x' : null;
+        if (!eIs || !vIs || eIs === vIs) continue;
+        if (attr === 'sibling' && kin === 'sib') return 'rule';
+        if (attr === 'spouse' && kin === 'wed') return 'rule';
+        // Y is X's father: Y parent of X; Y is X's son: Y child of X
+        if (attr === 'parent' && ((kin === 'up' && eIs === 'y') || (kin === 'down' && eIs === 'x'))) return 'rule';
+        if (attr === 'child' && ((kin === 'down' && eIs === 'y') || (kin === 'up' && eIs === 'x'))) return 'rule';
+        // Hector, Teodor's black bull; Rook — stallion, Oren's: Y is X's
+        if (attr === 'owner' && eIs === 'y' && !(k && PERSON_NOUNS.has(k.lw))) return 'rule';
+      }
+    }
+    // Clover … belonged to Mara; Rook, owned by Oren
+    if (attr === 'owner') {
+      for (const x of es) {
+        for (const v of vs) {
+          const t = norm(gap(x, v));
+          if (v.start > x.end && /(?:^|\s)(?:belonged|belongs|belonging) to$|(?:^|\s)owned by$/.test(t) && !between(x, v).some(living)) return 'rule';
+          if (x.start > v.end && /^(?:owned|owns|bought|bred)(?: (?:a|an|the|her|his|their)\b.*)?$/.test(norm(gap(v, x))) && gap(v, x).split(/\s+/).length <= 5) return 'rule';
+        }
+      }
+    }
+    // Mara lived in Kellsharrow; Ilsa: grey eyes, born in Saltmere
+    if (attr === 'home' || attr === 'birthplace') {
+      const verbs = attr === 'home' ? /^(?:lived|lives|living|dwelt|dwells|settled)$/ : /^born$/;
+      for (const v of vs) {
+        const i = wi(v.start);
+        if (!(i >= 2 && verbs.test(words[i - 2].lw) && ['in', 'at'].includes(words[i - 1].lw))) continue;
+        const people = ms.filter((m) => living(m) && m.start < v.start);
+        if (people.length && people.every(isE) && wi(people[people.length - 1].end) >= i - 12) return 'rule';
+      }
+    }
+    // tied, but not which way round: both named near a word for it
+    const rel = new Set(REL_WORDS[attr] || []);
+    for (const x of es) {
+      for (const v of vs) {
+        const lo = Math.min(wi(x.start), wi(v.start));
+        const hi = Math.max(wi(x.start), wi(v.start));
+        if (hi - lo > 10 || between(x, v).some(living)) continue;
+        const near = words.slice(Math.max(0, lo - 3), hi + 4);
+        if (near.some((w) => rel.has(w.lw)) || (attr === 'owner' && possOf(v))) return 'linked';
+      }
+    }
+    return null;
   }
 
   /* ---------- the engine ---------- */
@@ -1098,6 +1486,7 @@
           const idx = mentionIndex(entries);
           left += paras.filter((p, j) => cueful(p.text, idx) && !cache.proposals[ctxKey(paras, j)]).length;
         }
+        const names = shelfNames([...texts.values()]);
         let calls = 0;
         let spent = 0;
         let stopped = false;
@@ -1126,17 +1515,22 @@
               cache.proposals[ck] = props;
               tell(src, n + 1);
             }
-            for (const prop of props || []) accept(entries, prop, src, p, prev, texts.get(key));
+            for (const prop of props || []) accept(entries, prop, src, p, prev, texts.get(key), names);
           }
           if (!stopped) meta.read[key] = textHash(src.html);
+        }
+        // places the shelf names plainly, misspellings aside
+        for (const w of shelfPlaces([...texts.values()], names)) {
+          if (findEntry(entries, w) || misspelt(w, entries.filter((e) => !e.locked))) continue;
+          let id = slug(w);
+          for (let k = 2; entries.some((x) => x.id === id); k++) id = slug(w) + '-' + k;
+          entries.push(newEntry(w, 'place', id));
         }
         // a new entry never takes the name of a file Canon couldn't read
         for (const e of entries) if (!e.locked && !before.has(e.id) && taken.has(e.id)) e.id += '-' + entries.length;
         for (let i = entries.length - 1; i >= 0; i--) if (entries[i].locked) entries.splice(i, 1);
 
-        // passages edited away, values that disagree, then checking
-        const order = new Map(sources.map((s, i) => [s.bookId + '/' + s.chId, i]));
-        const firstAt = (f) => Math.min(Infinity, ...f.sources.filter((s) => !s.written).map((s) => order.has(s.book + '/' + s.ch) ? order.get(s.book + '/' + s.ch) : Infinity));
+        // passages edited away, then where each value stands, then checking
         const paraOf = (s) => (texts.get(s.book + '/' + s.ch) || '').split('\n').find((t) => norm(t).includes(norm(s.quote))) || s.quote;
         for (const e of entries) {
           for (const f of e.facts) {
@@ -1147,31 +1541,41 @@
             }
             if (f.state === 'verified' && !f.sources.some(live)) f.state = 'unverified';
           }
-          for (const attr of Object.keys(ATTRS).filter((a) => ATTRS[a].single)) {
-            const these = e.facts.filter((f) => f.attr === attr && solid(f));
-            const split = new Set(these.map((f) => norm(f.value))).size > 1;
-            // A value read against one already established (the writer's,
-            // or checked) doesn't unsettle it: the established fact keeps
-            // raising its slips, and the newcomer waits in Needs You. With
-            // nothing established yet, the value said first in reading order
-            // goes on to checking and the later ones wait.
-            const firm = these.filter((f) => f.state === 'yours').length ? these.filter((f) => f.state === 'yours') : these.filter((f) => f.state === 'verified');
-            const keep = !split ? null
-              : firm.length ? (new Set(firm.map((f) => norm(f.value))).size === 1 || firm[0].state === 'yours' ? norm(firm[0].value) : null)
-                : norm(these.reduce((a, b) => (firstAt(b) < firstAt(a) ? b : a)).value);
-            for (const f of e.facts.filter((x) => x.attr === attr && x.state !== 'yours')) {
-              if (split && these.includes(f) && norm(f.value) !== keep) f.state = 'disagree';
-              else if (f.state === 'disagree') f.state = 'unverified';
-            }
-          }
         }
-        // checking: by rule where the quote says it outright, else the reader
+        // what the shelf itself shows of each trait, as the checker reads it
+        // kin the shelf states outright, if no reading has it yet (nor the writer set it aside)
+        for (const k of kinEvidence(sources, entries)) {
+          const e = entries.find((x) => x.id === k.id);
+          const same = (f) => f.attr === k.attr && norm(f.value) === norm(k.value);
+          if (!e || e.facts.some(same) || e.setAside.some(same)) continue;
+          e.facts.push({ attr: k.attr, value: k.value, as: k.as, state: 'unverified', sources: [{ label: `${k.src.book}, ${k.src.label}`, quote: k.quote, book: k.src.bookId, ch: k.src.chId }] });
+        }
+        const evidence = shelfEvidence(sources, entries.filter((e) => !e.locked), await io.notSlips());
+        const holds = (e, f) => !ATTRS[f.attr].ref || (!misspelt(f.value, entries) && f.sources.some((x) => live(x) && !x.said && !x.plan && relation(e, f, x.quote, paraOf(x), entries)));
+        for (const e of entries) settle(e, evidence, holds);
+
+        // checking: what the text shows deterministically, else one plain
+        // question to the reader, asked the other way round as well
         const check = [];
         for (const e of entries) {
           for (const f of e.facts) {
             if (f.state !== 'unverified' || !solid(f)) continue; // speech and plans stay unchecked
-            if (ruleSupported(e, f, entries)) { f.state = 'verified'; continue; }
-            const s = f.sources.find((x) => live(x) && !x.said && !x.plan);
+            const firm = f.sources.filter((x) => live(x) && !x.said && !x.plan);
+            if (ATTRS[f.attr].ref) {
+              // a slip of the pen is no place; a relation needs both names and its word
+              if (misspelt(f.value, entries)) continue;
+              const how = firm.map((x) => relation(e, f, x.quote, paraOf(x), entries));
+              if (how.includes('rule')) { f.state = 'verified'; continue; }
+              if (!how.includes('linked') || !reader.judgeRelations) continue;
+            } else if (TIED[f.attr]) {
+              // a trait is checked only by the text: the shelf (settle), or
+              // its own quote tying the word to the entry when the shelf
+              // shows no other value. A pronoun, or a word the rules don't
+              // tie, waits for the writer.
+              if (ruleSupported(e, f, entries)) f.state = 'verified';
+              continue;
+            }
+            const s = firm.find((x) => !ATTRS[f.attr].ref || relation(e, f, x.quote, paraOf(x), entries)) || firm[0];
             check.push({ e, f, s, jk: factKey(e, f) + '|' + textHash(norm(s.quote)) });
           }
         }
@@ -1218,6 +1622,7 @@
     return {
       id: 'fake',
       calls: 0,
+      judgeRelations: true,
       async propose({ text }) {
         this.calls++;
         const hit = (answers.propose || []).find((x) => starts(text, x.para));
@@ -1264,18 +1669,42 @@
     required: ['f']
   };
   const ANSWER_SCHEMA = { type: 'object', properties: { a: { enum: ['yes', 'no', 'unclear'] } }, required: ['a'] };
-  const JUDGE_SYSTEM = 'You check one claimed fact against a paragraph of a novel. Answer yes only if the paragraph plainly states the claim as true in the story. Answer no if it states something else. Answer unclear if it does not say, or the claim rests on a question, a plan, a comparison or what a character says.';
-  const REFERS_SYSTEM = 'You read a paragraph of a novel and say whether a word in one of its sentences refers to a given character or animal.';
-  const said = (claim) => `${claim.entity}: ${claim.attr === 'birthplace' ? 'born in' : claim.attr} = ${claim.value}${claim.as ? ` (${claim.as})` : ''}`;
+  const JUDGE_SCHEMA = { type: 'object', properties: { a: { enum: ['yes', 'no', 'unsure'] } }, required: ['a'] };
+  const JUDGE_SYSTEM = 'You check one statement against a paragraph of a novel. Answer yes only if the paragraph itself plainly says the statement is true in the story. Answer no if the paragraph says otherwise. Answer unsure if the paragraph does not say, or only a character says it, or it is a question, a wish or a plan.';
+  // the claim as a plain statement, and its opposite: a reader that says
+  // yes to both is saying yes to anything, and its yes counts for nothing
+  const STATEMENTS = {
+    title: (e, v) => [`${e} has the title or rank "${v}".`, `${e} does not have the title or rank "${v}".`],
+    birthplace: (e, v) => [`${e} was born in ${v}.`, `${e} was not born in ${v}.`],
+    home: (e, v) => [`${e} lives in ${v}.`, `${e} does not live in ${v}.`],
+    owner: (e, v) => [`${e} belongs to ${v}.`, `${e} does not belong to ${v}.`],
+    sibling: (e, v) => [`${e} and ${v} are brother or sister to each other.`, `${e} and ${v} are not brother or sister to each other.`],
+    parent: (e, v) => [`${e} is the father or mother of ${v}.`, `${e} is not the father or mother of ${v}.`],
+    child: (e, v) => [`${e} is the son or daughter of ${v}.`, `${e} is not the son or daughter of ${v}.`],
+    spouse: (e, v) => [`${e} is married to ${v}.`, `${e} is not married to ${v}.`]
+  };
+  const statements = (c) => (STATEMENTS[c.attr] || ((e, v) => [`This is true of ${e}: ${v}.`, `This is false of ${e}: ${v}.`]))(c.entity, c.value);
+  const REFERS_SYSTEM = 'You read a paragraph of a novel and say who or what one word in one of its sentences refers to. Choose only from the options given. If the word means someone or something not in the options, or you cannot tell, say so.';
+  const ELSE = 'someone or something else';
+  const UNSURE = 'cannot tell';
 
-  function localReader({ id, ask }) {
+  // `tier`: the quick reader (Qwen2.5-1.5B) is never asked about relations:
+  // measured, it answers yes to who owns, fathers or marries whom on almost
+  // any sentence naming both (docs/semantics/ACCURACY.md). They wait for the
+  // writer, or the text's own words (relation 'rule').
+  function localReader({ id, ask, tier = null }) {
     // an answer that went wrong is no answer; stopping is passed on
     const safe = async (msg, none) => {
       try { return await ask(msg); } catch (err) { if (err && err.code) throw err; return none; }
     };
+    const yesNo = async (paragraph, statement) => {
+      const r = await safe({ system: JUDGE_SYSTEM, user: `Paragraph:\n${paragraph}\n\nStatement: ${statement}\nDoes the paragraph say this is true in the story?`, schema: JUDGE_SCHEMA, maxTokens: 12 }, null);
+      return (r && r.a) || 'unsure';
+    };
     return {
       id,
       calls: 0,
+      judgeRelations: tier !== 'quick',
       async propose({ text, known = [] }) {
         this.calls++;
         const names = known.map((k) => `${k.name} (${k.kind})`).join(', ');
@@ -1291,16 +1720,24 @@
           return p.attr === 'species' && SEX_WORDS[w] ? [p, { ...p, attr: 'sex', value: w }] : [p];
         });
       },
+      // yes only when it says yes to the claim and no to its opposite
       async judge({ claim, quote, paragraph }) {
         // a sex read from a pronoun alone ("Tamsin rode her") is left to the
         // writer: who a pronoun means is where small models go wrong
         if (claim.attr === 'sex' && !wordsOf(quote).some((x) => SEX_WORDS[x.replace(/'s$/, '')])) return 'unclear';
-        const r = await safe({ system: JUDGE_SYSTEM, user: `Paragraph:\n${paragraph}\n\nQuote: "${quote}"\nClaim: ${said(claim)}\nIs the claim true in the story, by this paragraph?`, schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
-        return (r && r.a) || 'unclear';
+        const [is, isNot] = statements(claim);
+        if (await yesNo(paragraph, is) !== 'yes') return 'unclear';
+        return await yesNo(paragraph, isNot) === 'no' ? 'yes' : 'unclear';
       },
-      async refers({ sentence, span, entity, paragraph }) {
-        const r = await safe({ system: REFERS_SYSTEM, user: `Paragraph:\n${paragraph}\n\nSentence: "${sentence}"\nDoes the word "${span}" in this sentence refer to ${entity}?`, schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
-        return (r && r.a) || 'unclear';
+      // a choice, not a yes: the entity, the others named nearby, someone else
+      async refers({ sentence, span, entity, paragraph, others = [] }) {
+        // the quick reader picks the one name it is offered for "He" or
+        // "She", whoever the sentence means (ACCURACY.md): not asked
+        if (tier === 'quick' && PRONOUNS[norm(span)]) return 'unclear';
+        // (in name order: the one asked about isn't always first)
+        const options = [...new Set([entity, ...others.slice(0, 4)])].sort((a, b) => a.localeCompare(b)).concat(ELSE, UNSURE);
+        const r = await safe({ system: REFERS_SYSTEM, user: `Paragraph:\n${paragraph}\n\nSentence: "${sentence}"\nIn this sentence, who or what does the word "${span}" refer to?\nOptions: ${options.join('; ')}`, schema: { type: 'object', properties: { a: { enum: options } }, required: ['a'] }, maxTokens: 24 }, null);
+        return r && r.a === entity ? 'yes' : 'unclear';
       },
       async pick() { return null; },
       abort() {}
@@ -1308,12 +1745,13 @@
   }
 
   return {
-    localReader, PROPOSE_SCHEMA, ANSWER_SCHEMA,
+    localReader, PROPOSE_SCHEMA, ANSWER_SCHEMA, JUDGE_SCHEMA,
     textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
     inSpans, nameParts, WORD, replaceInHtml,
     parseLinks, resolveName, entryLinks, linkGraph, backlinks, paraEntries, snippetAround, worldIndex, mentionPassages, searchPassages,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
     newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
-    firmFact, editDistance, checkSources, createEngine, fakeReader
+    firmFact, editDistance, checkSources, createEngine, fakeReader,
+    shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces
   };
 });

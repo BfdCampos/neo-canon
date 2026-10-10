@@ -69,7 +69,7 @@ test('the quick reader on Bramble\'s chapters: every quote verbatim, and the sli
       saveCache: () => {},
       knownWords: null
     };
-    const reader = Canon.localReader({ id: 'quick', ask });
+    const reader = Canon.localReader({ id: 'quick', tier: 'quick', ask });
     const t1 = Date.now();
     const summary = await Canon.createEngine({ io, reader }).readShelf();
     const readMs = Date.now() - t1;

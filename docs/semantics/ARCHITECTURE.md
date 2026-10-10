@@ -513,3 +513,42 @@ Each milestone ends with `npm test` green, `npm run lint` clean, and `node scrip
 39. **M10 — notebooks.** `isNotebook(meta)` beside `isScript`. Every page's kind reads as `unnumbered` (`chapterKind`), so NEO's own machinery gives titled, unnumbered pages; the body gets `no-cap`; the nav reads Pages / + Page with no outline notes; the Outline and Notes tabs are hidden; no word goal on the shelf menu and no progress bar; cover choices are gone (the tile is CSS only: `.nb-tile`, cloth, band, ribbon, paper label). `shelfBookData` leaves notebooks out of a bound book and an anthology; exports are text, Markdown, HTML and Word (`NOTEBOOK_FORMATS`, also enforced in `doExport` for the menu path). New Notebook is the third item on the shelf +'s right-click menu only (no File menu item). A page's right-click menu is Leave Out of Canon / Export Page… / Delete (no kinds). **Leave Out of Canon** writes `canon.json`'s `out` (the book never changes); the Notes tab label's right-click offers the same for a book's Notes. Bringing a page back drops its `read` hash (`canon:saveMeta`'s `unread`) so it is read again at the next pause. Pocket has no `canon*` bridge, so a notebook there is an ordinary book with unnumbered pages.
 40. **M11.** **Merge Into…** (an entry's right-click in the Canon list, then the entry to join): `mergeEntry` makes the name and aliases aliases, merges facts (sources joined; a value that differs from one already there waits as *disagree* unless it was the writer's), appends Set aside facts and *In my words*; the merged file then moves to `set-aside/` whole (P2 #24). **Dismissed (n)** sits at the foot of the Canon tab's right-hand pane (shown even without a reader), listing each Not a slip with its line and a Restore that removes it from `not-slips.json`. **Read Everything Again** appears under Read the Shelf once something has been read (`again: true`; the writer's facts stay, P1 #17). **Not built**: the popover's "4 more" list of every mention, and embeddings — no measurement here shows the known-entries list outgrowing the prompt (§8 note 5), so nomic stays out.
 41. **Lint and tests**: `npm test` 129 pass (one opt-in real-model test skipped); `npm run lint` reports the same 29 errors as before Canon; `canon.e2e.js` 17 checks (`CANON_SHOTS=1` to refresh docs/semantics/screens/).
+
+### Decisions made while fixing accuracy (QA-FINAL F1, F4, F7, F14; UX-REVIEW #5/#6)
+
+42. **A fact is checked by the text, or by a yes the reader also takes back.** The real quick reader made 9 of 15 checked facts wrong on the fixture (F1). The judge said yes to nearly anything. Now:
+    - **Traits** (sex, species, eyes, hair) are checked only by deterministic evidence. `shelfEvidence` reads the whole shelf with the slip checker's own strong rules, and `established` lets a value stand only when it is the only one, or when it appears in two chapters or more, first, against values that appear once. Anything else is "Your sources disagree", with no checked fact and no slip. A slip sentence that comes before the canonical one cannot win.
+    - **Relations** need both names and a relation word in the quote's sentence (`relation`). When the words say which way round, the fact is checked by rule. When they only link the two, the careful reader may be asked. The quick reader is never asked.
+    - **Asking.** Everything else is asked as a plain statement and as its negation. Only *yes* to the first and *no* to the second counts.
+    - **Recomputed states.** Every state that isn't the writer's is recomputed on each read (`settle`), so a Canon read under the old gates is corrected on its next read.
+    - **No rivals from nowhere.** A relation the text doesn't tie, or a misspelt place, is no rival to a value that is tied.
+43. **Names.**
+    - **One person, one entry.** The reader's "Varr" or "Ilsa" becomes the shelf's one full name ("Ilsa Varr", `shelfNames`). A shared surname makes no entry.
+    - **Not entries:** pronouns, words the shelf writes in lower case, uncapitalised descriptions and misspellings of an existing name.
+    - **Places.** A home or birthplace value written twice or more becomes an entry, and so does a place the shelf names three times after a preposition (`shelfPlaces`), so that "Corwyck" can be seen for the slip it is.
+    - **Kin.** Kin stated outright between two entries ("Tamsin Hale, Oren's younger sister") is added by `kinEvidence`, so the "elder" slip doesn't depend on the reader proposing it.
+    - **Kin checker.** It no longer reads "Mara's elder brother" as Mara's elder.
+    - **"The".** A hand entry "The Salt Law" is the reader's "Salt Law" (F4).
+    - **Windows names.** File names avoid the names Windows reserves (`con-entry`, F14).
+44. **Speech and plans stay their own facts** (F7, UX #5/#6). In a read, in *That's right*, in `replaceFact` and in `mergeEntry`, a source that someone says, or a plan, never joins a fact of the story or becomes its source. The writer's new "stallion" cites *Written in Canon*; the trader's "gelding" stays his.
+45. **The quick reader's limits, and pauses.** `localReader({ tier })`: the quick reader is not asked about relations or about who "he" or "she" means. In both cases it picked whichever name it was offered.
+    - `refers` is now a choice among the entries named nearby, "someone or something else" and "cannot tell", in name order.
+    - A Continuity Pass or Find Passages started by the writer doesn't wait out, and isn't stopped by, the ten-second typing pause (`canonReader({ urgent })`). The e2e test no longer waits 10.5 s.
+    - The prompt version went from 1 to 2, so cached proposals and answers are asked again.
+46. **Measured** with `scripts/canon-eval.js` on the Ashfall Road and on a held-out shelf, the Lantern Coast (`scripts/fixtures/canon-heldout/`). It has different names, cows and a bull, its own seeded slips (one of them before the fact it contradicts) and decoys. Details are in docs/semantics/ACCURACY.md.
+
+    | Engine | Reader | Shelf | Checked | Wrong | Slips | False slips | Model time |
+    |---|---|---|---|---|---|---|---|
+    | before | Quick | Ashfall Road | 15 | 9 | 3/5 | 2 | 332 s |
+    | before | Quick | Lantern Coast | 17 | 6 | 3/5 | 1 | 244 s |
+    | after | Quick | Ashfall Road | 8 | 0 | 5/5 | 0 | 285 s |
+    | after | Quick | Lantern Coast | 12 | 0 | 4/5 | 0 | 204 s |
+    | after | Careful | Ashfall Road | 8 | 0 | 5/5 | 0 | 493 s |
+    | after | Careful | Lantern Coast | 14 | 0 | 4/5 | 0 | 370 s |
+
+    The recommendation is unchanged: careful at 15 GB or more, quick at about 8 GB. Both are safe now, and careful finds more.
+47. **Tests**:
+    - `scripts/canon-gates.test.js` covers each gate. It includes the six wrong facts from F1, proposed by a fake reader that says yes to everything, and the held-out shelf's five slips and eight decoys.
+    - The fixture's expectations changed: Oren's sex and Bramble's owner now wait for the writer.
+    - `canon.e2e.js` passes 28/28.
+

@@ -13,19 +13,19 @@
       { "attr": "sibling", "value": "Oren Hale", "as": "younger", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] }
     ] },
     { "id": "oren-hale", "name": "Oren Hale", "kind": "person", "facts": [
-      { "attr": "sex", "value": "male", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] },
+      { "attr": "sex", "value": "male", "state": "unverified", "chapters": ["book-ember-and-thorn-ember1/c1"] },
       { "attr": "state", "value": "lost his left hand", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c3"] },
       { "attr": "state", "value": "fights with his right hand alone", "state": "verified", "chapters": ["book-the-salt-crown-salt2/c2"] }
     ] },
     { "id": "bramble", "name": "Bramble", "kind": "creature", "facts": [
       { "attr": "species", "value": "horse", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2"] },
       { "attr": "sex", "value": "female", "as": "mare", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2", "book-field-notes-notes3/p1"] },
-      { "attr": "owner", "value": "Tamsin Hale", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2"] },
+      { "attr": "owner", "value": "Tamsin Hale", "state": "unverified", "chapters": ["book-ember-and-thorn-ember1/c2"] },
       { "attr": "sex", "value": "male", "as": "gelding", "state": "unverified", "said": true, "chapters": ["book-ember-and-thorn-ember1/c2"] },
       { "attr": "state", "value": "in foal", "state": "unverified", "plan": true, "chapters": ["book-the-salt-crown-salt2/notes"] }
     ] },
     { "id": "rook", "name": "Rook", "kind": "creature", "facts": [
-      { "attr": "species", "value": "horse", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2"] },
+      { "attr": "species", "value": "horse", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2", "book-field-notes-notes3/p1"] },
       { "attr": "sex", "value": "male", "as": "stallion", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2", "book-field-notes-notes3/p1"] },
       { "attr": "owner", "value": "Oren Hale", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2", "book-field-notes-notes3/p1"] }
     ] },

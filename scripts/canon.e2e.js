@@ -838,10 +838,12 @@ test('the UX review: offers name the shelf, ⌘K finds Canon and no junk, the sh
 
 test('the QA pass: ⌘\' starts at once with a reader, and the World Map from the page leaves no pane over it', async () => {
   win.focus();
-  // (the keys typed above pause the reader for ten seconds: ⌘' itself must not)
-  await tick(10500);
+  // the keys typed just above pause the reader for ten seconds; a pass the
+  // writer starts doesn't wait for that: type now, then ⌘'
   await js(`switchTab('manuscript'); canonPassOn && canonPassOff()`);
   await js(`(() => { const b = document.querySelector('.chapter[data-id="c1"] .chapter-body'); b.focus(); })()`);
+  key('ArrowRight');
+  await tick(300);
   const t0 = Date.now();
   key("'", [CMD]);
   await until(`canonPassOn && canonProgress === '' && canonPassFacts > 0`, 9000);

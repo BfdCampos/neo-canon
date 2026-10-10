@@ -2362,7 +2362,7 @@ const canonQuietDone = new Map(); // canonId/bookId/chId → Set of paragraph ha
 const canonSend = (e, msg) => { if (!e.sender.isDestroyed()) e.sender.send('canon', msg); };
 ipcMain.handle('canon:check', async (e, opts) => {
   canonStopped = false;
-  const reader = canonReader();
+  const reader = canonReader({ urgent: opts.mode !== 'quiet' });
   const engine = Canon.createEngine({ io: canonIO(opts.canonId), reader });
   if (opts.mode !== 'quiet') {
     return engine.check({ ...opts, stop: () => canonStopped,
@@ -2408,7 +2408,7 @@ ipcMain.handle('canon:readShelf', async (e, canonId, opts = {}) => {
 
 // Changing a fact across the series: the passages to review (the window
 // applies each one the writer accepts, through the chapter write path)
-ipcMain.handle('canon:passages', (_e, opts) => Canon.createEngine({ io: canonIO(opts.canonId), reader: canonReader() }).passages(opts));
+ipcMain.handle('canon:passages', (_e, opts) => { canonStopped = false; return Canon.createEngine({ io: canonIO(opts.canonId), reader: canonReader({ urgent: true }) }).passages(opts); });
 
 // The writer's IDE (docs/semantics/IDE.md): who is where, the passages
 // naming an entry, and words found anywhere on the shelf. Built from the
@@ -2604,7 +2604,7 @@ function canonWorker(msg) {
   });
 }
 let canonRunning = null; // the prompt being answered, so typing can stop it
-async function canonAsk(msg) {
+async function canonAsk(msg, urgent = false) {
   const tier = canonInstalled();
   const file = tier && path.join(modelsDir(), canonReaders()[tier].file);
   if (!file) throw Object.assign(new Error('no reader'), { code: 'gone' });
@@ -2613,10 +2613,11 @@ async function canonAsk(msg) {
     if (!r.ok) { logError('canon reader', new Error(r.error)); throw Object.assign(new Error(r.error), { code: 'gone' }); }
     canonLoaded = file;
   }
+  // (a pass the writer started isn't stopped by their typing)
   const id = canonSeq + 1;
-  canonRunning = () => canonWorker({ type: 'abort', target: id });
+  if (!urgent) canonRunning = () => canonWorker({ type: 'abort', target: id });
   const r = await canonWorker({ type: 'prompt', ...msg });
-  canonRunning = null;
+  if (!urgent) canonRunning = null;
   if (r.ok) return r.result;
   throw Object.assign(new Error(r.error), r.error === 'aborted' || r.error === 'gone' ? { code: r.error } : {});
 }
@@ -2668,11 +2669,27 @@ function canonFake() {
   });
   return { ...fake, propose: slow(fake.propose.bind(fake)), judge: slow(fake.judge.bind(fake)), refers: slow(fake.refers.bind(fake)) };
 }
-function canonReader() {
+// A pass the writer started (canon:check, not a quiet one) runs at once:
+// it doesn't wait out the ten seconds after a key, and a key doesn't stop it
+function canonUrgent(reader) {
+  const wrap = (fn) => async (...args) => {
+    for (;;) {
+      if (canonStopped) throw canonStopError();
+      try { return await fn(...args); } catch (err) {
+        if (canonStopped) throw canonStopError();
+        if (err && err.code === 'aborted') continue;
+        throw err;
+      }
+    }
+  };
+  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)) };
+}
+function canonReader({ urgent = false } = {}) {
   const tier = canonInstalled();
   if (!tier) return null;
-  if (!app.isPackaged && process.env.NEO_CANON_FAKE) return canonPausable(canonFake());
-  return canonPausable(Canon.localReader({ id: tier + '-' + canonReaders()[tier].sha256.slice(0, 8), ask: canonAsk }));
+  const hold = urgent ? canonUrgent : canonPausable;
+  if (!app.isPackaged && process.env.NEO_CANON_FAKE) return hold(canonFake());
+  return hold(Canon.localReader({ id: tier + '-' + canonReaders()[tier].sha256.slice(0, 8), tier, ask: (m) => canonAsk(m, urgent) }));
 }
 function canonReaderStatus() {
   const all = canonReaders();

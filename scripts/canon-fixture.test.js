@@ -142,7 +142,7 @@ test('Read the Shelf gives the expected entries and facts, each quote the writer
     const texts = new Map(shelfSources(lib).map((s) => [s.bookId + '/' + s.chId, Canon.sourceParas(s.html).map((p) => p.text).join('\n')]));
     for (const e of got) for (const f of e.facts) for (const s of f.sources) assert.ok(texts.get(s.book + '/' + s.ch).includes(s.quote), s.quote);
     assert.equal(got.find((e) => e.id === 'bramble').facts.find((f) => f.attr === 'sex' && f.value === 'male').sources[0].said, 'the horse-trader');
-    assert.deepEqual(summary, { entries: 7, facts: 17, written: 7, calls: summary.calls, stopped: false, verified: 15, needs: 2 });
+    assert.deepEqual(summary, { entries: 7, facts: 17, written: 7, calls: summary.calls, stopped: false, verified: 13, needs: 4 });
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -242,7 +242,9 @@ test('a reading that contradicts an established fact waits in Needs You; the fac
     // all in one first read: what was said first goes on to checking
     const first = await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).readShelf();
     assert.deepEqual(states(), [['female verified', 'male disagree'], ['brown disagree', 'grey verified']]);
-    assert.equal(first.needs, 3); // these two, and the foal question (the trader's gelding joins the male one)
+    // these two; the foal question; the trader's gelding (his own, never joined to a
+    // reading of the story's); Oren's sex and Bramble's owner (a pronoun, no owner word)
+    assert.equal(first.needs, 6);
     assert.deepEqual(await check(), EXPECTED.slips);
     // and read again with the facts already checked: nothing moves
     await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).readShelf({ again: true });
@@ -252,7 +254,8 @@ test('a reading that contradicts an established fact waits in Needs You; the fac
     const file = path.join(where.dir, 'entries', 'bramble.md');
     const e = Canon.parseEntry(fs.readFileSync(file, 'utf8'));
     Canon.confirmFact(e, e.facts.findIndex((f) => f.attr === 'sex' && f.value === 'male' && f.state === 'disagree'));
-    assert.deepEqual(e.facts.filter((f) => f.attr === 'sex').map((f) => f.value + ' ' + f.state), ['male yours']);
+    // (the trader's line stays his own, beside it: "said", never the writer's source)
+    assert.deepEqual(e.facts.filter((f) => f.attr === 'sex').map((f) => f.value + ' ' + f.state + (f.sources.every((x) => x.said) ? ' said' : '')), ['male unverified said', 'male yours']);
     assert.ok(e.setAside.some((f) => f.attr === 'sex' && f.value === 'female'));
   } finally { fs.rmSync(where.root, { recursive: true, force: true }); }
 });
