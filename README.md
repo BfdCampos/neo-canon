@@ -2,7 +2,9 @@
 
 **A word processor for books that remembers your world, so you don't have to.**
 
-<!-- DEMO VIDEO -->
+![NEO Canon demo](docs/semantics/demo/neo-canon-demo.gif)
+
+[Watch it as an MP4](docs/semantics/demo/neo-canon-demo.mp4)
 
 ## Why
 
