@@ -64,6 +64,10 @@ contextBridge.exposeInMainWorld('neo', {
   canonRestore: (canonId, entryId) => ipcRenderer.invoke('canon:restore', canonId, entryId),
   canonSaveMeta: (canonId, patch) => ipcRenderer.invoke('canon:saveMeta', canonId, patch),
   canonReaderStatus: () => ipcRenderer.invoke('canon:readerStatus'),
+  canonCheck: (opts) => ipcRenderer.invoke('canon:check', opts),
+  canonStop: () => ipcRenderer.invoke('canon:stop'),
+  canonNotSlip: (canonId, record) => ipcRenderer.invoke('canon:notSlip', canonId, record),
+  canonUnNotSlip: (canonId, record) => ipcRenderer.invoke('canon:unNotSlip', canonId, record),
   onCanon: (cb) => ipcRenderer.on('canon', (_e, msg) => cb(msg)),
 
   poetryState: (on) => ipcRenderer.send('poetry:state', on),

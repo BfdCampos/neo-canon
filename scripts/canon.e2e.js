@@ -90,6 +90,74 @@ test('the Canon tab, kept by hand: a new entry and a fact of the writer\'s', asy
   await shot('canon-tab-by-hand.png');
 });
 
+test('the rest of the world, kept by hand from expected.json', async () => {
+  const expected = JSON.parse(fs.readFileSync(path.join(FIXTURE, 'expected.json'), 'utf8'));
+  await js(`(async (entries) => {
+    for (const x of entries) {
+      if (x.id === 'bramble') continue;
+      await canonEdit(x.id, () => {
+        const e = Canon.newEntry(x.name, x.kind, x.id);
+        for (const f of x.facts) if (!f.said && !f.plan) e.facts.push({ attr: f.attr, value: f.value, as: f.as || '', state: 'yours', sources: [{ written: true }] });
+        return e;
+      });
+    }
+    await canonEdit('bramble', (e) => { e.facts.push(Canon.handFact('Species: horse')); });
+  })(${JSON.stringify(expected.entries)})`);
+  assert.equal(fs.readdirSync(path.join(LIB, CANON, 'entries')).filter((f) => f.endsWith('.md')).length, 7);
+});
+
+const chapterFiles = () => ['c1', 'c2', 'c3'].map((c) => fs.readFileSync(path.join(LIB, SALT, 'chapters', c + '.html'), 'utf8'));
+let before;
+
+test('Continuity Pass: five marks, listed in the right-hand pane, none of it in the chapter', async () => {
+  before = chapterFiles();
+  await js(`switchTab('manuscript'); toggleContinuity()`);
+  await until(`canonProgress === '' && canonSlips.length >= 5`);
+  await until(`CSS.highlights.get('neo-slip') && CSS.highlights.get('neo-slip').size === 5`);
+  assert.deepEqual(await js(`canonSlips.map((s) => s.range.toString())`), ['his', 'brown', 'elder', 'Corwyck', 'stallion']);
+  assert.equal(await js(`document.querySelectorAll('#canon-side .cs-slip').length`), 5);
+  assert.equal(await js(`$('#side-pane').classList.contains('open')`), true);
+  const saved = await js(`[...document.querySelectorAll('.chapter-body')].map((b) => captureBody(b)).join('')`);
+  assert.ok(!/slip|canon/i.test(saved));
+  assert.deepEqual(chapterFiles(), before);
+});
+
+test('hovering a mark opens its popover', async () => {
+  const at = await js(`(() => { const r = canonSlips[0].range.getBoundingClientRect(); r.startContainer; canonSlips[0].range.startContainer.parentElement.scrollIntoView({ block: 'center' }); const q = canonSlips[0].range.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; })()`);
+  const zoom = await js(`parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-zoom')) || 1`);
+  wc.sendInputEvent({ type: 'mouseMove', x: Math.round(at[0] * zoom), y: Math.round(at[1] * zoom) });
+  await until(`!!document.querySelector('.canon-pop')`);
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-claim').textContent`), 'Bramble is a mare.');
+  assert.match(await js(`document.querySelector('.canon-pop').textContent`), /Keep: mare.*Not a slip/);
+  await shot('canon-slip-popover.png');
+});
+
+test('Keep: mare shows the change, Apply makes it as one undoable edit', async () => {
+  await js(`document.querySelector('.canon-pop .cp-main').click()`);
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-change').textContent`), 'his her');
+  await js(`document.querySelector('.canon-pop .cp-main').click()`);
+  const para = `[...document.querySelectorAll('.chapter[data-id="c1"] .chapter-body p')].find((p) => p.textContent.includes('tossed')).textContent`;
+  assert.match(await js(para), /Bramble tossed her head/);
+  assert.equal(await js(`CSS.highlights.get('neo-slip').size`), 4);
+  await js(`document.execCommand('undo')`);
+  assert.match(await js(para), /Bramble tossed his head/);
+});
+
+test('Not a slip is remembered against the sentence', async () => {
+  await js(`canonPopOpen(canonSlips.find((s) => s.span === 'brown'), 300, 300)`);
+  await js(`[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Not a slip').click()`);
+  await until(`canonSlips.length === 3`);
+  const notSlips = JSON.parse(fs.readFileSync(path.join(LIB, CANON, 'not-slips.json'), 'utf8'));
+  assert.deepEqual(notSlips.map((n) => n.fact), ['ilsa-varr/eyes', 'ilsa-varr/eyes']);
+  assert.equal(notSlips[1].text, 'Ilsa’s brown eyes narrowed.');
+});
+
+test('toggling the pass off clears every mark', async () => {
+  await js(`toggleContinuity()`);
+  assert.equal(await js(`CSS.highlights.has('neo-slip')`), false);
+  assert.equal(await js(`$('#editor-view').classList.contains('canon-side')`), false);
+});
+
 /* ---------- runner ---------- */
 
 async function main() {

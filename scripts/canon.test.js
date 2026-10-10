@@ -171,3 +171,86 @@ test('the writer\'s moves: that\'s right, set aside, restore', () => {
   assert.equal(e.facts.at(-1).state, 'yours');
   assert.equal(e.facts.at(-1).attr, 'owner');
 });
+
+// a small world for the checkers: every fact the writer's own
+function world() {
+  const e = (name, kind, ...facts) => {
+    const x = Canon.newEntry(name, kind);
+    for (const f of facts) x.facts.push(Canon.handFact(f));
+    return x;
+  };
+  return [
+    e('Bramble', 'creature', 'Sex: mare', 'Species: horse'),
+    e('Rook', 'creature', 'Sex: stallion', 'Species: horse'),
+    e('Ilsa Varr', 'person', 'Sex: woman', 'Eyes: grey', 'Born in: Saltmere'),
+    e('Oren Hale', 'person', 'Sex: man', 'Hair: black'),
+    e('Tamsin Hale', 'person', 'Sex: woman', 'Sibling: Oren Hale (younger)'),
+    e('Saltmere', 'place'), e('Corwick', 'place')
+  ];
+}
+const yes = { refers: async () => 'yes' };
+async function slipsIn(text, { reader = null, entries = world(), known = {} } = {}) {
+  const { slips } = await Canon.checkSources({ sources: [{ bookId: 'b', chId: 'c', html: '<p>' + text + '</p>' }], entries, reader,
+    knownWords: async (ws) => Object.fromEntries(ws.map((w) => [w, !!known[w]])) });
+  return slips.map((s) => `${s.span}→${s.to} ${s.entry}/${s.attr} ${s.strength}`);
+}
+
+test('pronouns: the owner\'s own word in its clause is strong; one opening a sentence is weak', async () => {
+  assert.deepEqual(await slipsIn('Bramble tossed his head.'), ['his→her bramble/sex strong']);
+  assert.deepEqual(await slipsIn('Oren lost her left hand and himself.'), ['her→his oren-hale/sex strong']);
+  assert.deepEqual(await slipsIn('Ilsa wrapped himself in a cloak.'), ['himself→herself ilsa-varr/sex strong']);
+  for (const fine of ['Rook shook his mane.', 'Tamsin let her go.', 'Ilsa watched him ride off.', 'Bramble, beside Rook, tossed his head.',
+    'Ilsa nodded, and his face fell.', '“Bramble hurt his leg,” said the boy.', 'Tamsin took the reins and his hand.']) {
+    assert.deepEqual(await slipsIn(fine, { reader: yes }), [], fine);
+  }
+  assert.deepEqual(await slipsIn('Ilsa came in. He said nothing.'), []); // weak, and no reader
+  assert.deepEqual(await slipsIn('Ilsa came in. He said nothing.', { reader: yes }), ['He→She ilsa-varr/sex weak']);
+  assert.deepEqual(await slipsIn('Ilsa and Oren came in. He said nothing.', { reader: yes }), []);
+});
+
+test('sex and species words: appositives are strong, "the stallion" in a mare\'s scene is weak', async () => {
+  assert.deepEqual(await slipsIn('Bramble, the grey stallion, stood still.'), ['stallion→mare bramble/sex strong']);
+  assert.deepEqual(await slipsIn('Rook, a black mule, stood still.'), ['mule→horse rook/species strong']);
+  assert.deepEqual(await slipsIn('Bramble, the grey mare, stood still. Rook, a black stallion, did not.'), []);
+  const scene = 'Tamsin did not argue with Bramble. She swung down from the stallion.';
+  assert.deepEqual(await slipsIn(scene), []);
+  assert.deepEqual(await slipsIn(scene, { reader: yes }), ['stallion→mare bramble/sex weak']);
+  assert.deepEqual(await slipsIn('Bramble stood by Rook. She swung down from the stallion.', { reader: yes }), []);
+  assert.deepEqual(await slipsIn('The sky went the grey of a mare’s flank above Rook.', { reader: yes }), []);
+});
+
+test('eyes, hair, birthplace and kin', async () => {
+  assert.deepEqual(await slipsIn('Ilsa’s brown eyes narrowed.'), ['brown→grey ilsa-varr/eyes strong']);
+  assert.deepEqual(await slipsIn('Ilsa’s eyes were green as glass.'), ['green→grey ilsa-varr/eyes strong']);
+  assert.deepEqual(await slipsIn('Oren pushed the fair hair out of his eyes.'), ['fair→black oren-hale/hair strong']);
+  for (const fine of ['Ilsa’s grey eyes narrowed.', 'Ilsa turned her eyes to the green hills.', 'Ilsa looked into Oren’s brown eyes.', 'The brown eyes of the dog followed Ilsa.']) {
+    assert.deepEqual(await slipsIn(fine), [], fine);
+  }
+  assert.deepEqual(await slipsIn('Ilsa was born in Corwick.'), ['Corwick→Saltmere ilsa-varr/birthplace strong']);
+  assert.deepEqual(await slipsIn('Ilsa was born in Saltmere, not Corwick.'), []);
+  assert.deepEqual(await slipsIn('Tamsin, the elder of the two, read.', { reader: yes }), ['elder→younger tamsin-hale/sibling weak']);
+  assert.deepEqual(await slipsIn('Tamsin, the younger of the two, read.', { reader: yes }), []);
+});
+
+test('names a letter off are slips only when the dictionary doesn\'t know the word', async () => {
+  assert.deepEqual(await slipsIn('The road ran back to Corwyck.'), ['Corwyck→Corwick corwick/name strong']);
+  assert.deepEqual(await slipsIn('Corwyck’s walls were high.'), ['Corwyck→Corwick corwick/name strong']);
+  assert.deepEqual(await slipsIn('Brambles grew by Corwick.', { known: { Brambles: true } }), []);
+  assert.deepEqual(await slipsIn('Tamzin waved.'), ['Tamzin→Tamsin tamsin-hale/name strong']);
+  assert.deepEqual(await slipsIn('Ilsu waved.'), []); // short names are too close to too many words
+});
+
+test('the slip carries what the popover shows', async () => {
+  const { slips } = await Canon.checkSources({ sources: [{ bookId: 'b', chId: 'c', label: 'Ch 1', html: '<p>Rain fell. Bramble tossed his head.</p>' }], entries: world() });
+  const [s] = slips;
+  assert.equal(s.sentence, 'Bramble tossed his head.');
+  assert.equal(s.at, 26);
+  assert.equal(s.sentenceHash, Canon.textHash(Canon.norm(s.sentence)));
+  assert.equal(s.fact, 'bramble/sex');
+  assert.equal(s.as, 'mare');
+  assert.equal(s.written, true);
+  assert.equal(s.para, Canon.textHash(Canon.norm('Rain fell. Bramble tossed his head.')));
+  const { slips: none } = await Canon.checkSources({ sources: [{ bookId: 'b', chId: 'c', html: '<p>Rain fell. Bramble tossed his head.</p>' }], entries: world(),
+    notSlips: [{ fact: 'bramble/sex', sentence: s.sentenceHash }] });
+  assert.deepEqual(none, []);
+});

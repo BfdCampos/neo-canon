@@ -2288,8 +2288,81 @@ ipcMain.handle('canon:saveMeta', (_e, canonId, patch) => {
   return true;
 });
 
+// The shelf's books as Canon reads them, in shelf order (reading order): a
+// book's story chapters, then its Notes; a notebook's pages by their titles
+const CANON_STORY = ['chapter', 'unnumbered', 'prologue', 'epilogue'];
+function canonSources(canonId) {
+  const shelf = (readJSON(LIBRARY_FILE, { shelves: [] }).shelves || []).find((s) => s.canonId === canonId);
+  const out = [];
+  for (const bookId of shelf ? shelf.bookIds : []) {
+    const meta = readJSON(path.join(bookDir(bookId), 'book.json'), null);
+    if (!meta || !Array.isArray(meta.chapterOrder)) continue;
+    const notebook = meta.format === 'notebook';
+    const read = (file) => { try { return fs.readFileSync(file, 'utf8'); } catch { return ''; } };
+    let n = 0;
+    for (const chId of meta.chapterOrder) {
+      const kind = (meta.chapterKinds || {})[chId] || 'chapter';
+      if (!notebook && !CANON_STORY.includes(kind)) continue;
+      const title = (meta.chapterTitles || {})[chId];
+      const label = notebook ? title || 'Page' : kind === 'chapter' ? 'Ch ' + (++n) : kind === 'unnumbered' ? title || 'Chapter' : kind[0].toUpperCase() + kind.slice(1);
+      out.push({ bookId, chId, book: meta.title, label, html: read(path.join(bookDir(bookId), 'chapters', libName(chId) + '.html')) });
+    }
+    if (!notebook) out.push({ bookId, chId: 'notes', book: meta.title, label: 'Notes', notes: true, html: read(path.join(bookDir(bookId), 'notes.html')) });
+  }
+  return out;
+}
+
+// the engine's way to one Canon's files (the cache is this device's own)
+function canonIO(canonId) {
+  const cacheFile = path.join(app.getPath('userData'), 'canon-cache', libName(canonId), 'index.json');
+  return {
+    sources: () => canonSources(canonId),
+    meta: () => readJSON(canonFile(canonId, 'canon.json'), { v: 1 }),
+    saveMeta: (meta) => writeJSON(canonFile(canonId, 'canon.json'), meta),
+    entries: () => canonEntries(canonId).filter((x) => x.data).map((x) => ({ id: x.id, text: Canon.serialiseEntry(x.data) })),
+    saveEntry: (id, text) => writeFileDurable(canonFile(canonId, 'entries', libName(id) + '.md'), text),
+    notSlips: () => readJSON(canonFile(canonId, 'not-slips.json'), []),
+    cache: () => readJSON(cacheFile, null),
+    saveCache: (cache) => { fs.mkdirSync(path.dirname(cacheFile), { recursive: true }); writeFileDurable(cacheFile, JSON.stringify(cache)); },
+    knownWords: async (words) => {
+      const res = await spellRequest({ type: 'check', words });
+      return res.ok ? res.result : Object.fromEntries(words.map((w) => [w, true])); // no dictionary: nothing is misspelt
+    }
+  };
+}
+
+// The Continuity Pass. Each source's slips go to the window as they're found
+let canonStopped = false;
+const canonSend = (e, msg) => { if (!e.sender.isDestroyed()) e.sender.send('canon', msg); };
+ipcMain.handle('canon:check', (e, opts) => {
+  canonStopped = false;
+  const engine = Canon.createEngine({ io: canonIO(opts.canonId), reader: canonReader() });
+  return engine.check({ ...opts, stop: () => canonStopped,
+    onSource: (src, slips, n, of) => canonSend(e, { type: 'checked', run: opts.run, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, n, of, slips }) });
+});
+ipcMain.handle('canon:stop', () => { canonStopped = true; return true; });
+
+// Not a slip: remembered against the sentence, so an edit brings it back
+ipcMain.handle('canon:notSlip', (_e, canonId, record) => {
+  const file = canonFile(canonId, 'not-slips.json');
+  const list = readJSON(file, []);
+  if (!list.some((n) => n.fact === record.fact && n.sentence === record.sentence)) writeJSON(file, [...list, record]);
+  return true;
+});
+ipcMain.handle('canon:unNotSlip', (_e, canonId, record) => {
+  const file = canonFile(canonId, 'not-slips.json');
+  const list = readJSON(file, []);
+  const kept = list.filter((n) => !(n.fact === record.fact && n.sentence === record.sentence));
+  if (kept.length !== list.length) writeJSON(file, kept);
+  return true;
+});
+
 // No reader yet (M5 brings the local one). For tests and development a fake
 // one answers from a file; a packaged NEO never looks.
+function canonReader() {
+  if (app.isPackaged || !process.env.NEO_CANON_FAKE) return null;
+  return Canon.fakeReader(JSON.parse(fs.readFileSync(process.env.NEO_CANON_FAKE, 'utf8')));
+}
 function canonReaderStatus() {
   return { installed: !app.isPackaged && process.env.NEO_CANON_FAKE ? 'fake' : null };
 }
@@ -2514,6 +2587,12 @@ function buildMenu() {
           // key and one press did both (#282).
           registerAccelerator: false,
           click: () => sendToWindow({ type: 'spellcheck' })
+        },
+        {
+          label: t('Continuity Pass'),
+          accelerator: "CmdOrCtrl+'",
+          registerAccelerator: false, // the window answers the key itself, like ⌘;
+          click: () => sendToWindow({ type: 'continuity' })
         },
         {
           label: t('Spellcheck Language'),

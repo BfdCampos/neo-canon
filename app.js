@@ -4872,6 +4872,10 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     snapshotNow();
   }
+  if (CANON_ON && isContinuityShortcut(e)) {
+    e.preventDefault();
+    toggleContinuity();
+  }
   if (isSpellcheckShortcut(e)) {
     e.preventDefault();
     toggleSpellcheck();
@@ -7534,7 +7538,7 @@ function wireHoverPane(hotzone, pane, isPinnable) {
   // (a menu opened from the Chapters pane keeps it open while it's up)
   const pinned = () => (isPinnable && pane.dataset.pinned === '1') ||
     (pane.id === 'nav-pane' && (chapterDragActive || !!document.querySelector('.pop-menu'))) ||
-    (pane.id === 'side-pane' && $('#editor-view').classList.contains('darlings-tab')); // the snapshots stay
+    (pane.id === 'side-pane' && $('#editor-view').matches('.darlings-tab, .canon-side')); // the snapshots (and a pass's slips) stay
   hotzone.addEventListener('mouseenter', (e) => {
     if (e.buttons) return; // dragging something — stand down
     pane.classList.add('open');
@@ -7556,7 +7560,7 @@ wireHoverPane($('#side-hotzone'), $('#side-pane'), true);
 function closeUnpinnedPanes() {
   // Wayland can blur the window as a native chapter drag begins.
   if (!chapterDragActive && $('#nav-pane').dataset.pinned !== '1') $('#nav-pane').classList.remove('open');
-  if ($('#side-pane').dataset.pinned !== '1' && !$('#editor-view').classList.contains('darlings-tab')) $('#side-pane').classList.remove('open');
+  if ($('#side-pane').dataset.pinned !== '1' && !$('#editor-view').matches('.darlings-tab, .canon-side')) $('#side-pane').classList.remove('open');
 }
 document.documentElement.addEventListener('mouseleave', closeUnpinnedPanes);
 window.addEventListener('blur', closeUnpinnedPanes);
@@ -10514,6 +10518,7 @@ function sidePaneForTab(name) {
   $('#editor-view').classList.toggle('darlings-tab', dar);
   if (dar) { snapList(); $('#side-pane').classList.add('open'); }
   else if (was && $('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
+  if (CANON_ON) canonSideUpdate();
 }
 
 // ---- the note walks ahead ----
@@ -12168,6 +12173,7 @@ setInterval(() => { if (book) flushAllSaves('tick'); }, 20000);
 
 async function backToShelf() {
   if (reading) stopReadAloud(false);
+  if (canonPassOn) canonPassOff();
   flushAllSaves();
   tabPlaces = {};
   book = null;
@@ -16041,6 +16047,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'emailSettings') emailSettings();
   if (msg.type === 'find') openSearch();
   if (msg.type === 'spellcheck') toggleSpellcheck();
+  if (msg.type === 'continuity') toggleContinuity();
   if (msg.type === 'spellLanguage') changeSpellLanguage(msg.value);
   if (msg.type === 'reshelve') reshelveBook();
   if (msg.type === 'typewriter') toggleTypewriter();
@@ -16176,6 +16183,7 @@ function canonTabUpdate() {
   const tab = $('.tab[data-tab="canon"]');
   if (tab) tab.hidden = !id;
   if (!id || (canon && canon.id !== id)) { canon = null; canonShown = null; }
+  if (canonPassOn) canonPassOff(); // a pass belongs to the book it was run on
 }
 
 // One change to one entry, saved. When the file changed underneath (a text
@@ -16499,6 +16507,315 @@ async function canonOpenSource(s) {
   const off = () => CSS.highlights.delete('neo-canon-quote');
   document.addEventListener('keydown', off, { once: true });
   document.addEventListener('mousedown', off, { once: true });
+}
+
+// ---- the Continuity Pass: Edit → Continuity Pass (⌘'), a toggle like Spellcheck Pass ----
+// The open book is checked against its shelf's Canon; each slip is a muted
+// gold dotted underline on its word (the Highlight API: nothing goes into
+// the chapter), listed in the right-hand pane. Hover, right-click or ⌥Enter
+// on a mark opens its popover; the caret alone never does.
+let canonPassOn = false;
+let canonScope = 'book';
+let canonSlips = [];      // the slips found, each with its Range once placed
+let canonPassRun = 0;
+let canonPassFacts = 0;
+let canonProgress = '';
+
+function isContinuityShortcut(e) {
+  return (e.metaKey || e.ctrlKey) && !e.altKey && (e.key === '\'' || e.code === 'Quote');
+}
+
+async function toggleContinuity() {
+  if (!CANON_ON || !book || $('#editor-view').hidden) return;
+  if (canonPassOn) { canonPassOff(); toast(t('Continuity Pass off')); return; }
+  if (!canonIdFor(book.id)) {
+    const shelf = library.shelves.find((s) => s.bookIds.includes(book.id));
+    const pick = await optionModal(t('Continuity Pass'), escHtml(t('A Continuity Pass checks this book against its shelf’s Canon, and this shelf doesn’t keep one yet.')),
+      [{ label: t('Keep a Canon for This Shelf'), desc: t('Canon keeps track of who and what is in this world, from every book on the shelf.'), value: 'keep' }]);
+    if (pick === 'keep' && shelf) { await keepCanon(shelf); canonTabUpdate(); }
+    return;
+  }
+  canonPassOn = true;
+  if (currentTab !== 'manuscript') switchTab('manuscript');
+  await canonPassRunNow();
+}
+
+function canonPassOff() {
+  canonPassOn = false;
+  canonPassRun++;
+  canonSlips = [];
+  if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-slip');
+  canonPopClose();
+  canonSideUpdate();
+}
+
+async function canonPassRunNow() {
+  const run = ++canonPassRun;
+  canonSlips = [];
+  CSS.highlights.delete('neo-slip');
+  canonPopClose();
+  if (!(await canonLoad())) { canonPassOff(); return; }
+  canonProgress = t('Checking…');
+  canonSideUpdate();
+  const html = {};
+  for (const chId of book.chapterOrder) html[chId] = chapterHTML[chId];
+  let res;
+  try {
+    res = await window.neo.canonCheck({ canonId: canon.id, bookId: book.id, scope: canonScope, html, run });
+  } catch (err) {
+    window.neo.logError('continuity pass: ' + (err && err.message || err));
+    if (run === canonPassRun) { canonProgress = t('The Continuity Pass stopped. Try again in a moment.'); canonSideUpdate(); }
+    return;
+  }
+  if (run !== canonPassRun || !canonPassOn) return;
+  canonPassFacts = res.facts;
+  canonProgress = '';
+  canonSlips = res.slips;
+  canonPaint();
+}
+
+// the slips of one chapter arrive as it's checked
+if (CANON_ON) {
+  window.neo.onCanon((msg) => {
+    if (msg.type !== 'checked' || msg.run !== canonPassRun || !canonPassOn) return;
+    canonProgress = msg.n < msg.of ? t('Checking chapter {n} of {of}…', { n: msg.n + 1, of: msg.of }) : '';
+    // (a chapter's slips replace what that chapter had: the answer to the
+    // whole pass can come in before its last chapter's message)
+    canonSlips = canonSlips.filter((s) => s.bookId !== msg.bookId || s.chId !== msg.chId).concat(msg.slips).sort((a, b) => a.seq - b.seq);
+    canonPaint();
+  });
+}
+
+// a slip's Range, found by the paragraph's text (never by an offset alone,
+// which an edit since would turn onto the wrong word)
+function canonPlace(s) {
+  if (!book || s.bookId !== book.id) return null;
+  const body = document.querySelector(`.chapter[data-id="${s.chId}"] .chapter-body`);
+  if (!body) return null;
+  for (const p of body.children) {
+    if (p.tagName !== 'P' || p.matches('.scene-break, .ghost')) continue;
+    const { segs, text } = canonTextOf(p);
+    if (Canon.textHash(Canon.norm(text)) !== s.para) continue;
+    let at = text.slice(s.at, s.at + s.span.length) === s.span ? s.at : -1;
+    if (at < 0) {
+      const si = text.indexOf(s.sentence);
+      const k = si < 0 ? -1 : s.sentence.indexOf(s.span);
+      if (k >= 0) at = si + k;
+    }
+    return at < 0 ? null : canonRange(segs, at, at + s.span.length);
+  }
+  return null;
+}
+
+function canonPaint() {
+  const hl = new Highlight();
+  for (const s of canonSlips) {
+    if (!s.range || s.range.toString() !== s.span) s.range = canonPlace(s);
+    if (s.range) hl.add(s.range);
+  }
+  CSS.highlights.set('neo-slip', hl);
+  canonSideUpdate();
+}
+
+function canonDrop(s) {
+  canonSlips = canonSlips.filter((x) => x !== s);
+  canonPopClose();
+  canonPaint();
+}
+
+// The right-hand pane: the pass's slips (and, on the Canon tab, Needs You)
+function canonSideBox() {
+  let box = $('#canon-side');
+  if (box) return box;
+  box = document.createElement('div');
+  box.id = 'canon-side';
+  $('#side-head').after(box);
+  return box;
+}
+function canonSideUpdate() {
+  const on = CANON_ON && !!book && (canonPassOn && currentTab === 'manuscript');
+  const was = $('#editor-view').classList.contains('canon-side');
+  $('#editor-view').classList.toggle('canon-side', on);
+  if (on) $('#side-pane').classList.add('open');
+  else if (was && $('#side-pane').dataset.pinned !== '1' && !$('#editor-view').classList.contains('darlings-tab')) $('#side-pane').classList.remove('open');
+  if (!on) { if ($('#canon-side')) $('#canon-side').innerHTML = ''; return; }
+  const box = canonSideBox();
+  box.innerHTML = '';
+  const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+  box.appendChild(el('div', 'cs-title', t('Continuity Pass')));
+  const scope = el('div', 'cs-scope');
+  for (const [v, label] of [['book', t('This book')], ['shelf', t('Whole shelf')]]) {
+    const b = el('button', v === canonScope ? 'on' : '', label);
+    b.onclick = () => { if (canonScope !== v) { canonScope = v; canonPassRunNow(); } };
+    scope.appendChild(b);
+  }
+  box.appendChild(scope);
+  if (canonProgress) box.appendChild(el('div', 'cs-note', canonProgress));
+  else if (!canonSlips.length) box.appendChild(el('div', 'cs-note', t('No slips found against {n} facts.', { n: canonPassFacts })));
+  if (canon && !canon.reader.installed) box.appendChild(el('div', 'cs-note', t('Without Canon’s reader, only the plainest slips are checked.')));
+  for (const s of canonSlips) {
+    const item = el('button', 'cs-slip');
+    const where = s.bookId === book.id ? s.label : `${(s.book || '')} · ${s.label}`;
+    item.append(el('strong', '', s.name), el('span', 'cs-where', ' · ' + where + ' · '), el('q', '', canonSnippet(s)));
+    item.onclick = () => canonGoTo(s);
+    box.appendChild(item);
+  }
+}
+// a few words around the slip's word
+function canonSnippet(s) {
+  const i = s.sentence.indexOf(s.span);
+  const before = s.sentence.slice(0, Math.max(0, i)).split(/\s+/).slice(-3).join(' ');
+  const after = s.sentence.slice(i + s.span.length).split(/\s+/).slice(0, 3).join(' ');
+  return (before ? before + ' ' : '') + s.span + after;
+}
+
+async function canonGoTo(s) {
+  if (!book || s.bookId !== book.id) {
+    await openBook(s.bookId);
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+    if (!book || book.id !== s.bookId) return;
+    canonPassOn = true;
+    switchTab('manuscript');
+    await canonPassRunNow();
+    s = canonSlips.find((x) => x.chId === s.chId && x.para === s.para && x.at === s.at) || s;
+  }
+  if (currentTab !== 'manuscript') switchTab('manuscript');
+  const r = s.range || canonPlace(s);
+  if (!r) return;
+  r.startContainer.parentElement.scrollIntoView({ block: 'center' });
+  const rect = r.getBoundingClientRect();
+  canonPopOpen(s, rect.left, rect.bottom + 6);
+}
+
+// ---- the popover ----
+function canonPopClose() {
+  clearTimeout(canonPopOpen.wait);
+  canonPopOpen.wait = null;
+  const pop = document.querySelector('.canon-pop');
+  if (pop) pop.remove();
+}
+
+function canonClaim(s) {
+  const v = { name: s.name, value: s.value, word: s.as || s.value };
+  if (s.attr === 'sex') return s.as && SEXED_KINDS.has(s.entryKind) ? t('{name} is a {word}.', v) : s.value === 'female' ? t('{name} is female.', v) : t('{name} is male.', v);
+  if (s.attr === 'eyes') return t('{name}’s eyes are {word}.', v);
+  if (s.attr === 'hair') return t('{name}’s hair is {word}.', v);
+  if (s.attr === 'species') return t('{name} is a {value}.', v);
+  if (s.attr === 'birthplace') return t('{name} was born in {value}.', v);
+  if (s.attr === 'sibling') return t('{name} is the {word} sibling of {value}.', v);
+  return t('It’s spelt {name}.', v);
+}
+const SEXED_KINDS = new Set(['creature']);
+
+function canonPopOpen(s, x, y) {
+  canonPopClose();
+  const pop = document.createElement('div');
+  pop.className = 'canon-pop';
+  pop.setAttribute('role', 'dialog');
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; pop.appendChild(n); return n; };
+  const rec = canon && canon.entries.get(s.entry);
+  s.entryKind = rec && rec.data ? rec.data.kind : '';
+  el('div', 'cp-claim', canonClaim(s));
+  const where = s.sources.map((x) => x.label);
+  if (s.more) where.push(t('{n} more', { n: s.more }));
+  if (where.length) el('div', 'cp-where', t('Established in {where}', { where: where.join(' · ') }) + (s.written ? ' · ' + t('and by you') : ''));
+  else if (s.written) el('div', 'cp-where', t('You wrote this in Canon.'));
+  if (s.sources[0]) el('q', 'cp-quote', s.sources[0].quote);
+  el('div', 'cp-why', s.attr === 'name' ? t('Here it’s spelt “{span}”.', { span: s.span })
+    : ['pronoun', 'noun'].includes(s.kind) ? t('Here, “{span}” seems to mean {name}.', { span: s.span, name: s.name })
+      : t('Here it says “{span}”.', { span: s.span }));
+  const row = el('div', 'cp-row');
+  const btn = (label, fn, cls = '') => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; row.appendChild(b); return b; };
+  if (s.to) {
+    btn(t('Keep: {word}', { word: s.attr === 'name' ? s.name : s.attr === 'sex' ? s.as || canonValue({ value: s.value }) : s.as || s.value }), () => {
+      // the change shown in place, applied only on Apply
+      row.innerHTML = '';
+      const change = document.createElement('div');
+      change.className = 'cp-change';
+      change.append(Object.assign(document.createElement('s'), { textContent: s.span }), ' ', Object.assign(document.createElement('b'), { textContent: s.to }));
+      row.before(change);
+      btn(t('Apply'), () => canonApply(s), 'cp-main');
+      btn(t('Cancel'), canonPopClose);
+    }, 'cp-main');
+  }
+  btn(t('Not a slip'), () => canonNotSlip(s));
+  document.body.appendChild(pop);
+  const w = pop.offsetWidth;
+  const h = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+  pop.style.top = (y + h > window.innerHeight - 50 ? Math.max(8, y - h - 30) : y) + 'px';
+  pop.onmouseleave = () => { canonPopOpen.wait = setTimeout(canonPopClose, 500); };
+  pop.onmouseenter = () => clearTimeout(canonPopOpen.wait);
+}
+
+// Keep → Apply: the one word replaced as an ordinary edit, so ⌘Z takes it back
+function canonApply(s) {
+  const r = s.range || canonPlace(s);
+  if (!r || r.toString() !== s.span) { canonDrop(s); return; }
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  document.execCommand('insertText', false, s.to);
+  canonDrop(s);
+}
+
+async function canonNotSlip(s) {
+  const record = { fact: s.fact, sentence: s.sentenceHash, span: s.span, text: s.sentence.slice(0, 120), at: new Date().toISOString() };
+  try { await window.neo.canonNotSlip(canon.id, record); } catch { toast(t('NEO couldn’t save that')); return; }
+  canon.notSlips.push(record);
+  canonDrop(s);
+  toast(t('Got it. Canon won’t flag this line again.'));
+}
+
+// which slip, if any, is under the pointer or holds the caret
+function canonSlipAt(node, offset, x, y) {
+  return canonSlips.find((s) => {
+    if (!s.range) return false;
+    try { if (!s.range.isPointInRange(node, offset)) return false; } catch { return false; }
+    return x == null || [...s.range.getClientRects()].some((r) => x >= r.left - 1 && x <= r.right + 1 && y >= r.top - 1 && y <= r.bottom + 1);
+  });
+}
+function canonSlipFromPoint(x, y) {
+  const pos = document.caretRangeFromPoint(x, y);
+  return pos && canonSlipAt(pos.startContainer, pos.startOffset, x, y);
+}
+if (CANON_ON) {
+  document.addEventListener('mousemove', (e) => {
+    if (!canonPassOn || !canonSlips.length || e.buttons || !e.target.closest || !e.target.closest('.chapter-body')) return;
+    const s = canonSlipFromPoint(e.clientX, e.clientY);
+    const open = document.querySelector('.canon-pop');
+    if (!s) {
+      if (!open) { clearTimeout(canonPopOpen.wait); canonPopOpen.wait = null; } else if (!canonPopOpen.wait) canonPopOpen.wait = setTimeout(canonPopClose, 500);
+      return;
+    }
+    if (open && open.dataset.at === String(canonSlips.indexOf(s))) { clearTimeout(canonPopOpen.wait); canonPopOpen.wait = null; return; }
+    clearTimeout(canonPopOpen.wait);
+    canonPopOpen.wait = setTimeout(() => {
+      const rect = s.range.getBoundingClientRect();
+      canonPopOpen(s, rect.left, rect.bottom + 6);
+      document.querySelector('.canon-pop').dataset.at = String(canonSlips.indexOf(s));
+      canonPopOpen.wait = null;
+    }, 350);
+  });
+  document.addEventListener('contextmenu', (e) => {
+    if (!canonPassOn || !e.target.closest || !e.target.closest('.chapter-body')) return;
+    const s = canonSlipFromPoint(e.clientX, e.clientY);
+    if (!s) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    canonPopOpen(s, e.clientX, e.clientY + 8);
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.querySelector('.canon-pop')) { e.preventDefault(); e.stopPropagation(); canonPopClose(); return; }
+    if (!canonPassOn || e.key !== 'Enter' || !e.altKey || e.metaKey || e.ctrlKey) return;
+    const sel = window.getSelection();
+    const s = sel.rangeCount && canonSlipAt(sel.focusNode, sel.focusOffset);
+    if (!s) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = s.range.getBoundingClientRect();
+    canonPopOpen(s, rect.left, rect.bottom + 6);
+  }, true);
 }
 
 /* ================================================================== */

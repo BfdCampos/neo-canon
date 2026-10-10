@@ -355,10 +355,275 @@
     e.facts.push(f);
   }
 
+  /* ---------- slips ---------- */
+
+  // A fact may raise a slip when the writer wrote or confirmed it, or it was
+  // checked against a passage that is still there, isn't speech and isn't a
+  // plan, in a source that isn't left out of Canon.
+  function firmFact(f, out) {
+    if (!ATTRS[f.attr] || !ATTRS[f.attr].slips || !['verified', 'yours'].includes(f.state)) return false;
+    return f.state === 'yours' || f.sources.some((s) => !s.written && !s.said && !s.plan && !s.changed && !((out || {})[s.book] || []).includes(s.ch));
+  }
+  // each entry's firm facts by attribute (the writer's win), relations listed
+  function worldOf(entries, out) {
+    const world = new Map();
+    for (const e of entries) {
+      const k = { e, rel: [] };
+      for (const f of e.facts) {
+        if (!firmFact(f, out)) continue;
+        if (!ATTRS[f.attr].single) k.rel.push(f);
+        else if (!k[f.attr] || f.state === 'yours') k[f.attr] = f;
+      }
+      world.set(e.id, k);
+    }
+    return world;
+  }
+
+  const keepCase = (like, w) => /^\p{Lu}/u.test(like) ? w[0].toUpperCase() + w.slice(1) : w;
+  // after "her", a word it can own ("her ears"), not one that ends a phrase ("let her go")
+  const NOT_OWNED = new Set(['and', 'or', 'but', 'nor', 'so', 'yet', 'to', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'of', 'off', 'up', 'down', 'out', 'over', 'into', 'onto', 'away', 'back', 'again', 'there', 'here', 'then', 'that', 'this', 'the', 'a', 'an', 'as', 'if', 'when', 'while', 'go', 'be', 'have', 'had', 'was', 'is', 'say', 'said', 'know', 'see', 'too', 'once', 'alone', 'home']);
+  function pronounAt(words, i, text) {
+    const w = words[i];
+    if (w.lw !== 'her') return PRONOUNS[w.lw] ? w.lw : null;
+    const next = words[i + 1];
+    const owns = next && /^\s+$/.test(text.slice(w.end, next.start)) && !NOT_OWNED.has(next.lw);
+    return owns ? 'her' : 'her-obj';
+  }
+  // the word for the other sex: his → her, her (owning) → his, her → him
+  const swapPronoun = (word, kind) => keepCase(word, kind === 'her' ? 'his' : kind === 'her-obj' ? 'him' : PRONOUN_SWAP[word.toLowerCase()]);
+  const OWNING = new Set(['his', 'her', 'himself', 'herself']);
+  const CLAUSE = new Set(['and', 'but', 'or', 'while', 'as', 'when', 'until', 'because', 'though', 'who', 'whom', 'whose', 'which', 'that']);
+  const COPULA = new Set(['were', 'was', 'are', 'is', 'looked', 'seemed', 'went', 'turned', 'had', 'gone']);
+  const KIN_WORD_SWAP = { younger: 'elder', elder: 'younger', older: 'younger', youngest: 'eldest', eldest: 'youngest', oldest: 'youngest' };
+
+  // optimal string alignment distance (one swap of neighbours counts as one)
+  function editDistance(a, b) {
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+    return d[a.length][b.length];
+  }
+
+  // Candidate slips in one paragraph. Strong ones stand on their own; weak
+  // ones are kept only if the reader agrees the word means that entry.
+  // Each: { kind, strength, id, attr, fact, start, end, to, si }.
+  function paraCandidates(text, idx, world, names) {
+    const speech = speechSpans(text);
+    const free = (a, b) => !speech.some(([s, e]) => a < e && b > s);
+    const all = mentions(text, idx).filter((m) => free(m.start, m.end));
+    const sents = sentences(text);
+    const out = [];
+    const sexed = (m) => world.get(m.id) && world.get(m.id).sex;
+    sents.forEach((s, si) => {
+      const inS = all.filter((m) => m.start >= s.start && m.end <= s.end);
+      const words = [];
+      for (const m of s.text.matchAll(WORD)) {
+        const start = s.start + m.index;
+        words.push({ w: m[0], lw: m[0].toLowerCase().replace(/['’]s$/, ''), start, end: start + m[0].length });
+      }
+      const add = (c) => { if (free(c.start, c.end)) out.push({ ...c, si }); };
+      const after = (pos) => words.findIndex((w) => w.start >= pos);
+      const named = (w) => inS.some((m) => m.start < w.end && m.end > w.start);
+
+      for (const m of inS) {
+        const k = world.get(m.id);
+        // E … his: the nearest owning pronoun after a sexed entry, in its clause
+        if (k.sex) {
+          for (let i = after(m.end), n = 0, from = m.end; i >= 0 && i < words.length && n < 6; i++, n++) {
+            const w = words[i];
+            if (/[,;:—–()"“”]/.test(text.slice(from, w.start)) || named(w) || (/^\p{Lu}/u.test(w.w) && w.w !== 'I')) break;
+            from = w.end;
+            if (CLAUSE.has(w.lw)) break;
+            const kind = pronounAt(words, i, text);
+            if (!kind) continue;
+            if (OWNING.has(kind) && PRONOUNS[w.lw] !== k.sex.value) add({ kind: 'pronoun', strength: 'strong', id: m.id, attr: 'sex', fact: k.sex, start: w.start, end: w.end, to: swapPronoun(w.w, kind) });
+            break;
+          }
+        }
+        // E, the grey mare: an appositive naming its sex or species
+        const j = after(m.end);
+        if (j >= 0 && /^,\s+$/.test(text.slice(m.end, words[j].start)) && ['the', 'a', 'an'].includes(words[j].lw)) {
+          const noun = words.slice(j + 1, j + 4).find((w) => SEX_WORDS[w.lw] || SPECIES[w.lw]);
+          if (noun) {
+            const sw = SEX_WORDS[noun.lw];
+            if (sw && k.sex && sw[0] !== k.sex.value) add({ kind: 'noun', strength: 'strong', id: m.id, attr: 'sex', fact: k.sex, start: noun.start, end: noun.end, to: keepCase(noun.w, sw[1]) });
+            else if (SPECIES[noun.lw] && k.species && SPECIES[noun.lw] !== k.species.value) add({ kind: 'species', strength: 'strong', id: m.id, attr: 'species', fact: k.species, start: noun.start, end: noun.end, to: keepCase(noun.w, k.species.value) });
+          }
+        }
+        // Tamsin, the elder: a kin word against the sibling fact (weak)
+        for (const f of k.rel.filter((x) => x.attr === 'sibling' && KIN_SWAP[x.as])) {
+          for (let i = after(m.end), n = 0; i >= 0 && i < words.length && n < 6; i++, n++) {
+            const w = words[i];
+            const o = inS.find((x) => x.start < w.end && x.end > w.start);
+            if (o && o.id !== m.id) break;
+            if (KIN[w.lw] && KIN_SWAP[KIN[w.lw]] && KIN[w.lw] !== f.as) {
+              add({ kind: 'kin', strength: 'weak', id: m.id, attr: 'sibling', fact: f, start: w.start, end: w.end, to: keepCase(w.w, KIN_WORD_SWAP[w.lw]) });
+              break;
+            }
+          }
+        }
+      }
+
+      // He, opening a sentence after one that names one sexed entry (weak)
+      const first = words[0];
+      if (first && ['he', 'she', 'his', 'her'].includes(first.lw) && si > 0) {
+        const prev = [...new Set(all.filter((m) => m.start >= sents[si - 1].start && m.end <= sents[si - 1].end && sexed(m)).map((m) => m.id))];
+        const k = prev.length === 1 && world.get(prev[0]);
+        if (k && PRONOUNS[first.lw] !== k.sex.value) add({ kind: 'pronoun', strength: 'weak', id: k.e.id, attr: 'sex', fact: k.sex, start: first.start, end: first.end, to: swapPronoun(first.w, pronounAt(words, 0, text)) });
+      }
+
+      words.forEach((w, i) => {
+        // the stallion, when the horse in the last few sentences is a mare (weak)
+        const sw = SEX_WORDS[w.lw];
+        if (sw && sw[2] && i > 0 && words[i - 1].lw === 'the' && !inS.some((m) => world.get(m.id).species && world.get(m.id).species.value === sw[2])) {
+          const seen = all.filter((m) => m.start >= sents[Math.max(0, si - 3)].start && m.end <= w.start && world.get(m.id).species && world.get(m.id).species.value === sw[2]);
+          const last = seen.length && world.get(seen[seen.length - 1].id);
+          if (last && last.sex && last.sex.value !== sw[0] && !seen.some((m) => world.get(m.id).sex && world.get(m.id).sex.value === sw[0])) {
+            add({ kind: 'noun', strength: 'weak', id: last.e.id, attr: 'sex', fact: last.sex, start: w.start, end: w.end, to: keepCase(w.w, last.sex.as && SEX_WORDS[last.sex.as] && SEX_WORDS[last.sex.as][2] === sw[2] ? last.sex.as : sw[1]) });
+          }
+        }
+        // brown eyes / eyes were brown, of the one entry the sentence names
+        if (['eyes', 'eye', 'hair'].includes(w.lw)) {
+          const attr = w.lw === 'hair' ? 'hair' : 'eyes';
+          const ids = [...new Set(inS.map((m) => m.id))];
+          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (ids.length === 1 && inS[0].end <= w.start && inS[0]);
+          const k = owner && world.get(owner.id);
+          let c = i > 0 && COLOURS[words[i - 1].lw] && /^[\s-]+$/.test(text.slice(words[i - 1].end, w.start)) ? words[i - 1] : null;
+          if (!c && words[i + 1] && COPULA.has(words[i + 1].lw)) c = words.slice(i + 2, i + 5).find((x) => COLOURS[x.lw]);
+          if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, k[attr].as || k[attr].value) });
+        }
+        // born in a place that isn't the one in Canon
+        if (w.lw === 'born' && words[i + 1] && ['in', 'at'].includes(words[i + 1].lw)) {
+          const place = inS.find((m) => m.start >= words[i + 1].end && /^\s+$/.test(text.slice(words[i + 1].end, m.start)));
+          const people = [...new Set(inS.filter((m) => m !== place && world.get(m.id).e.kind === 'person').map((m) => m.id))];
+          const k = people.length === 1 && world.get(people[0]);
+          if (place && k && k.birthplace && norm(k.birthplace.value) !== norm(world.get(place.id).e.name)) {
+            add({ kind: 'birthplace', strength: 'strong', id: k.e.id, attr: 'birthplace', fact: k.birthplace, start: place.start, end: place.end, to: k.birthplace.value });
+          }
+        }
+        // Corwyck for Corwick: a capitalised word a letter away from a name
+        if (/^\p{Lu}/u.test(w.w) && !named(w)) {
+          const bare = w.w.replace(/['’]s$/, '');
+          if (bare.length >= 5 && !names.some(([n]) => n === bare.toLowerCase())) {
+            const near = names.filter(([n]) => editDistance(bare.toLowerCase(), n) <= (n.length >= 8 ? 2 : 1));
+            const targets = [...new Set(near.map(([, id]) => id))];
+            if (targets.length === 1) out.push({ kind: 'name', strength: 'strong', id: targets[0], attr: 'name', fact: null, start: w.start, end: w.start + bare.length, to: near[0][2], si, word: bare });
+          }
+        }
+      });
+    });
+    return out;
+  }
+
+  // every capitalised name part of five letters or more: [lower case, entry id, as written]
+  const nameTokens = (entries) => entries.flatMap((e) => [e.name, ...(e.aliases || [])].flatMap((x) => x.split(/\s+/))
+    .map((p) => p.replace(/[^\p{L}\p{M}'’-]/gu, '')).filter((w) => w.length >= 5 && /^\p{Lu}/u.test(w)).map((w) => [w.toLowerCase(), e.id, w]));
+
+  // The Continuity Pass over some sources: [{ bookId, chId, label, html }].
+  // `knownWords(words)` asks the spelling dictionary; `reader` (or null)
+  // confirms the weak candidates; `notSlips` are the writer's dismissals.
+  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null }) {
+    const idx = mentionIndex(entries);
+    const world = worldOf(entries, out);
+    const names = nameTokens(entries);
+    const byId = new Map(entries.map((e) => [e.id, e]));
+    const dismissed = new Set(notSlips.map((n) => n.fact + '|' + n.sentence));
+    const facts = [...world.values()].reduce((n, k) => n + k.rel.length + Object.keys(ATTRS).filter((a) => k[a]).length, 0);
+    const all = [];
+    let n = 0;
+    for (const src of sources) {
+      if (stop && stop()) break;
+      const slips = [];
+      const found = [];
+      for (const p of sourceParas(src.html)) {
+        const sents = sentences(p.text);
+        for (const c of paraCandidates(p.text, idx, world, names)) found.push({ c, p, s: sents[c.si] });
+      }
+      // a word the dictionary knows (Corwyn, Bramblee are not words; "Brambles" is) is no slip of the pen
+      const odd = [...new Set(found.filter((x) => x.c.kind === 'name').map((x) => x.c.word))];
+      const known = odd.length && knownWords ? await knownWords(odd) : {};
+      for (const { c, p, s } of found) {
+        if (c.kind === 'name' && (!knownWords || known[c.word] !== false)) continue;
+        const e = byId.get(c.id);
+        const key = c.fact ? factKey(e, c.fact) : `${e.id}/name`;
+        const sentenceHash = textHash(norm(s.text));
+        if (dismissed.has(key + '|' + sentenceHash)) continue;
+        const span = p.text.slice(c.start, c.end);
+        if (c.strength === 'weak') {
+          if (!reader) continue;
+          if (await reader.refers({ sentence: s.text, span, entity: e.name, paragraph: p.text }) !== 'yes') continue;
+        }
+        const srcs = c.fact ? c.fact.sources.filter((x) => !x.written) : [];
+        slips.push({
+          seq: all.length + slips.length, bookId: src.bookId, chId: src.chId, label: src.label, para: p.hash, sentence: s.text, sentenceHash, at: c.start, span, to: c.to || null,
+          kind: c.kind, strength: c.strength, entry: e.id, name: e.name, attr: c.attr, value: c.fact ? c.fact.value : e.name, as: c.fact ? c.fact.as : '',
+          fact: key, sources: srcs.slice(0, 2).map((x) => ({ label: x.label, quote: x.quote })), more: Math.max(0, srcs.length - 2),
+          written: !!(c.fact && c.fact.sources.some((x) => x.written))
+        });
+      }
+      all.push(...slips);
+      if (onSource) onSource(src, slips, ++n, sources.length);
+    }
+    return { slips: all, facts };
+  }
+
+  /* ---------- the engine ---------- */
+
+  // The pipelines over one Canon. `io` is the only way to the files (main.js
+  // gives one over the library; the tests one over a folder):
+  //   sources() → [{ bookId, chId, book, label, html, notes? }] in reading order
+  //   meta() / saveMeta(m), entries() → [{ id, text }] / saveEntry(id, text),
+  //   notSlips(), cache() / saveCache(c) (this device only), knownWords(words)
+  function createEngine({ io, reader = null }) {
+    const loadEntries = async () => (await io.entries()).map((x) => parseEntry(x.text)).filter((e) => !e.error);
+    return {
+      // the Continuity Pass: one book's chapters (or the shelf's), with the
+      // window's unsaved text standing in for the files (`html` by chapter)
+      async check({ bookId, scope = 'book', html = {}, onSource = null, stop = null }) {
+        const meta = await io.meta();
+        const out = meta.out || {};
+        const sources = (await io.sources())
+          .filter((s) => !s.notes && (scope === 'shelf' || s.bookId === bookId) && !(out[s.bookId] || []).includes(s.chId))
+          .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
+        return checkSources({ sources, entries: await loadEntries(), notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop });
+      }
+    };
+  }
+
+  /* ---------- readers ---------- */
+
+  // The reader the tests use: answers from a file (scripts/fixtures/canon/
+  // reader-answers.json). propose matches a paragraph by its first words.
+  function fakeReader(answers) {
+    const starts = (text, key) => norm(text).startsWith(norm(key));
+    return {
+      id: 'fake',
+      calls: 0,
+      async propose({ text }) {
+        this.calls++;
+        const hit = (answers.propose || []).find((x) => starts(text, x.para));
+        return hit ? hit.facts.map((f) => ({ ...f, note: undefined })) : [];
+      },
+      async judge({ claim }) { return (answers.judge || {})[norm([claim.entity, claim.attr, claim.value].join('|'))] || 'unclear'; },
+      async refers({ sentence, span, entity }) {
+        const hit = (answers.refers || []).find((r) => starts(sentence, r.sentence) && r.span === span && norm(r.entity) === norm(entity));
+        return hit ? hit.answer : 'no';
+      },
+      async pick() { return null; },
+      abort() {}
+    };
+  }
+
   return {
     textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
     inSpans, nameParts, WORD,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
-    newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, restoreFact
+    newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, restoreFact,
+    firmFact, editDistance, checkSources, createEngine, fakeReader
   };
 });
