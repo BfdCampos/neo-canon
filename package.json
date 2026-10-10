@@ -1,9 +1,9 @@
 {
-  "name": "neo",
-  "productName": "NEO",
+  "name": "neo-canon",
+  "productName": "NEO Canon",
   "version": "1.5.0",
-  "description": "A word processor for authors. Distraction-free by default.",
-  "homepage": "https://github.com/hughhowey/neo",
+  "description": "NEO Canon: a word processor for authors with a continuity engine that keeps your world's fact sheet for you. Local, offline, plain files.",
+  "homepage": "https://github.com/bfdcampos/neo-canon",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -25,12 +25,12 @@
     "package:all": "electron-builder --mac --win --linux"
   },
   "build": {
-    "appId": "com.hughhowey.neo",
-    "productName": "NEO",
+    "appId": "com.bfdcampos.neocanon",
+    "productName": "NEO Canon",
     "publish": {
       "provider": "github",
-      "owner": "hughhowey",
-      "repo": "neo"
+      "owner": "bfdcampos",
+      "repo": "neo-canon"
     },
     "mac": {
       "category": "public.app-category.productivity",

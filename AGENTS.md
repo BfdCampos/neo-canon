@@ -1,6 +1,6 @@
-# NEO — notes for agents
+# NEO Canon — notes for agents
 
-NEO is a local word processor for books. It is an Electron app made of plain JavaScript, HTML, and CSS. There is no bundler, no framework, and no compile step. `npm start` runs `electron .`.
+NEO Canon is a fork of NEO (by Hugh Howey) that adds Canon, a continuity engine. NEO is a local word processor for books. It is an Electron app made of plain JavaScript, HTML, and CSS. There is no bundler, no framework, and no compile step. `npm start` runs `electron .`.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is opinionated on purpose. A change that helps someone finish a book belongs here. A change that adds a panel, a prompt, or a dependency usually does not.
 
@@ -35,6 +35,25 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 `app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export.
 
 Menus are built in `buildMenu()` in `main.js`. A menu click sends `{ type, ... }` to the window; `app.js` handles it on `window.neo.onMenu`.
+
+## Canon
+
+A shelf can keep a Canon: its people, places, creatures and rules, each fact citing the passage it came from. Specs are in `docs/semantics/` (PRODUCT, ARCHITECTURE, IDE, ACCURACY). The principle: the local reader proposes, code decides. Never generate prose. A fact whose quote is not found in the text is unverified and never raises a slip.
+
+| File | Role |
+|---|---|
+| `canon.js` | Pure logic: entries, facts, merging, quote checks, slip detection, substitutions. No I/O |
+| `canon-worker.js` | The local reader, forked with `utilityProcess` like the spell worker. The model runs here |
+| `map.js` | World Map, 2D and 3D |
+| `app.js` | CANON and GO TO ANYTHING sections (⌘K). Search for the banner. Pocket has neither `canon.js` nor the `canon*` bridge, so Canon stays asleep there |
+| `main.js` | `canon:*` IPC (create, open, refresh, saveEntry, check, readShelf, download, readerStatus, search, notSlip…), reader download, files |
+
+- On disk, beside the books: `canon-<slug>-<shelfId>/` holding `canon.json`, `not-slips.json` and `entries/*.md`, one plain Markdown file per entry. NEO ignores these folders. The folder name still passes through `libName()`. Writes are durable, like every library write.
+- Deleting or setting aside an entry must stay recoverable (`canon:setAside`, `canon:restore`). A change to a fact across the series takes a snapshot first and shows a review list.
+- Checks run on a pause, never mid-sentence, and write nothing into chapter HTML: marks use the CSS Highlight API.
+- The reader's model is downloaded on request, one button, then offline. Nothing about a manuscript leaves the machine.
+- Tests: `scripts/canon*.test.js` (`npm test`; `canon-eval.js` is the model evaluation, not a test) and the end-to-end run `xvfb-run -a npx electron --no-sandbox scripts/canon.e2e.js` (`npm run test:canon` with a display). Screens for the docs are in `docs/semantics/screens/`.
+- The folder stays `NEO Library` so a library opens in both apps. The rename is logged in `docs/semantics/RENAME.md`.
 
 ## Outline cards
 

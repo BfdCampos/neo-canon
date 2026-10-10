@@ -3512,7 +3512,7 @@ app.whenReady().then(() => {
     if (process.platform === 'darwin' && fs.existsSync(devIcon)) {
       if (app.dock) app.dock.setIcon(devIcon);
       app.setAboutPanelOptions({
-        applicationName: 'NEO',
+        applicationName: 'NEO Canon',
         applicationVersion: app.getVersion(),
         iconPath: devIcon
       });
