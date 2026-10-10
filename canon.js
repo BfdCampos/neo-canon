@@ -572,6 +572,115 @@
     return { slips: all, facts };
   }
 
+  /* ---------- reading ---------- */
+
+  // Bumped when the prompts change, so cached proposals are asked again
+  const PROMPT = 1;
+  const STOP = new Set(['the', 'and', 'his', 'her', 'its', 'their', 'with', 'from', 'that', 'this', 'was', 'were', 'had', 'has', 'for', 'into', 'onto', 'by']);
+  const CUE = new Set([...Object.keys(SEX_WORDS), ...Object.keys(COLOURS), ...Object.keys(SPECIES), ...Object.keys(KIN), 'born', 'eyes', 'hair']);
+  const stripTitles = (name) => String(name || '').trim().split(/\s+/).filter((w, i, all) => i === all.length - 1 || !TITLES.has(w.toLowerCase().replace(/\.$/, ''))).join(' ');
+  const hasWord = (hay, needle) => !!needle && new RegExp(`(^|[^\\p{L}\\p{N}])${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}])`, 'u').test(hay);
+
+  // Only a paragraph with something to say about the world goes to the
+  // reader: a name, a capitalised word mid-sentence, or a trait or kin word.
+  // (A model call is tens of seconds on a laptop's CPU: §8 cut 1.)
+  function cueful(text, idx) {
+    if (mentions(text, idx).length) return true;
+    if (wordsOf(text).some((w) => CUE.has(w.replace(/'s$/, '')))) return true;
+    return /[^.!?"“‘\s]\s+\p{Lu}\p{Ll}/u.test(text);
+  }
+
+  // the entry a proposed name means: its name or an alias, or a part of a
+  // person's name no one else has
+  function findEntry(entries, name) {
+    const n = norm(stripTitles(name));
+    if (!n) return null;
+    const whole = entries.find((e) => norm(e.name) === n || e.aliases.some((a) => norm(a) === n));
+    if (whole) return whole;
+    const parts = entries.filter((e) => e.kind === 'person' && nameParts(e.name).some((p) => norm(p) === n));
+    return parts.length === 1 ? parts[0] : null;
+  }
+  // the entity is named in the quote or its paragraph
+  function reaches(entries, name, quote, text) {
+    const e = findEntry(entries, name);
+    const names = [stripTitles(name), ...nameParts(name), ...(e ? [e.name, ...e.aliases, ...nameParts(e.name)] : [])].map(norm);
+    return names.some((x) => hasWord(norm(quote), x) || hasWord(norm(text), x));
+  }
+  // the value is in the quote itself, or a word the lexicon ties to it
+  function valueInQuote(f, quote) {
+    const w = new Set(wordsOf(quote).map((x) => x.replace(/'s$/, '')));
+    const any = (test) => [...w].some(test);
+    if (f.attr === 'sex') return any((x) => (SEX_WORDS[x] && SEX_WORDS[x][0] === f.value) || PRONOUNS[x] === f.value);
+    if (f.attr === 'eyes' || f.attr === 'hair') return any((x) => COLOURS[x] === f.value);
+    if (f.attr === 'species') return any((x) => SPECIES[x] === f.value);
+    if (f.attr === 'sibling' && f.as && !any((x) => KIN[x] === f.as)) return false;
+    const parts = ATTRS[f.attr].ref ? nameParts(f.value).map(norm) : wordsOf(f.value).filter((x) => x.length >= 3 && !STOP.has(x));
+    return parts.length > 0 && parts.some((x) => w.has(x));
+  }
+  // where a quote sits in its paragraph: in speech, and in a question or a maybe
+  function quoteIn(quote, text) {
+    const src = normMap(text);
+    const at = src.text.indexOf(norm(quote));
+    if (at < 0) return { said: false, plan: /\?|\b(?:what if|maybe|perhaps)\b/i.test(quote) };
+    const a = src.map[at];
+    const b = src.map[at + norm(quote).length - 1] + 1;
+    const sent = sentences(text).filter((s) => s.end > a && s.start < b).map((s) => s.text).join(' ');
+    return { said: speechSpans(text).some(([s, e]) => a >= s && b <= e + 1), plan: /\?|\b(?:what if|maybe|perhaps)\b/i.test(sent) };
+  }
+
+  // One proposal through the gates, into its entry. Every way it can fail
+  // drops it: a quote not in the source (P0 #7), an entity not named in it,
+  // its paragraph or the one before (which the reader saw too), a value the
+  // quote doesn't hold, a value the writer already said is not right.
+  function accept(entries, prop, src, para, prev, full) {
+    if (!prop || !prop.entity || !prop.quote) return;
+    const quote = gateQuote(prop.quote, full);
+    if (!quote || !reaches(entries, prop.entity, quote, prev + '\n' + para.text)) return;
+    let e = findEntry(entries, prop.entity);
+    if (!e) {
+      const name = stripTitles(prop.entity);
+      let id = slug(name);
+      for (let n = 2; entries.some((x) => x.id === id); n++) id = slug(name) + '-' + n;
+      e = newEntry(name, prop.kind, id);
+      entries.push(e);
+    }
+    if (!prop.attr || !ATTRS[prop.attr]) return;
+    const n = normaliseFact(prop.attr, prop.value, prop.asWritten);
+    if (!n) return;
+    const ref = ATTRS[prop.attr].ref && findEntry(entries, n.value);
+    const f = { attr: prop.attr, label: prop.attr === 'other' ? prop.label || 'Other' : undefined, value: ref ? ref.name : n.value, as: n.as, state: 'unverified', sources: [] };
+    if (!valueInQuote(f, quote)) return;
+    const where = quoteIn(quote, para.text);
+    const source = { label: `${src.book}, ${src.label}`, quote, book: src.bookId, ch: src.chId };
+    if (where.said) source.said = prop.said || true;
+    if (where.plan) source.plan = true;
+    const same = (a, b) => a.attr === b.attr && norm(a.value) === norm(b.value) && (a.attr !== 'other' || a.label === b.label);
+    if (e.setAside.some((x) => x.state === 'not right' && same(x, f) && x.sources.some((s) => norm(s.quote) === norm(quote)))) return;
+    const had = e.facts.find((x) => same(x, f));
+    if (!had) { f.sources.push(source); e.facts.push(f); return; }
+    if (!had.as && f.as) had.as = f.as;
+    // the same passage twice (a whole sentence and a piece of it) is one source
+    if (!had.sources.some((s) => s.book === source.book && s.ch === source.ch && (norm(s.quote).includes(norm(quote)) || norm(quote).includes(norm(s.quote))))) had.sources.push(source);
+  }
+
+  const live = (s) => !s.written && !s.changed;
+  const solid = (f) => f.state === 'yours' || f.sources.some((s) => live(s) && !s.said && !s.plan);
+
+  // Checking by rule: the quote names the entity and holds a closed-lexicon
+  // word for the value, and isn't speech or a plan (§8 cut 2). The rest is
+  // asked of the reader, the same way, one fact at a time.
+  function ruleSupported(e, f, idx) {
+    return f.sources.some((s) => {
+      if (!live(s) || s.said || s.plan || !mentions(s.quote, idx).some((m) => m.id === e.id)) return false;
+      const w = wordsOf(s.quote).map((x) => x.replace(/'s$/, ''));
+      if (f.attr === 'sex') return w.some((x) => SEX_WORDS[x] && SEX_WORDS[x][0] === f.value);
+      if (f.attr === 'eyes' || f.attr === 'hair') return w.some((x) => COLOURS[x] === f.value);
+      if (f.attr === 'species') return w.some((x) => SPECIES[x] === f.value);
+      if (f.attr === 'sibling') return w.some((x) => KIN[x] === f.as) && nameParts(f.value).some((p) => w.includes(norm(p)));
+      return false;
+    });
+  }
+
   /* ---------- the engine ---------- */
 
   // The pipelines over one Canon. `io` is the only way to the files (main.js
@@ -591,6 +700,105 @@
           .filter((s) => !s.notes && (scope === 'shelf' || s.bookId === bookId) && !(out[s.bookId] || []).includes(s.chId))
           .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
         return checkSources({ sources, entries: await loadEntries(), notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop });
+      },
+
+      // Read the Shelf, and every read after it: only sources whose text
+      // changed since canon.json last saw them (`again` reads everything),
+      // only paragraphs with cues, and a proposal is asked once per paragraph
+      // and the one before it (the cache). The writer's facts are never touched.
+      async readShelf({ again = false, onProgress = null, stop = null } = {}) {
+        const meta = await io.meta();
+        const metaWas = JSON.stringify(meta);
+        meta.read = meta.read || {};
+        const out = meta.out || {};
+        const old = (!again && (await io.cache())) || {};
+        const cache = old.reader === reader.id && old.prompt === PROMPT ? old : { v: 1, reader: reader.id, prompt: PROMPT, proposals: {}, judged: {} };
+        const cacheWas = JSON.stringify(cache);
+        const files = await io.entries();
+        const entries = [];
+        const before = new Map();
+        for (const x of files) {
+          const e = parseEntry(x.text);
+          if (e.error) continue; // a file Canon can't read is left as it is
+          entries.push(e);
+          before.set(e.id, serialiseEntry(e));
+        }
+        const taken = new Set(files.map((x) => x.id));
+        const sources = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId));
+        const texts = new Map();
+        let calls = 0;
+        for (const [i, src] of sources.entries()) {
+          if (stop && stop()) break;
+          const key = src.bookId + '/' + src.chId;
+          const paras = sourceParas(src.html);
+          texts.set(key, paras.map((p) => p.text).join('\n'));
+          const h = textHash(src.html);
+          if (!again && meta.read[key] === h) continue;
+          if (onProgress) onProgress({ phase: 'read', book: src.book, label: src.label, n: i + 1, of: sources.length });
+          for (let j = 0; j < paras.length; j++) {
+            const p = paras[j];
+            const idx = mentionIndex(entries);
+            if (!cueful(p.text, idx)) continue;
+            const prev = j ? paras[j - 1].text : '';
+            const ck = textHash([reader.id, PROMPT, prev, p.text].join('\n'));
+            let props = cache.proposals[ck];
+            if (!props) {
+              const near = new Set(mentions(prev + '\n' + p.text, idx).map((m) => m.id));
+              props = await reader.propose({ text: p.text, before: prev, known: entries.filter((e) => near.has(e.id)).map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases })) });
+              calls++;
+              cache.proposals[ck] = props;
+            }
+            for (const prop of props || []) accept(entries, prop, src, p, prev, texts.get(key));
+          }
+          meta.read[key] = h;
+        }
+        // a new entry never takes the name of a file Canon couldn't read
+        for (const e of entries) if (!before.has(e.id) && taken.has(e.id)) e.id += '-' + entries.length;
+
+        // passages edited away, values that disagree, then checking
+        const idx = mentionIndex(entries);
+        const paraOf = (s) => (texts.get(s.book + '/' + s.ch) || '').split('\n').find((t) => norm(t).includes(norm(s.quote))) || s.quote;
+        for (const e of entries) {
+          for (const f of e.facts) {
+            for (const s of f.sources) {
+              if (s.written || !texts.has(s.book + '/' + s.ch)) continue;
+              if (gateQuote(s.quote, texts.get(s.book + '/' + s.ch))) delete s.changed;
+              else s.changed = true;
+            }
+            if (f.state === 'verified' && !f.sources.some(live)) f.state = 'unverified';
+          }
+          for (const attr of Object.keys(ATTRS).filter((a) => ATTRS[a].single)) {
+            const these = e.facts.filter((f) => f.attr === attr && solid(f));
+            const split = new Set(these.map((f) => norm(f.value))).size > 1;
+            for (const f of e.facts.filter((x) => x.attr === attr && x.state !== 'yours')) {
+              if (split && these.includes(f)) f.state = 'disagree';
+              else if (f.state === 'disagree') f.state = 'unverified';
+            }
+          }
+          for (const f of e.facts) {
+            if (f.state !== 'unverified' || !solid(f)) continue; // speech and plans stay unchecked
+            if (ruleSupported(e, f, idx)) { f.state = 'verified'; continue; }
+            const s = f.sources.find((x) => live(x) && !x.said && !x.plan);
+            const jk = factKey(e, f) + '|' + textHash(norm(s.quote));
+            if (!cache.judged[jk]) cache.judged[jk] = await reader.judge({ claim: { entity: e.name, attr: f.attr, value: f.value, as: f.as }, quote: s.quote, paragraph: paraOf(s) });
+            if (cache.judged[jk] === 'yes') f.state = 'verified';
+          }
+        }
+
+        // written only where something changed: an idle read writes nothing
+        let written = 0;
+        for (const e of entries) {
+          const text = serialiseEntry(e);
+          if (before.get(e.id) !== text) { await io.saveEntry(e.id, text); written++; }
+        }
+        if (JSON.stringify(meta) !== metaWas) await io.saveMeta(meta);
+        if (JSON.stringify(cache) !== cacheWas) await io.saveCache(cache);
+        const facts = entries.flatMap((e) => e.facts);
+        return {
+          entries: entries.length, facts: facts.length, written, calls,
+          verified: facts.filter((f) => f.state === 'verified' || f.state === 'yours').length,
+          needs: facts.filter((f) => f.state === 'unverified' || f.state === 'disagree').length
+        };
       }
     };
   }

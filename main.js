@@ -2342,6 +2342,19 @@ ipcMain.handle('canon:check', (e, opts) => {
 });
 ipcMain.handle('canon:stop', () => { canonStopped = true; return true; });
 
+// Read the Shelf (and every read after it): only what changed is read again.
+// One read at a time; progress goes to the window as it goes.
+let canonReading = null;
+ipcMain.handle('canon:readShelf', async (e, canonId, opts = {}) => {
+  const reader = canonReader();
+  if (!reader) return { error: 'no-reader' };
+  if (canonReading) return { error: 'busy' };
+  canonStopped = false;
+  canonReading = Canon.createEngine({ io: canonIO(canonId), reader })
+    .readShelf({ again: !!opts.again, stop: () => canonStopped, onProgress: (p) => canonSend(e, { type: 'progress', canonId, ...p }) });
+  try { return await canonReading; } finally { canonReading = null; }
+});
+
 // Not a slip: remembered against the sentence, so an edit brings it back
 ipcMain.handle('canon:notSlip', (_e, canonId, record) => {
   const file = canonFile(canonId, 'not-slips.json');

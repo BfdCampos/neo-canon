@@ -3,13 +3,13 @@
   "entries": [
     { "id": "corwick", "name": "Corwick", "kind": "place", "facts": [] },
     { "id": "ilsa-varr", "name": "Ilsa Varr", "kind": "person", "facts": [
-      { "attr": "sex", "value": "female", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] },
+      { "attr": "sex", "value": "female", "as": "woman", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] },
       { "attr": "title", "value": "Captain", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] },
       { "attr": "eyes", "value": "grey", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1", "book-field-notes-notes3/p2"] },
       { "attr": "birthplace", "value": "Saltmere", "state": "verified", "chapters": ["book-field-notes-notes3/p2"] }
     ] },
     { "id": "tamsin-hale", "name": "Tamsin Hale", "kind": "person", "facts": [
-      { "attr": "sex", "value": "female", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] },
+      { "attr": "sex", "value": "female", "as": "sister", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] },
       { "attr": "sibling", "value": "Oren Hale", "as": "younger", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] }
     ] },
     { "id": "oren-hale", "name": "Oren Hale", "kind": "person", "facts": [

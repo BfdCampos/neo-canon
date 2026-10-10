@@ -90,20 +90,23 @@ test('the Canon tab, kept by hand: a new entry and a fact of the writer\'s', asy
   await shot('canon-tab-by-hand.png');
 });
 
-test('the rest of the world, kept by hand from expected.json', async () => {
-  const expected = JSON.parse(fs.readFileSync(path.join(FIXTURE, 'expected.json'), 'utf8'));
-  await js(`(async (entries) => {
-    for (const x of entries) {
-      if (x.id === 'bramble') continue;
-      await canonEdit(x.id, () => {
-        const e = Canon.newEntry(x.name, x.kind, x.id);
-        for (const f of x.facts) if (!f.said && !f.plan) e.facts.push({ attr: f.attr, value: f.value, as: f.as || '', state: 'yours', sources: [{ written: true }] });
-        return e;
-      });
-    }
-    await canonEdit('bramble', (e) => { e.facts.push(Canon.handFact('Species: horse')); });
-  })(${JSON.stringify(expected.entries)})`);
+test('Read the Shelf (the fake reader): entries, facts and Needs You', async () => {
+  await js(`canonShown = null; renderCanon()`);
+  await until(`!!document.querySelector('#canon-view .cn-read')`);
+  await js(`document.querySelector('#canon-view .cn-read').click()`);
+  await until(`!canonReading && /found/.test(canonReadLine)`, 20000);
+  assert.equal(await js(`canonReadLine`), 'Canon found 7 entries and 17 facts. 15 checked out; 2 need you.');
   assert.equal(fs.readdirSync(path.join(LIB, CANON, 'entries')).filter((f) => f.endsWith('.md')).length, 7);
+  assert.deepEqual(await js(`[...document.querySelectorAll('#nav-list .cn-kind-head')].map((x) => x.textContent)`), ['People', 'Creatures', 'Places']);
+  // the writer's own fact stayed theirs, and gained the passages that agree
+  const bramble = fs.readFileSync(path.join(LIB, CANON, 'entries', 'bramble.md'), 'utf8');
+  assert.match(bramble, /- Sex: female \(mare\) · yours\n {2}- Written in Canon\n {2}- Ember and Thorn, Ch 2: "Bramble, the grey mare, would not cross the ford\." \{book:book-ember-and-thorn-ember1, ch:c2\}/);
+  await js(`canonShown = 'bramble'; renderCanon()`);
+  await until(`document.querySelectorAll('#canon-side .cs-need').length === 2`);
+  assert.equal(await js(`$('#side-pane').classList.contains('open')`), true);
+  await js(`$('#nav-pane').classList.add('open')`);
+  await tick(400);
+  await shot('canon-tab.png');
 });
 
 const chapterFiles = () => ['c1', 'c2', 'c3'].map((c) => fs.readFileSync(path.join(LIB, SALT, 'chapters', c + '.html'), 'utf8'));

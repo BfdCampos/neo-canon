@@ -10518,7 +10518,7 @@ function sidePaneForTab(name) {
   $('#editor-view').classList.toggle('darlings-tab', dar);
   if (dar) { snapList(); $('#side-pane').classList.add('open'); }
   else if (was && $('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
-  if (CANON_ON) canonSideUpdate();
+  if (CANON_ON) canonSideUpdate(name);
 }
 
 // ---- the note walks ahead ----
@@ -16320,6 +16320,7 @@ async function renderCanon() {
   renderNav();
   view.innerHTML = '';
   const rec = canonShown && canon.entries.get(canonShown);
+  canonSideUpdate();
   if (!rec) { view.appendChild(canonHome()); return; }
   if (rec.error) {
     const p = document.createElement('p');
@@ -16331,6 +16332,80 @@ async function renderCanon() {
   view.appendChild(canonEntryPage(rec.data));
 }
 
+// ---- Read the Shelf (with a reader) ----
+let canonReading = false;
+let canonReadLine = '';
+async function canonReadShelfNow() {
+  if (!canon || canonReading) return;
+  const id = canon.id;
+  canonReading = true;
+  canonReadLine = t('Reading…');
+  renderCanon();
+  let res;
+  try {
+    res = await window.neo.canonReadShelf(id, {});
+  } catch (err) {
+    window.neo.logError('canon read: ' + (err && err.message || err));
+    res = { error: 'failed' };
+  }
+  canonReading = false;
+  canonReadLine = res.error ? t('Canon couldn’t read the shelf just now. Try again in a moment.')
+    : t('Canon found {entries} entries and {facts} facts. {ok} checked out; {needs} need you.', { entries: res.entries, facts: res.facts, ok: res.verified, needs: res.needs });
+  if (canon && canon.id === id && (await canonLoad(true)) && currentTab === 'canon') renderCanon();
+}
+if (CANON_ON) {
+  window.neo.onCanon((msg) => {
+    if (msg.type !== 'progress' || !canon || msg.canonId !== canon.id) return;
+    canonReadLine = t('Reading {book} · {where} ({n} of {of})', { book: msg.book, where: msg.label, n: msg.n, of: msg.of });
+    const line = $('#canon-view .cn-read-line');
+    if (line) line.textContent = canonReadLine;
+  });
+}
+
+// Needs You: the facts not yet checked, and values that disagree, one by
+// one with their passage. Ignoring the list only means fewer slips.
+const canonSkipped = new Set();
+function canonNeeds() {
+  if (!canon) return [];
+  const out = [];
+  for (const x of canonSorted()) {
+    if (!x.data) continue;
+    for (const f of x.data.facts) {
+      const key = x.id + '|' + f.attr + '|' + f.value;
+      if ((f.state === 'unverified' || f.state === 'disagree') && !canonSkipped.has(key)) out.push({ e: x.data, f, key });
+    }
+  }
+  return out;
+}
+function canonNeedsList(box, el) {
+  const needs = canonNeeds();
+  box.appendChild(el('div', 'cs-title', t('Needs You') + (needs.length ? ' · ' + fmtNum(needs.length) : '')));
+  if (!needs.length) { box.appendChild(el('div', 'cs-note', t('Nothing waiting. Every fact is checked or yours.'))); return; }
+  const at = (d, f) => d.facts.findIndex((x) => x.attr === f.attr && x.value === f.value);
+  for (const { e, f, key } of needs) {
+    const item = el('div', 'cs-need');
+    item.appendChild(el('strong', '', `${e.name} · ${canonLabel(f)}: ${canonValue(f)}?`));
+    if (f.state === 'disagree') item.appendChild(el('div', 'cs-tag', t('Your sources disagree')));
+    const s = f.sources.find((x) => !x.written);
+    if (s) {
+      const src = el('div', 'cs-src');
+      const where = el('button', 'cs-where-btn', s.label + ': ');
+      where.onclick = () => canonOpenSource(s);
+      src.append(where, el('q', '', s.quote));
+      if (s.said) src.appendChild(el('span', 'cs-tag', s.said === true ? ' ' + t('said in dialogue') : ' ' + t('said by {who}', { who: s.said })));
+      if (s.plan) src.appendChild(el('span', 'cs-tag', ' ' + t('a plan, not yet true')));
+      item.appendChild(src);
+    }
+    const row = el('div', 'cs-row');
+    const act = (label, fn) => { const b = el('button', '', label); b.onclick = fn; row.appendChild(b); };
+    act(t('That’s right'), () => canonEdit(e.id, (d) => { const i = at(d, f); if (i >= 0) Canon.confirmFact(d, i); }));
+    act(t('Not right'), () => canonEdit(e.id, (d) => { const i = at(d, f); if (i >= 0) Canon.setAsideFact(d, i, true); }));
+    act(t('Skip'), () => { canonSkipped.add(key); canonSideUpdate(); });
+    item.appendChild(row);
+    box.appendChild(item);
+  }
+}
+
 // the tab with no entry picked: what Canon is, and what it can do here
 function canonHome() {
   const box = document.createElement('div');
@@ -16338,7 +16413,17 @@ function canonHome() {
   const say = (text, cls = 'cn-note') => { const p = document.createElement('p'); p.className = cls; p.textContent = text; box.appendChild(p); return p; };
   if (!canon.entries.size) say(t('Nothing in this Canon yet. Add an entry with + New Entry in the list, or let Canon read the shelf.'));
   else say(t('Pick an entry from the list.'));
-  if (!canon.reader.installed) {
+  if (canon.reader.installed) {
+    say(t('Read the Shelf'), 'cn-h');
+    say(t('Canon reads every book and notebook on this shelf, and only what changed since it last read. Facts you wrote or confirmed are never changed.'));
+    const go = document.createElement('button');
+    go.className = 'cn-read btn-gold';
+    go.textContent = t('Read the Shelf');
+    go.disabled = canonReading;
+    go.onclick = canonReadShelfNow;
+    box.appendChild(go);
+    say(canonReadLine, 'cn-note cn-read-line');
+  } else {
     say(t('Canon needs a reader'), 'cn-h');
     say(t('Canon reads your books and notes to keep track of who and what is in your world. The reader runs on this computer. Nothing you write is sent anywhere.'));
     say(t('The reader isn’t on this computer yet. Until it is, keep the Canon by hand: entries and facts you add are yours, and a Continuity Pass checks the book against them.'));
@@ -16494,7 +16579,7 @@ function canonFindRange(root, quote) {
 async function canonOpenSource(s) {
   if (!book || book.id !== s.book) {
     await openBook(s.book);
-    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0))); // the book settles on its tab first
+    await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))); // the book settles on its tab first
   }
   if (!book || book.id !== s.book) return;
   if (s.ch === 'notes') { switchTab('notes'); return; }
@@ -16632,8 +16717,9 @@ function canonSideBox() {
   $('#side-head').after(box);
   return box;
 }
-function canonSideUpdate() {
-  const on = CANON_ON && !!book && (canonPassOn && currentTab === 'manuscript');
+function canonSideUpdate(tab = currentTab) {
+  const mode = !CANON_ON || !book ? null : canonPassOn && tab === 'manuscript' ? 'pass' : tab === 'canon' && canon && canon.reader.installed ? 'needs' : null;
+  const on = !!mode;
   const was = $('#editor-view').classList.contains('canon-side');
   $('#editor-view').classList.toggle('canon-side', on);
   if (on) $('#side-pane').classList.add('open');
@@ -16642,6 +16728,7 @@ function canonSideUpdate() {
   const box = canonSideBox();
   box.innerHTML = '';
   const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+  if (mode === 'needs') { canonNeedsList(box, el); return; }
   box.appendChild(el('div', 'cs-title', t('Continuity Pass')));
   const scope = el('div', 'cs-scope');
   for (const [v, label] of [['book', t('This book')], ['shelf', t('Whole shelf')]]) {
@@ -16672,7 +16759,7 @@ function canonSnippet(s) {
 async function canonGoTo(s) {
   if (!book || s.bookId !== book.id) {
     await openBook(s.bookId);
-    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+    await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
     if (!book || book.id !== s.bookId) return;
     canonPassOn = true;
     switchTab('manuscript');

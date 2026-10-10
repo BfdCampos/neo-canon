@@ -473,3 +473,18 @@ Each milestone ends with `npm test` green, `npm run lint` clean, and `node scrip
 8. **Download progress copy says "about 6 minutes"**: computed from the last 10 s of throughput; no estimate before that.
 9. **Two Edit items on shelves without a Canon** (PRODUCT §4.9) mean the Edit menu is not literally unchanged; P0 #1 is read as "unchanged apart from those two items".
 10. **Backups**: today's daily zip only takes `book-*` and `library.json`; Canon folders must be added or a writer's hand-kept facts have no backup.
+
+### Decisions made while building M0–M4
+
+11. **Strong pronoun rule, narrowed.** Only an *owning* pronoun (his, her + a word it can own, himself, herself) after a sexed entity, in its clause (no comma, conjunction, other name or capitalised word between, within six words), is strong. "he", "him" and "her" ending a phrase never are: in "Tamsin watched him go" the pronoun is almost always someone else. Known false positive left: "Tamsin took his hand" in a sentence naming no one else; the writer dismisses it. M5 may route these through `refers`.
+12. **`her` → his | him** is decided by the next word (owning or not), not by `reader.pick`. `pick` stays in the reader interface, unused.
+13. **"the stallion" (weak):** "no entry is named in the sentence" is read as "no entry *of that species*" (Book 2 Ch 3 names Tamsin in the slip sentence). It needs the definite article, so "a mare's flank" is never a candidate.
+14. **Colour rule:** a colour right before eyes/hair ("brown eyes") or after a copula ("eyes were the grey of", "eyes looked almost brown"); the owner is the possessive name ("Ilsa's") or the one entity the sentence names before the colour.
+15. **Name spelling:** only capitalised words of five letters or more, against name parts of five or more (short names sit a letter from too many words); the dictionary decides, and with no dictionary nothing is flagged.
+16. **The weak checkers live in `canon.js` already** (M3), each confirmed by `reader.refers`. With the fake reader the fixture's five slips are found; with no reader the three strong ones (P0 #13 "kept by hand"). M5 only has to give `refers` a real model.
+17. **Entity in reach** includes the paragraph before the proposal's own, which the reader also saw: the trader's "That's no mare" paragraph doesn't name Bramble, the one before does.
+18. **The fake reader** matches a paragraph by any prefix of its normalised text (`para` in `reader-answers.json`), not exactly 40 characters.
+19. **Readings that contradict a checked fact.** A reader that proposes "eyes: brown" from "Ilsa's brown eyes narrowed" makes Ilsa's eyes *disagree*, and the slip goes quiet until the writer picks in Needs You (spec §5). The fixture's fake reader doesn't propose from slip sentences. M5 should either pass the firm facts to `propose` so it doesn't, or treat a contradiction later in reading order than a verified fact as a slip candidate rather than a new value.
+20. **Not built yet, for later milestones:** the `mentions` and `sources`/`checked` parts of the cache (M8 quiet checking, M9 change across series, M11 "4 more"); `canon:typing` and the pause (M7). The Read the Shelf UI is a button and one progress line on the Canon tab (M7 adds the estimate and pausing).
+21. **Small shapes:** `canon:refresh` takes the window's stamps (main keeps no per-window state); a spelling slip's fact key is `<entry>/name`; the Continuity Pass checks story chapters only (not Notes), using the window's unsaved HTML; a source label is "Ch n" counting chapters only (front and back pages are not read); `canon:create` takes up any `canon-*-<shelfId>` folder.
+22. **Lint:** `npm run lint` reports the same errors it did before Canon (app.js, main.js); the Canon code adds none.
