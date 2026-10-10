@@ -349,3 +349,56 @@ test('places the shelf names plainly become entries, so their misspellings can b
   const texts = ['Rain had come to Corwick. The ford below Corwick ran high.', 'The surgeon in Corwick worked. Then she rode back to Corwyck.', 'They came from Ashby. Captain Varr came to Saltmere. Tamsin Hale rode to Tamsin Hale.'];
   assert.deepEqual(Canon.shelfPlaces(texts, Canon.shelfNames(texts)), ['Corwick']);
 });
+
+// QA-VERIFY 2: a sentence's first word is no part of a name ("Then Mara")
+function memShelf(paras) {
+  let meta = {};
+  const entries = {};
+  const io = { sources: () => paras.map((html, i) => ({ bookId: 'b', chId: 'c' + i, book: 'B', label: 'Ch ' + (i + 1), html })),
+    meta: () => meta, saveMeta: (m) => { meta = m; }, entries: () => Object.entries(entries).map(([id, text]) => ({ id, text })), saveEntry: (id, t) => { entries[id] = t; },
+    notSlips: () => [], cache: () => null, saveCache: () => {}, knownWords: async (ws) => Object.fromEntries(ws.map((w) => [w, true])) };
+  return { io, parsed: () => Object.values(entries).map(Canon.parseEntry) };
+}
+test('names: "Then Mara" and "Suddenly Ilsa Varr" are Mara and Ilsa Varr, on a shelf that never writes "then" in lower case', async () => {
+  const names = Canon.shelfNames(['Then Mara lived in Kelsharow.', 'Mara sat. Suddenly Ilsa Varr ran. Meanwhile Tamsin Hale slept.']);
+  assert.ok(!names.has('then') && !names.has('suddenly') && !names.has('meanwhile'));
+  assert.ok(!names.has('mara'));
+  assert.deepEqual([...names.get('varr')], ['Ilsa Varr']);
+  assert.deepEqual([...names.get('hale')], ['Tamsin Hale']);
+  // QA's T3: the reader proposed "Mara"; the entry is Mara, not "Then Mara"
+  const M = memShelf(['<p>Then Mara lived in Kelsharow.</p><p>Mara sat. Mara, the tall woman, stood.</p><p>She saw Mara by the door.</p>']);
+  const F3 = { entity: 'Mara', kind: 'person', attr: 'home', value: 'Kelsharow', quote: 'Then Mara lived in Kelsharow' };
+  await Canon.createEngine({ io: M.io, reader: Canon.fakeReader({ propose: [{ para: 'Then Mara', facts: [F3] }] }) }).readShelf();
+  assert.deepEqual(M.parsed().map((e) => e.name), ['Mara']);
+  // and a reader that itself says "Then Mara" is read as Mara too
+  const M2 = memShelf(['<p>Then Mara lived in Kelsharow.</p><p>Mara sat.</p>']);
+  await Canon.createEngine({ io: M2.io, reader: Canon.fakeReader({ propose: [{ para: 'Then Mara', facts: [{ ...F3, entity: 'Then Mara' }] }] }) }).readShelf();
+  assert.deepEqual(M2.parsed().map((e) => e.name), ['Mara']);
+});
+
+// QA-VERIFY 6: reported speech is talk, like a quotation
+test('reported speech and hearsay: never a story fact, never a slip', async () => {
+  const pip = Canon.newEntry('Pip', 'creature', 'pip');
+  pip.facts.push(Canon.handFact('Sex: female'));
+  const tom = Canon.newEntry('Tom', 'person', 'tom');
+  tom.facts.push(Canon.handFact('Sex: male'));
+  const known = async (ws) => Object.fromEntries(ws.map((w) => [w, true]));
+  const slipsIn = async (text) => (await Canon.checkSources({ sources: [{ bookId: 'b', chId: 'c', book: 'B', label: 'Ch 1', html: '<p>' + text + '</p>' }], entries: [pip, tom], knownWords: known })).slips;
+  for (const said of ['Tom said Pip was a gelding.', 'Tom told Hana that Pip was a gelding.', 'According to Tom, Pip was a gelding.', 'Pip was a gelding, according to Tom.',
+    'Rumour had it Pip was a gelding.', 'Rumor has it that Pip was a stallion.', 'Pip, Tom said, was a gelding.', 'They say Pip is a stallion.', 'Tom swore Pip was a gelding.']) {
+    assert.deepEqual(await slipsIn(said), [], said);
+  }
+  // the narrator's own word still raises the slip
+  assert.equal((await slipsIn('Pip was a gelding.')).length, 1);
+  assert.equal((await slipsIn('“Pip is fast,” Tom said. Pip shook his head.')).length, 1);
+  assert.deepEqual(Canon.reportedSpans('“Pip is fast,” Tom said.'), []);
+  // and a reader's fact quoted from reported speech is talk: kept, never checked
+  const M = memShelf(['<p>Tom said Pip was a gelding.</p><p>Pip ran.</p><p>Pip slept.</p>']);
+  const fact = { entity: 'Pip', kind: 'creature', attr: 'sex', value: 'male', quote: 'Tom said Pip was a gelding' };
+  await Canon.createEngine({ io: M.io, reader: Canon.fakeReader({ propose: [{ para: 'Tom said Pip', facts: [fact] }] }) }).readShelf();
+  assert.equal(M.parsed().flatMap((e) => e.facts).length, 1);
+  for (const f of M.parsed().flatMap((e) => e.facts)) {
+    assert.notEqual(f.state, 'verified', f.attr);
+    assert.ok(f.sources.every((s) => s.said), 'the source is marked said');
+  }
+});

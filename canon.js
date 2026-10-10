@@ -134,6 +134,33 @@
   }
   const inSpans = (spans, a, b) => spans.some(([s, e]) => a >= s && b <= e);
 
+  // Reported speech and hearsay, which are talk as much as a quotation is:
+  // "Tom said Pip was a gelding", "according to Tom…", "rumour had it…".
+  // What follows a saying verb, to the end of its sentence, is someone's
+  // word, not the story's; "according to", "rumour has it" and the like
+  // make the whole sentence talk. A verb that only closes a quotation
+  // ("…,” Tom said.) adds nothing: the quotation is already speech.
+  const REPORT_VERB = /(?<![\p{L}\p{M}])(?:said|says|say|told|tells|tell|claimed|claims|swore|swears|insisted|insists|whispered|reckoned|reckons|believed|believes|thought|thinks|supposed|suspected|assumed|guessed|figured|hinted|admitted|warned|boasted|boasts|announced|declared|muttered|heard|wrote|writes|swear)(?![\p{L}\p{M}])/giu;
+  const HEARSAY = /(?<![\p{L}\p{M}])(?:according to|rumou?rs? (?:had|has|have) it|word (?:was|is|had it|has it)|it (?:was|is) said|they say|people say|folk say|some say|legend (?:had|has) it|the story goes|so the story goes|as the story goes|it was rumou?red|it is rumou?red|by all accounts|apparently|allegedly|supposedly|reportedly)(?![\p{L}\p{M}])/iu;
+  function reportedSpans(text) {
+    const spans = [];
+    for (const s of sentences(text)) {
+      if (HEARSAY.test(s.text)) { spans.push([s.start, s.end]); continue; }
+      for (const m of s.text.matchAll(REPORT_VERB)) {
+        const rest = s.text.slice(m.index + m[0].length);
+        // "…,” Tom said." / "Tom said: “…”" / "said nothing": no reported clause
+        if (/^\s*(?:[.!?…:;]|[“"‘'«„—–]|$|nothing\b|so\b|no\b|yes\b)/iu.test(rest)) continue;
+        // "Pip, Tom said, was a gelding": the clause runs both ways
+        const parenthetical = /^\s*,/.test(rest);
+        spans.push([parenthetical ? s.start : s.start + m.index, s.end]);
+        break;
+      }
+    }
+    return spans;
+  }
+  // Speech of either kind: the quoted (speechSpans) and the reported
+  const talkSpans = (text) => speechSpans(text).concat(reportedSpans(text));
+
   // Sentences with their place in the paragraph. A stop after a title or an
   // initial (Capt., J.) doesn't end one.
   const ABBREV = /(?:^|[\s(])(?:mr|mrs|ms|dr|st|capt|col|gen|lt|sgt|prof|rev|jr|sr|vs|etc|no|\p{L})\.$/iu;
@@ -695,7 +722,7 @@
   // ones are kept only if the reader agrees the word means that entry.
   // Each: { kind, strength, id, attr, fact, start, end, to, si }.
   function paraCandidates(text, idx, world, names) {
-    const speech = speechSpans(text);
+    const speech = talkSpans(text);
     const free = (a, b) => !speech.some(([s, e]) => a < e && b > s);
     const all = mentions(text, idx).filter((m) => free(m.start, m.end));
     const sents = sentences(text);
@@ -958,7 +985,8 @@
     const a = src.map[at];
     const b = src.map[at + norm(quote).length - 1] + 1;
     const sent = sentences(text).filter((s) => s.end > a && s.start < b).map((s) => s.text).join(' ');
-    return { said: speechSpans(text).some(([s, e]) => a >= s && b <= e + 1), plan: /\?|\b(?:what if|maybe|perhaps)\b/i.test(sent) };
+    // a quote inside a quotation, or touching reported speech, is talk
+    return { said: speechSpans(text).some(([s, e]) => a >= s && b <= e + 1) || reportedSpans(text).some(([s, e]) => a < e && b > s), plan: /\?|\b(?:what if|maybe|perhaps)\b/i.test(sent) };
   }
 
   // One proposal through the gates, into its entry. Every way it can fail
@@ -968,6 +996,13 @@
   // The shelf's full names: two capitalised words together, neither a
   // title nor a word the shelf also writes in lower case ("Then Ilsa" is no
   // name). → Map one part (lower case) → Set of full names
+  // Words that open a sentence and are no part of a name after them
+  const LEADERS = new Set(['then', 'now', 'so', 'but', 'and', 'or', 'yet', 'still', 'soon', 'later', 'there', 'here', 'after', 'afterwards', 'before', 'once', 'when', 'while', 'whilst', 'if', 'as', 'because', 'since', 'until', 'till', 'though', 'although', 'where', 'why', 'how', 'what', 'who', 'whom', 'whose', 'which', 'meanwhile', 'today', 'tonight', 'tomorrow', 'yesterday', 'outside', 'inside', 'even', 'only', 'just', 'again', 'instead', 'besides', 'also', 'perhaps', 'maybe', 'surely', 'thus', 'hence', 'indeed', 'nor', 'neither', 'either', 'both', 'all', 'every', 'each', 'some', 'many', 'few', 'this', 'that', 'these', 'those', 'his', 'her', 'their', 'our', 'your', 'its', 'my', 'did', 'does', 'had', 'has', 'was', 'were', 'is', 'are', 'will', 'would', 'could', 'should', 'can', 'may', 'might', 'must', 'not', 'never', 'always', 'often', 'sometimes', 'oh', 'ah', 'yes', 'well', 'with', 'without', 'for', 'from', 'by', 'at', 'on', 'in', 'into', 'to', 'of', 'like', 'unlike', 'beside', 'behind', 'above', 'below', 'under', 'over', 'past', 'near', 'tell', 'ask', 'let', 'make', 'get', 'go', 'come', 'see', 'look', 'poor', 'dear', 'good', 'next', 'last', 'first', 'an', 'a',
+    'suddenly', 'finally', 'slowly', 'quickly', 'quietly', 'eventually', 'gradually', 'instantly', 'immediately', 'luckily', 'unluckily', 'fortunately', 'unfortunately',
+    'clearly', 'certainly', 'obviously', 'naturally', 'presumably', 'apparently', 'honestly', 'frankly', 'briefly', 'carefully', 'gently', 'softly', 'silently',
+    'usually', 'normally', 'actually', 'really', 'recently', 'lately', 'nearly', 'merely', 'simply', 'surely', 'likely', 'possibly', 'probably', 'abruptly',
+    'swiftly', 'hastily', 'reluctantly', 'sadly', 'happily', 'strangely', 'oddly', 'curiously', 'inevitably', 'initially', 'ultimately', 'originally', 'later',
+    'somehow', 'somewhere', 'nowhere', 'anyway', 'otherwise', 'however', 'therefore', 'moreover', 'furthermore', 'nevertheless', 'nonetheless', 'already', 'almost', 'together', 'alone', 'beyond', 'across', 'along', 'around', 'during', 'upon', 'against', 'between', 'among', 'through', 'throughout', 'within', 'despite']);
   function shelfNames(texts) {
     const lower = new Set();
     for (const t of texts) for (const m of t.matchAll(/(?<![\p{L}'’])\p{Ll}[\p{L}\p{M}]*/gu)) lower.add(m[0]);
@@ -979,6 +1014,9 @@
       for (const m of t.matchAll(/(?<![\p{L}\p{M}'’-])(\p{Lu}[\p{Ll}\p{M}]{2,})(?=\s+(\p{Lu}[\p{Ll}\p{M}]{2,})(?![\p{L}\p{M}]))/gu)) {
         const parts = [m[1], m[2]];
         if (parts.some((w) => TITLES.has(w.toLowerCase()) || lower.has(w.toLowerCase()))) continue;
+        // a sentence's first word is capitalised anyway: "Then Mara", "Suddenly
+        // Mara" is Mara, even on a shelf that never writes "then" in lower case
+        if (LEADERS.has(m[1].toLowerCase())) continue;
         for (const w of parts) {
           if (!out.has(w.toLowerCase())) out.set(w.toLowerCase(), new Set());
           out.get(w.toLowerCase()).add(parts.join(' '));
@@ -1007,7 +1045,12 @@
   const JOINS = new Set(['of', 'the', 'de', 'du', 'da', 'del', 'la', 'le', 'van', 'von', 'der', 'and', 'on', 'upon']);
   function accept(entries, prop, src, para, prev, full, names = new Map()) {
     // an entry is someone or something with a name: "the drover" is not one
-    if (!prop || !prop.entity || !prop.quote || !/^\p{Lu}/u.test(stripTitles(prop.entity))) return;
+    if (!prop || !prop.entity || !prop.quote) return;
+    // "Then Mara" from a sentence's start is Mara
+    const lead = String(prop.entity).trim().split(/\s+/);
+    while (lead.length > 1 && LEADERS.has(lead[0].toLowerCase())) lead.shift();
+    if (lead.join(' ') !== String(prop.entity).trim()) prop = { ...prop, entity: lead.join(' ') };
+    if (!/^\p{Lu}/u.test(stripTitles(prop.entity))) return;
     const quote = gateQuote(prop.quote, full);
     if (!quote || !reaches(entries, prop.entity, quote, prev + '\n' + para.text)) return;
     let e = findEntry(entries, prop.entity);
@@ -1249,7 +1292,7 @@
         for (const s of sentences(p.text)) {
           if (PLAN.test(s.text)) continue;
           const S = s.text;
-          const speech = speechSpans(S);
+          const speech = talkSpans(S);
           const ms = mentions(S, idx).filter((m) => byId.get(m.id).kind === 'person' && !speech.some(([a, b]) => m.start < b && m.end > a));
           const words = [...S.matchAll(WORD)].map((m) => ({ lw: m[0].toLowerCase().replace(/['’]s$/, ''), poss: /['’]s$/.test(m[0]), start: m.index, end: m.index + m[0].length }));
           for (const x of ms.filter((m) => /^['’]s\b/.test(S.slice(m.end)))) {
@@ -1746,7 +1789,7 @@
 
   return {
     localReader, PROPOSE_SCHEMA, ANSWER_SCHEMA, JUDGE_SCHEMA,
-    textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
+    textHash, norm, normMap, decode, sourceParas, speechSpans, reportedSpans, sentences, mentionIndex, mentions, gateQuote,
     inSpans, nameParts, WORD, replaceInHtml,
     parseLinks, resolveName, entryLinks, linkGraph, backlinks, paraEntries, snippetAround, worldIndex, mentionPassages, searchPassages,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
