@@ -55,7 +55,7 @@ const server = http.createServer((req, res) => {
 const serving = new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const readersFile = path.join(tmp, 'readers.json');
 process.env.NEO_CANON_READERS = readersFile;
-const SCREENS = path.join(__dirname, '..', 'docs', 'semantics', 'screens');
+const SCREENS = process.env.CANON_SHOTS_DIR || path.join(__dirname, '..', 'docs', 'semantics', 'screens');
 const loadFile = BrowserWindow.prototype.loadFile;
 BrowserWindow.prototype.loadFile = function (file, opts) {
   return loadFile.call(this, path.resolve(__dirname, '..', file), opts);
@@ -75,6 +75,7 @@ const shot = async (name) => {
   if (!want || (want !== '1' && !want.split(',').some((w) => name.includes(w)))) return;
   fs.mkdirSync(SCREENS, { recursive: true });
   await js(`$('#hint').hidden = true`); // a toast left from a step before
+  await tick(80);
   const img = await wc.capturePage();
   fs.writeFileSync(path.join(SCREENS, name), img.toPNG());
 };
@@ -463,9 +464,11 @@ const libStamps = () => {
   walk(LIB);
   return out;
 };
+const theme = async (value) => { wc.send('menu', { type: 'pageTheme', value }); await until(`library.pageTheme === '${value}'`); await tick(300); };
 const backs = `[...document.querySelectorAll('#canon-view .cn-backs')].map((b) => b.textContent)`;
 
 test('links: a rule entry, [[links]] set as links, Linked from both ways, a rename that keeps them', async () => {
+  if (process.env.CANON_THEME) await theme(process.env.CANON_THEME); // to look at the IDE views in another theme
   fs.copyFileSync(path.join(FIXTURE, 'ide', 'the-salt-laws.md'), path.join(ENTRIES, 'the-salt-laws.md'));
   await js(`canonRefreshNow()`);
   await until(`canon.entries.has('the-salt-laws')`);
@@ -626,7 +629,6 @@ test('Go to Anything: a menu command runs as if picked; Esc puts the caret back;
 
 // distinct colours in a canvas: a map that drew something has many
 const colours = (sel) => js(`(() => { const c = document.querySelector('${sel}'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; const seen = new Set(); for (let i = 0; i < d.length; i += 4 * 97) seen.add(d[i] << 16 | d[i + 1] << 8 | d[i + 2]); return seen.size; })()`);
-const theme = async (value) => { wc.send('menu', { type: 'pageTheme', value }); await until(`library.pageTheme === '${value}'`); await tick(300); };
 const zoomed = async (p) => { const z = await js(`parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-zoom')) || 1`); return { x: Math.round(p.x * z), y: Math.round(p.y * z) }; };
 let stamps;
 test('the small map: the open entry and its neighbours, at the top of the Canon tab\'s pane', async () => {

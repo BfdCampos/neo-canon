@@ -2418,3 +2418,5 @@ body.light #canon-side q { color: #5f5a50; }
 body.light #canon-side .cs-row button { border-color: #d9d4ca; color: #5f5a50; }
 body.light #canon-side .cs-row button:hover { color: #2b2926; }
 body.light #canon-side .cs-sent { color: #3a362f; }
+body.light .cn-find { background: #fff; border-color: #d9d4ca; color: #2b2926; }
+body.light .cn-new { border-color: #cfc9be; color: #8a8379; }
