@@ -2401,6 +2401,10 @@ ipcMain.handle('canon:readShelf', async (e, canonId, opts = {}) => {
   } finally { canonReading = null; }
 });
 
+// Changing a fact across the series: the passages to review (the window
+// applies each one the writer accepts, through the chapter write path)
+ipcMain.handle('canon:passages', (_e, opts) => Canon.createEngine({ io: canonIO(opts.canonId), reader: canonReader() }).passages(opts));
+
 // Not a slip: remembered against the sentence, so an edit brings it back
 ipcMain.handle('canon:notSlip', (_e, canonId, record) => {
   const file = canonFile(canonId, 'not-slips.json');

@@ -273,3 +273,35 @@ test('what a small reader gets wrong stays out: unnamed things, values that aren
     assert.doesNotMatch(files['bramble.md'], /Lives in|Hair|Born in/);
   } finally { fs.rmSync(where.root, { recursive: true, force: true }); }
 });
+
+/* ---------- changing a fact across the series (M9) ---------- */
+
+test('Bramble is now a stallion: the passages that say mare, in reading order, and what needs the writer\'s words', async () => {
+  const { root, dir, lib, io, reader } = await readOnce();
+  try {
+    const file = path.join(dir, 'entries', 'bramble.md');
+    const e = Canon.parseEntry(fs.readFileSync(file, 'utf8'));
+    Canon.replaceFact(e, Canon.handFact('Sex: stallion'), null);
+    fs.writeFileSync(file, Canon.serialiseEntry(e));
+    assert.match(fs.readFileSync(file, 'utf8'), /## Set aside\n- Sex: female \(mare\) · set aside\n {2}- Ember and Thorn, Ch 2/);
+    const items = await Canon.createEngine({ io, reader }).passages({ entryId: 'bramble', attr: 'sex' });
+    assert.deepEqual(items.map((x) => [x.book + ', ' + x.label, x.span, x.to]), [
+      ['Ember and Thorn, Ch 2', 'mare', 'stallion'],
+      ['Ember and Thorn, Ch 2', 'her', 'his'],
+      ['The Salt Crown, Ch 1', 'her', 'his'],
+      ['The Salt Crown, Notes', 'in foal', null],
+      ['Field Notes, Horses', 'mare', 'stallion']
+    ]);
+    // the swap, made in the chapter's own HTML, changes that word and nothing else
+    const [first] = items;
+    const ch = path.join(lib, 'book-ember-and-thorn-ember1', 'chapters', 'c2.html');
+    const html = fs.readFileSync(ch, 'utf8');
+    const next = Canon.replaceInHtml(html, first.para, first.at, first.span, first.to);
+    assert.equal(next, html.replace('Bramble, the grey mare,', 'Bramble, the grey stallion,'));
+    assert.equal(Canon.replaceInHtml(next, first.para, first.at, first.span, first.to), null); // that paragraph reads differently now
+    // a span across a tag needs the writer
+    const p = Canon.sourceParas('<p>the <i>grey</i> mare</p>')[0];
+    assert.equal(Canon.replaceInHtml('<p>the <i>grey</i> mare</p>', p.hash, 4, 'grey mare', 'x'), null);
+    assert.equal(Canon.replaceInHtml('<p>the <i>grey</i> mare</p>', p.hash, 9, 'mare', 'stallion'), '<p>the <i>grey</i> stallion</p>');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});

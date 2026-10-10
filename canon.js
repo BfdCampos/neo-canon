@@ -86,6 +86,41 @@
     return out;
   }
 
+  // Words changed in NEO's chapter HTML without a DOM: in the paragraph whose
+  // text hashes to `para`, the `span` at `at` (in the paragraph's text)
+  // becomes `to`. Only inside one run of text: a span that crosses a tag
+  // (part in italics) needs the writer's own hand, and gives null, as does a
+  // paragraph that no longer reads as it did. Every other byte stays.
+  const escText = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  function replaceInHtml(html, para, at, span, to) {
+    html = String(html || '');
+    const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/gi;
+    let m;
+    while ((m = re.exec(html))) {
+      if (/\bclass="[^"]*\b(?:scene-break|ghost)\b/.test(m[1]) || textHash(norm(paraText(m[2]))) !== para) continue;
+      const base = m.index + m[0].length - m[2].length - 4;
+      // each character of the text: where it is in the HTML, and which run
+      const chars = [];
+      let run = 0;
+      const tok = /<span\b[^>]*\bclass="[^"]*\bph-mark\b[^"]*"[^>]*>[\s\S]*?<\/span>|<[^>]*>|&(?:#x[0-9a-f]+|#\d+|[a-z]+);|[\s\S]/gi;
+      let t;
+      while ((t = tok.exec(m[2]))) {
+        if (t[0][0] === '<' && t[0].length > 1) { run++; continue; }
+        const raw = t[0];
+        const d = raw.length > 1 ? decode(raw) : raw;
+        if (d === raw) for (let i = 0; i < raw.length; i++) chars.push({ c: raw[i], a: t.index + i, b: t.index + i + 1, run });
+        else for (const u of d.split('')) chars.push({ c: u, a: t.index, b: t.index + raw.length, run });
+      }
+      const text = chars.map((x) => x.c).join('');
+      if (text.slice(at, at + span.length) !== span || !span.length) return null;
+      const first = chars[at];
+      const last = chars[at + span.length - 1];
+      if (first.run !== last.run) return null;
+      return html.slice(0, base + first.a) + escText(to) + html.slice(base + last.b);
+    }
+    return null;
+  }
+
   // Spans of speech: inside quotation marks of any style, or a line opened
   // by a dash (dialogue set the European way).
   function speechSpans(text) {
@@ -456,6 +491,9 @@
   const OWNING = new Set(['his', 'her', 'himself', 'herself']);
   const CLAUSE = new Set(['and', 'but', 'or', 'while', 'as', 'when', 'until', 'because', 'though', 'who', 'whom', 'whose', 'which', 'that']);
   const COPULA = new Set(['were', 'was', 'are', 'is', 'looked', 'seemed', 'went', 'turned', 'had', 'gone']);
+  // what only a female (or male) can be or do: listed when a fact changes
+  // across the series, never swapped (a stallion in foal needs the writer)
+  const ONLY = { female: ['in foal', 'with foal', 'foaled', 'pregnant', 'gave birth', 'with child', 'in calf'], male: ['sired', 'at stud', 'fathered'] };
   const KIN_WORD_SWAP = { younger: 'elder', elder: 'younger', older: 'younger', youngest: 'eldest', eldest: 'youngest', oldest: 'youngest' };
 
   // optimal string alignment distance (one swap of neighbours counts as one)
@@ -647,7 +685,7 @@
         }
         const srcs = c.fact ? c.fact.sources.filter((x) => !x.written) : [];
         slips.push({
-          seq: all.length + slips.length, bookId: src.bookId, chId: src.chId, label: src.label, para: p.hash, sentence: s.text, sentenceHash, at: c.start, span, to: c.to || null,
+          seq: all.length + slips.length, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: p.hash, sentence: s.text, sat: s.start, sentenceHash, at: c.start, span, to: c.to || null,
           kind: c.kind, strength: c.strength, entry: e.id, name: e.name, attr: c.attr, value: c.fact ? c.fact.value : e.name, as: c.fact ? c.fact.as : '',
           fact: key, sources: srcs.slice(0, 2).map((x) => ({ label: x.label, quote: x.quote })), more: Math.max(0, srcs.length - 2),
           written: !!(c.fact && c.fact.sources.some((x) => x.written))
@@ -808,6 +846,45 @@
         const skipped = skip ? norm(skip) : null;
         const paraOk = skip || done ? (src, p) => !(done && done.has(p.hash)) && norm(p.text) !== skipped : null;
         return checkSources({ sources, entries: await loadEntries(), notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk });
+      },
+
+      // Changing a fact across the series (PRODUCT §4.7), once the writer
+      // has made the change in the entry: every passage on the shelf (books,
+      // their Notes, notebooks; not what's left out of Canon) that now says
+      // otherwise of that entry's `attr`, found by the pass's own checkers,
+      // dismissals ignored, in reading order. A word that can't simply be
+      // swapped ("in foal", for a stallion) comes with `to: null`.
+      async passages({ entryId, attr, bookId = null, html = {} }) {
+        const out = (await io.meta()).out || {};
+        const sources = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId))
+          .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
+        const entries = await loadEntries();
+        const e = entries.find((x) => x.id === entryId);
+        const k = e && worldOf([e], out).get(e.id)[attr];
+        if (!k) return [];
+        const { slips } = await checkSources({ sources, entries, reader, out });
+        const items = slips.filter((x) => x.entry === entryId && x.attr === attr);
+        const idx = mentionIndex(entries);
+        const words = attr === 'sex' ? ONLY[k.value === 'male' ? 'female' : 'male'] : [];
+        sources.forEach((src, n) => {
+          for (const p of sourceParas(src.html)) {
+            for (const st of sentences(p.text)) {
+              if (!mentions(st.text, idx).some((m) => m.id === entryId)) continue;
+              const low = st.text.toLowerCase();
+              const w = words.find((x) => hasWord(low, x));
+              if (!w) continue;
+              const i = low.search(new RegExp(`(^|[^\\p{L}])${w}`, 'u'));
+              const at = st.start + i + (/^\p{L}/u.test(low[i]) ? 0 : 1);
+              items.push({ bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: p.hash, sentence: st.text, sat: st.start, at, span: p.text.slice(at, at + w.length), to: null, entry: entryId, name: e.name, attr, kind: 'words', n });
+            }
+          }
+        });
+        const rank = new Map(sources.map((s, i) => [s.bookId + '/' + s.chId, i]));
+        const pos = (x) => [rank.get(x.bookId + '/' + x.chId), sourceParas(sources[rank.get(x.bookId + '/' + x.chId)].html).findIndex((p) => p.hash === x.para), x.at];
+        return items.map((x) => ({ x, r: pos(x) })).sort((a, b) => a.r[0] - b.r[0] || a.r[1] - b.r[1] || a.r[2] - b.r[2]).map(({ x }) => {
+          const { bookId, chId, book, label, para, sentence, sat, at, span, to, kind } = x;
+          return { bookId, chId, book, label, notes: !!sources[rank.get(bookId + '/' + chId)].notes, para, sentence, sat, at, span, to, kind };
+        });
       },
 
       // Read the Shelf, and every read after it: only sources whose text
@@ -1061,7 +1138,7 @@
   return {
     localReader, PROPOSE_SCHEMA, ANSWER_SCHEMA,
     textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
-    inSpans, nameParts, WORD,
+    inSpans, nameParts, WORD, replaceInHtml,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
     newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, replaceFact, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader

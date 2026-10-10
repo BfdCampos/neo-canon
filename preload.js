@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('neo', {
   canonCheck: (opts) => ipcRenderer.invoke('canon:check', opts),
   canonStop: () => ipcRenderer.invoke('canon:stop'),
   canonReadShelf: (canonId, opts) => ipcRenderer.invoke('canon:readShelf', canonId, opts),
+  canonPassages: (opts) => ipcRenderer.invoke('canon:passages', opts),
   canonNotSlip: (canonId, record) => ipcRenderer.invoke('canon:notSlip', canonId, record),
   canonUnNotSlip: (canonId, record) => ipcRenderer.invoke('canon:unNotSlip', canonId, record),
   canonDownload: (tier) => ipcRenderer.invoke('canon:download', tier),

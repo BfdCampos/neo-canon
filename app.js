@@ -11453,22 +11453,24 @@ async function snapMeta(bookId, s) {
   return s.meta;
 }
 
-// Takes a snapshot of the open book. `htmlOf` gives each chapter's text (by
-// default what's on the page). Resolves to { snap, same } — same: nothing
-// had changed since the last snapshot, so none was taken.
+// Takes a snapshot of the open book (or of `meta`, another book's book.json,
+// with `htmlOf` its chapters as read from disk). `htmlOf` gives each
+// chapter's text (by default what's on the page). Resolves to { snap, same }
+// — same: nothing had changed since the last snapshot, so none was taken.
 let snapChain = Promise.resolve();
-function takeSnapshot(kind, htmlOf = (c) => chapterHTML[c] || '', { ifNoneToday = false } = {}) {
-  const run = () => takeSnapshotNow(kind, htmlOf, { ifNoneToday });
+function takeSnapshot(kind, htmlOf = (c) => chapterHTML[c] || '', { ifNoneToday = false, meta = null } = {}) {
+  const run = () => takeSnapshotNow(kind, htmlOf, { ifNoneToday, meta });
   const p = snapChain.catch(() => {}).then(run);
   snapChain = p;
   return p;
 }
-async function takeSnapshotNow(kind, htmlOf, { ifNoneToday }) {
-  if (!book || !snapsCan()) return null;
-  const bookId = book.id;
-  const order = [...book.chapterOrder];
-  const titles = { ...(book.chapterTitles || {}) };
-  const kinds = { ...(book.chapterKinds || {}) };
+async function takeSnapshotNow(kind, htmlOf, { ifNoneToday, meta: of }) {
+  const b = of || book;
+  if (!b || !snapsCan()) return null;
+  const bookId = b.id;
+  const order = [...b.chapterOrder];
+  const titles = { ...(b.chapterTitles || {}) };
+  const kinds = { ...(b.chapterKinds || {}) };
   const texts = {};
   for (const c of order) texts[c] = htmlOf(c);
   const snaps = await loadSnaps(bookId);
@@ -11493,7 +11495,7 @@ async function takeSnapshotNow(kind, htmlOf, { ifNoneToday }) {
   if (!changed.length && sameShape && (kind !== SNAP_KEPT || last.kind === SNAP_KEPT)) return { snap: last, same: true };
   const name = snapName(now, kind, changed.length, total);
   for (const c of changed) await window.neo.snapshotWrite(bookId, name, c + '.html', texts[c]);
-  const meta = { v: 1, at: new Date(now).toISOString(), kind, title: book.title || '', chapterOrder: order, chapterTitles: titles, chapterKinds: kinds, hashes, words, changed, total };
+  const meta = { v: 1, at: new Date(now).toISOString(), kind, title: b.title || '', chapterOrder: order, chapterTitles: titles, chapterKinds: kinds, hashes, words, changed, total };
   await window.neo.snapshotWrite(bookId, name, 'snapshot.json', JSON.stringify(meta, null, 1));
   const snap = parseSnapName(name);
   snap.files = new Set([...changed.map((c) => c + '.html'), 'snapshot.json']);
@@ -16647,6 +16649,11 @@ function canonEntryPage(e) {
           // and the old one, with its passages, goes to Set aside
           if (nf.attr === f.attr && Canon.norm(nf.value) === Canon.norm(f.value)) {
             edit((d) => { d.facts[i] = { ...nf, sources: [...d.facts[i].sources.filter((s) => !s.written), { written: true }] }; });
+          } else if (CANON_TRAITS.has(nf.attr) && nf.attr === f.attr && Canon.lexical(nf)) {
+            const pick = await optionModal(escHtml(t('Change It Across the Series?')), escHtml(canonChangeText(e.name, nf, e.kind)),
+              [{ label: escHtml(t('Find Passages')), value: 'find' }, { label: escHtml(t('Just Change the Fact')), desc: escHtml(t('The books stay as they are.')), value: 'fact' }]);
+            if (pick === 'find') canonChangeAcross(e.id, nf, f);
+            else if (pick === 'fact') edit((d) => Canon.replaceFact(d, nf, f));
           } else edit((d) => Canon.replaceFact(d, nf, f));
         }));
         if (f.state !== 'yours') ctl.appendChild(button(t('That’s right'), () => edit((d) => Canon.confirmFact(d, i))));
@@ -16920,7 +16927,8 @@ function canonSideBox() {
   return box;
 }
 function canonSideUpdate(tab = currentTab) {
-  const mode = !CANON_ON || !book ? null : canonPassOn && tab === 'manuscript' ? 'pass' : tab === 'canon' && canon && canon.reader.installed ? 'needs' : null;
+  const mode = !CANON_ON || !book ? null : canonReview && (tab === 'manuscript' || tab === 'canon') ? 'review'
+    : canonPassOn && tab === 'manuscript' ? 'pass' : tab === 'canon' && canon && canon.reader.installed ? 'needs' : null;
   const on = !!mode;
   const was = $('#editor-view').classList.contains('canon-side');
   $('#editor-view').classList.toggle('canon-side', on);
@@ -16931,6 +16939,7 @@ function canonSideUpdate(tab = currentTab) {
   box.innerHTML = '';
   const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
   if (mode === 'needs') { canonNeedsList(box, el); return; }
+  if (mode === 'review') { canonReviewList(box, el); return; }
   box.appendChild(el('div', 'cs-title', t('Continuity Pass')));
   const shown = canonShownSlips();
   const scope = el('div', 'cs-scope');
@@ -17029,6 +17038,19 @@ function canonPopOpen(s, x, y) {
       btn(t('Cancel'), canonPopClose);
     }, 'cp-main');
   }
+  const nf = canonNewValue(s);
+  if (nf) {
+    btn(canonIsNow(s.name, nf), () => {
+      // a short confirmation in place: nothing changes until each Apply
+      row.innerHTML = '';
+      const ask = document.createElement('div');
+      ask.className = 'cp-ask';
+      ask.textContent = canonChangeText(s.name, nf, s.entryKind);
+      row.before(ask);
+      btn(t('Find Passages'), () => { canonPopClose(); canonChangeAcross(s.entry, nf); }, 'cp-main');
+      btn(t('Cancel'), canonPopClose);
+    });
+  }
   btn(t('Not a slip'), () => canonNotSlip(s));
   document.body.appendChild(pop);
   const w = pop.offsetWidth;
@@ -17037,6 +17059,160 @@ function canonPopOpen(s, x, y) {
   pop.style.top = (y + h > window.innerHeight - 50 ? Math.max(8, y - h - 30) : y) + 'px';
   pop.onmouseleave = () => { canonPopOpen.wait = setTimeout(canonPopClose, 500); };
   pop.onmouseenter = () => clearTimeout(canonPopOpen.wait);
+}
+
+// ---- changing a fact across the series (PRODUCT §4.7) ----
+// The entry changes first (the old value to Set aside, with its passages);
+// then every passage on the shelf that says otherwise is listed in the
+// right-hand pane, each changed only on its own Apply (or Apply All Shown,
+// once the whole list has been seen). Before the first change in a book
+// NEO snapshots it (and, for the open book, takes a structural undo step),
+// so ⌘Z or Snapshots → Restore brings every word back. Other books are
+// changed through the chapter write path, one word in one chapter file.
+const CANON_TRAITS = new Set(['sex', 'eyes', 'hair', 'species']);
+let canonReview = null; // { entry, name, fact, items, loading, snapped: Set, seenAll }
+
+// the value a slip's own word says, as a fact: "stallion" → Sex: male (stallion)
+function canonNewValue(s) {
+  if (!CANON_TRAITS.has(s.attr) || s.kind === 'name') return null;
+  const w = s.span.toLowerCase().replace(/['’]s$/, '');
+  const f = { attr: s.attr, value: '', as: '', state: 'yours', sources: [{ written: true }] };
+  if (s.attr === 'sex') {
+    f.value = Canon.SEX_WORDS[w] ? Canon.SEX_WORDS[w][0] : Canon.PRONOUNS[w];
+    f.as = Canon.SEX_WORDS[w] ? w : s.as && Canon.SEX_WORDS[s.as] ? Canon.SEX_WORDS[s.as][1] : '';
+  } else f.value = s.attr === 'species' ? Canon.SPECIES[w] : Canon.COLOURS[w];
+  return f.value && f.value !== s.value ? f : null;
+}
+const canonIsNow = (name, f) => f.attr === 'sex' ? (f.as ? t('{name} is now a {word}…', { name, word: f.as }) : t('{name} is now {word}…', { name, word: canonValue({ value: f.value }) }))
+  : f.attr === 'species' ? t('{name} is now a {word}…', { name, word: f.value })
+    : f.attr === 'eyes' ? t('{name}’s eyes are now {word}…', { name, word: f.as || f.value }) : t('{name}’s hair is now {word}…', { name, word: f.as || f.value });
+const canonChangeText = (name, f, kind) => canonClaim({ name, attr: f.attr, value: f.value, as: f.as, entryKind: kind }) + ' ' +
+  t('Canon will find every passage that says otherwise and show you each change. Nothing changes until you apply it.');
+
+async function canonChangeAcross(entryId, nf, old) {
+  if (!(await canonLoad())) return;
+  const rec = canon.entries.get(entryId);
+  if (!rec || !rec.data) return;
+  if (!(await canonEdit(entryId, (d) => Canon.replaceFact(d, nf, old)))) return;
+  if (canonPassOn) canonPassOff();
+  canonReview = { entry: entryId, name: rec.data.name, kind: rec.data.kind, fact: nf, items: [], loading: true, snapped: new Set(), seenAll: false };
+  const review = canonReview;
+  canonSideUpdate();
+  const html = {};
+  for (const c of book.chapterOrder) html[c] = chapterHTML[c];
+  try {
+    const items = await window.neo.canonPassages({ canonId: canon.id, entryId, attr: nf.attr, bookId: book.id, html });
+    review.items = items.map((x) => ({ ...x, state: x.to && !x.notes ? 'todo' : 'words' }));
+  } catch (err) {
+    window.neo.logError('canon passages: ' + (err && err.message || err));
+    review.failed = true;
+  }
+  review.loading = false;
+  if (canonReview === review) canonSideUpdate();
+}
+
+function canonReviewList(box, el) {
+  const r = canonReview;
+  const head = el('div', 'cs-title');
+  const books = new Set(r.items.map((x) => x.bookId)).size;
+  head.textContent = t('Review Changes') + (r.loading ? '' : ' · ' + t('{passages} in {books}', { passages: t('{n} passages', { n: r.items.length }), books: t('{n} books', { n: books }) }));
+  box.appendChild(head);
+  if (r.loading) { box.appendChild(el('div', 'cs-note', t('Finding passages…'))); return; }
+  if (r.failed) box.appendChild(el('div', 'cs-note', t('Canon couldn’t look through the shelf just now. The fact is changed; nothing else is.')));
+  const todo = r.items.filter((x) => x.state === 'todo');
+  const changed = r.items.filter((x) => x.state === 'applied').length;
+  const skipped = r.items.filter((x) => x.state === 'skipped').length;
+  const claim = canonClaim({ name: r.name, attr: r.fact.attr, value: r.fact.value, as: r.fact.as, entryKind: r.kind });
+  if (!todo.length) {
+    box.appendChild(el('div', 'cs-done', t('{changed}, {skipped}. {claim}', { changed: t('{n} passages changed', { n: changed }), skipped: t('{n} skipped', { n: skipped }), claim })));
+  } else box.appendChild(el('div', 'cs-note', t('Before the first change in each book, NEO takes a snapshot of it: ⌘Z or Snapshots → Restore brings it back.')));
+  const row = el('div', 'cs-row cs-review-top');
+  const act = (parent, label, fn, cls = '') => { const b = el('button', cls, label); b.onclick = fn; parent.appendChild(b); return b; };
+  if (todo.length > 1 && r.seenAll) act(row, t('Apply All Shown'), async () => { for (const x of todo) if (x.state === 'todo') await canonReviewApply(x); }, 'cs-main');
+  act(row, todo.length ? t('Stop Reviewing') : t('Done'), () => { canonReview = null; canonSideUpdate(); });
+  box.appendChild(row);
+  r.items.forEach((x, i) => {
+    const item = el('div', 'cs-review cs-' + x.state);
+    const where = el('button', 'cs-where-btn', `${x.book}, ${x.label}`);
+    where.onclick = () => canonOpenPassage(x);
+    item.appendChild(where);
+    const q = el('div', 'cs-sent');
+    const k = x.at - x.sat;
+    q.append(x.sentence.slice(0, k), Object.assign(document.createElement(x.to && x.state !== 'words' ? 's' : 'mark'), { textContent: x.span }));
+    if (x.to && x.state !== 'words') q.append(' ', Object.assign(document.createElement('b'), { textContent: x.state === 'edited' ? '' : x.to }));
+    q.append(x.sentence.slice(k + x.span.length));
+    if (x.state === 'edited') { q.textContent = ''; q.appendChild(Object.assign(document.createElement('b'), { textContent: x.mine })); }
+    item.appendChild(q);
+    const acts = el('div', 'cs-row');
+    if (x.state === 'todo') {
+      act(acts, t('Apply'), () => canonReviewApply(x), 'cs-main');
+      act(acts, t('Skip'), () => { x.state = 'skipped'; canonSideUpdate(); });
+      act(acts, t('Edit…'), async () => {
+        const mine = await askInput(t('Your words for this sentence'), '', x.sentence);
+        if (mine && mine !== x.sentence) canonReviewApply(x, mine);
+      });
+    } else if (x.state === 'words') {
+      acts.appendChild(el('span', 'cs-tag', t('Needs your words — open the passage.')));
+      act(acts, t('Open'), () => canonOpenPassage(x));
+    } else acts.appendChild(el('span', 'cs-tag', x.state === 'skipped' ? t('Skipped') : t('Changed')));
+    item.appendChild(acts);
+    box.appendChild(item);
+    // Apply All Shown appears once the last passage has been seen
+    if (i === r.items.length - 1 && !r.seenAll && todo.length > 1) {
+      const io = new IntersectionObserver((seen) => {
+        if (!seen.some((e) => e.isIntersecting) || canonReview !== r) return;
+        io.disconnect();
+        r.seenAll = true;
+        canonSideUpdate();
+      });
+      io.observe(item);
+    }
+  });
+}
+
+// the book open, and the passage lit (Edit… and "Needs your words")
+const canonOpenPassage = (x) => canonOpenSource({ book: x.bookId, ch: x.notes ? 'notes' : x.chId, quote: x.sentence });
+
+// one passage changed: the word (or, from Edit…, the writer's sentence)
+async function canonReviewApply(x, mine) {
+  const r = canonReview;
+  const span = mine ? x.sentence : x.span;
+  const at = mine ? x.sat : x.at;
+  const to = mine || x.to;
+  try {
+    if (!r.snapped.has(x.bookId)) {
+      if (book && book.id === x.bookId) {
+        snapshotStructure(t('Change Across the Series'));
+        await takeSnapshot('r');
+      } else {
+        const meta = await window.neo.readBookMeta(x.bookId);
+        const texts = {};
+        for (const c of meta.chapterOrder) texts[c] = await window.neo.readChapter(x.bookId, c);
+        await takeSnapshot('r', (c) => texts[c] || '', { meta });
+      }
+      r.snapped.add(x.bookId);
+    }
+    let done = false;
+    if (book && book.id === x.bookId) {
+      if (currentTab !== 'manuscript') switchTab('manuscript');
+      const range = canonPlace({ ...x, at, span, sentence: x.sentence });
+      if (range && range.toString() === span) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        done = document.execCommand('insertText', false, to);
+      }
+    } else {
+      const old = await window.neo.readChapter(x.bookId, x.chId);
+      const next = Canon.replaceInHtml(old, x.para, at, span, to);
+      done = next != null && (await window.neo.writeChapter(x.bookId, x.chId, next, old)) === true;
+    }
+    if (done) { x.state = mine ? 'edited' : 'applied'; x.mine = mine; } else x.state = 'words';
+  } catch (err) {
+    window.neo.logError('canon change: ' + (err && err.message || err));
+    toast(t('NEO couldn’t change this passage. It’s as it was.'));
+  }
+  if (canonReview === r) canonSideUpdate();
 }
 
 // Keep → Apply: the one word replaced as an ordinary edit, so ⌘Z takes it back

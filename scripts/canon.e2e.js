@@ -305,6 +305,63 @@ test('quiet checking: after a pause the changed paragraphs are checked, and mark
   assert.ok(!/slip|canon/i.test(saved));
 });
 
+const EMBER = 'book-ember-and-thorn-ember1';
+const NOTES = 'book-field-notes-notes3';
+test('Bramble is now a stallion: the review list, snapshots first, each change applied on its own', async () => {
+  const emberC2 = fs.readFileSync(path.join(LIB, EMBER, 'chapters', 'c2.html'), 'utf8');
+  const notesP1 = fs.readFileSync(path.join(LIB, NOTES, 'chapters', 'p1.html'), 'utf8');
+  await js(`switchTab('manuscript'); toggleContinuity()`);
+  await until(`canonProgress === '' && canonSlips.some((s) => s.span === 'his')`);
+  await js(`canonPopOpen(canonSlips.find((s) => s.span === 'his'), 300, 300)`);
+  const now = `[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Bramble is now a stallion…')`;
+  assert.equal(await js(`!!${now}`), true);
+  await js(`${now}.click()`);
+  assert.match(await js(`document.querySelector('.canon-pop .cp-ask').textContent`), /^Bramble is a stallion\. Canon will find every passage that says otherwise/);
+  await js(`[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Find Passages').click()`);
+  await until(`canonReview && !canonReview.loading`);
+  assert.equal(await js(`document.querySelector('#canon-side .cs-title').textContent`), 'Review Changes · 5 passages in 3 books');
+  assert.deepEqual(await js(`canonReview.items.map((x) => [x.book + ', ' + x.label, x.span, x.to, x.state])`), [
+    ['Ember and Thorn, Ch 2', 'mare', 'stallion', 'todo'], ['Ember and Thorn, Ch 2', 'her', 'his', 'todo'], ['The Salt Crown, Ch 1', 'her', 'his', 'todo'],
+    ['The Salt Crown, Notes', 'in foal', null, 'words'], ['Field Notes, Horses', 'mare', 'stallion', 'todo']]);
+  const bramble = fs.readFileSync(path.join(LIB, CANON, 'entries', 'bramble.md'), 'utf8');
+  assert.match(bramble, /- Sex: male \(stallion\) · yours\n[^#]*- Written in Canon/);
+  assert.match(bramble, /## Set aside\n[\s\S]*- Sex: female \(mare\) · set aside/);
+  assert.deepEqual(fs.readFileSync(path.join(LIB, EMBER, 'chapters', 'c2.html'), 'utf8'), emberC2); // nothing until Apply (P0 #10)
+  await js(`$('#nav-pane').classList.remove('open')`);
+  await tick(300);
+  await shot('canon-review-changes.png');
+  // a book that isn't open: snapshot first, then one word in one file
+  const items = '[...document.querySelectorAll("#canon-side .cs-review")]';
+  const click = (i, label) => js(`[...${items}[${i}].querySelectorAll('button')].find((b) => b.textContent === '${label}').click()`);
+  await click(0, 'Apply');
+  await until(`canonReview.items[0].state === 'applied'`);
+  assert.equal(fs.readFileSync(path.join(LIB, EMBER, 'chapters', 'c2.html'), 'utf8'), emberC2.replace('the grey mare,', 'the grey stallion,'));
+  const snaps = fs.readdirSync(path.join(LIB, EMBER, 'snapshots'));
+  assert.equal(snaps.length, 1);
+  assert.match(snaps[0], /Z-r-/);
+  assert.equal(fs.readFileSync(path.join(LIB, EMBER, 'snapshots', snaps[0], 'c2.html'), 'utf8'), emberC2); // Restore gives these bytes back (P0 #11)
+  // the open book: an ordinary edit, after a snapshot and a structural undo step
+  const para = `[...document.querySelectorAll('.chapter[data-id="c1"] .chapter-body p')].find((p) => p.textContent.includes('ears back')).textContent`;
+  await click(2, 'Apply');
+  await until(`canonReview.items[2].state === 'applied'`);
+  assert.match(await js(para), /Bramble put his ears back/);
+  assert.equal(await js(`undoStack[undoStack.length - 1].label`), 'Change Across the Series');
+  assert.match(fs.readdirSync(path.join(LIB, SALT, 'snapshots')).join(), /Z-r-/);
+  await js(`document.execCommand('undo')`);
+  assert.match(await js(para), /Bramble put her ears back/);
+  // the rest: Apply All Shown, there once the whole list has been seen
+  await js(`${items}.at(-1).scrollIntoView()`);
+  await until(`[...document.querySelectorAll('#canon-side button')].some((b) => b.textContent === 'Apply All Shown')`);
+  await js(`[...document.querySelectorAll('#canon-side button')].find((b) => b.textContent === 'Apply All Shown').click()`);
+  await until(`!canonReview.items.some((x) => x.state === 'todo')`);
+  assert.equal(await js(`document.querySelector('#canon-side .cs-done').textContent`), '4 passages changed, 0 skipped. Bramble is a stallion.');
+  assert.equal(fs.readFileSync(path.join(LIB, NOTES, 'chapters', 'p1.html'), 'utf8'), notesP1.replace('Bramble — mare,', 'Bramble — stallion,'));
+  assert.match(fs.readFileSync(path.join(LIB, EMBER, 'chapters', 'c2.html'), 'utf8'), /Bramble flattened his ears/);
+  assert.equal(fs.readdirSync(path.join(LIB, EMBER, 'snapshots')).length, 1); // one snapshot per book, before its first change
+  await js(`[...document.querySelectorAll('#canon-side button')].find((b) => b.textContent === 'Done').click()`);
+  assert.equal(await js(`$('#editor-view').classList.contains('canon-side')`), false);
+});
+
 /* ---------- runner ---------- */
 
 async function main() {
