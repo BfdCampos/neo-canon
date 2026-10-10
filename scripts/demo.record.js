@@ -3,7 +3,7 @@
 //   xvfb-run -a -s "-screen 0 1440x900x24" npx electron --no-sandbox scripts/demo.record.js
 // It drives the app on a copy of the Ashfall Road fixture with real input events
 // (webContents.sendInputEvent), the fake reader (NEO_CANON_FAKE) and a shortened
-// quiet-check timeout (NEO_CANON_QUIET_MS), grabs frames with capturePage() and
+// quiet-check timeout and resume (NEO_CANON_QUIET_MS, NEO_CANON_RESUME_MS), grabs frames with capturePage() and
 // lets ffmpeg make the mp4 and the gif. Captions are a temporary DOM element in
 // the window, only for the recording; nothing tracked is written but the output.
 // DEMO_KEEP=1 keeps the frames; DEMO_OUT sets another output folder.
@@ -27,6 +27,7 @@ app.setPath('userData', path.join(tmp, 'app'));
 app.setPath('documents', tmp);
 process.env.NEO_CANON_FAKE = path.join(FIXTURE, 'reader-answers.json');
 process.env.NEO_CANON_QUIET_MS = '2500'; // the 90 s pause, shortened for the film
+process.env.NEO_CANON_RESUME_MS = '1500'; // and the reader's 10 s wait after a key, so the check plays in real time
 // a stand-in reader file, so Canon has a reader installed without a download
 const MODEL = Buffer.alloc(1024, 7);
 const readersFile = path.join(tmp, 'readers.json');
@@ -60,8 +61,7 @@ const until = async (code, ms = 20000) => {
 /* ---------- frames ---------- */
 
 let recording = false;
-let warp = 1; // >1 plays that stretch faster (the reader's ten quiet seconds)
-const frames = []; // { file, t, warp }
+const frames = []; // { file, t }
 let t0 = 0;
 async function grab() {
   while (recording) {
@@ -70,7 +70,7 @@ async function grab() {
       const img = await wc.capturePage();
       const file = path.join(FRAMES, String(frames.length).padStart(5, '0') + '.jpg');
       fs.writeFileSync(file, img.toJPEG(92));
-      frames.push({ file, t: started - t0, warp });
+      frames.push({ file, t: started - t0 });
     } catch { /* a frame lost */ }
     await tick(Math.max(0, 70 - (Date.now() - started)));
   }
@@ -198,11 +198,7 @@ async function story() {
   await type('Bramble tossed his mane and snorted.');
   await tick(500);
   await cap('You paused. Canon checked quietly — never mid-sentence.');
-  warp = 1;
-  await tick(3000);
-  warp = 4; // the reader waits out ten seconds of quiet; played faster
   await until(`canonSlips.some((s) => s.span === 'his')`, 30000).catch(() => {});
-  warp = 1;
   await tick(1800);
 
   // 4. hover the mark; the popover; his -> her
@@ -260,7 +256,7 @@ async function story() {
     const c = document.createElement('div');
     c.id = 'demo-end';
     c.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:#14141a;color:#f3efe6;font:600 54px/1.2 Georgia,serif;letter-spacing:.01em;opacity:0;transition:opacity .9s';
-    c.innerHTML = '<div style="text-align:center">NEO Canon<div style="font:400 30px/1.5 Georgia,serif;margin-top:14px;color:#e2c26b">you write. It remembers.</div></div>';
+    c.innerHTML = '<div style="text-align:center">NEO Canon<div style="font:400 30px/1.5 Georgia,serif;margin-top:14px;color:#e2c26b">You write. It remembers.</div></div>';
     document.body.appendChild(c);
     requestAnimationFrame(() => requestAnimationFrame(() => { c.style.opacity = '1'; }));
   })()`);
@@ -275,7 +271,7 @@ function encode() {
   const lines = [];
   frames.forEach((f, i) => {
     const next = frames[i + 1];
-    const dur = next ? Math.max(0.02, (next.t - f.t) / 1000 / f.warp) : 0.5;
+    const dur = next ? Math.max(0.02, (next.t - f.t) / 1000) : 0.5;
     lines.push(`file '${f.file}'`, `duration ${dur.toFixed(4)}`);
   });
   lines.push(`file '${frames[frames.length - 1].file}'`);
