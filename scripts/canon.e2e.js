@@ -351,9 +351,12 @@ test('Bramble is now a stallion: the review list, snapshots first, each change a
   assert.match(fs.readdirSync(path.join(LIB, SALT, 'snapshots')).join(), /Z-r-/);
   await js(`document.execCommand('undo')`);
   assert.match(await js(para), /Bramble put her ears back/);
+  await until(`canonReview.items[2].state === 'todo'`); // and the list says so again
   // the rest: Apply All Shown, there once the whole list has been seen
   await js(`${items}.at(-1).scrollIntoView()`);
   await until(`[...document.querySelectorAll('#canon-side button')].some((b) => b.textContent === 'Apply All Shown')`);
+  // Apply All Shown and Stop Reviewing sit on one line in the narrow pane
+  assert.equal(await js(`(() => { const [a, b] = document.querySelectorAll('#canon-side .cs-review-top button'); return a.getBoundingClientRect().top === b.getBoundingClientRect().top && a.getBoundingClientRect().height < 30; })()`), true);
   await js(`[...document.querySelectorAll('#canon-side button')].find((b) => b.textContent === 'Apply All Shown').click()`);
   await until(`!canonReview.items.some((x) => x.state === 'todo')`);
   assert.equal(await js(`document.querySelector('#canon-side .cs-done').textContent`), '4 passages changed, 0 skipped. Bramble is a stallion.');
@@ -513,15 +516,21 @@ test('Mentioned in: reading order, folded after eight, a passage opens its chapt
 });
 
 const SIDE_X = 1395;
+// input sent to a window that's busy settling can be lost: send it again until it lands
+const until2 = async (send, code, tries = 4) => {
+  for (let i = 0; i < tries; i++) {
+    send();
+    try { return await until(code, 2000); } catch (err) { if (i === tries - 1) throw err; }
+  }
+};
 test('In this chapter: the right-hand pane lists who and what the chapter names, the caret\'s in the accent', async () => {
   await js(`openBook('${SALT}')`);
   await until(`book && book.id === '${SALT}'`);
   await js(`switchTab('manuscript')`);
   // the caret in Bramble's paragraph of Ch 1
   await js(`(() => { const p = [...document.querySelectorAll('.chapter[data-id="c1"] .chapter-body p')].find((x) => x.textContent.includes('did not like the convoy')); p.scrollIntoView({ block: 'center' }); const r = document.createRange(); r.setStart(p.firstChild, 3); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()`);
-  wc.sendInputEvent({ type: 'mouseMove', x: 700, y: 400 });
-  wc.sendInputEvent({ type: 'mouseMove', x: SIDE_X, y: 400 });
-  await until(`$('#side-pane').classList.contains('open') && !!document.querySelector('#canon-here .ch-name')`);
+  await until2(() => { wc.sendInputEvent({ type: 'mouseMove', x: 700, y: 400 }); wc.sendInputEvent({ type: 'mouseMove', x: SIDE_X, y: 400 }); },
+    `$('#side-pane').classList.contains('open') && !!document.querySelector('#canon-here .ch-name')`);
   const names = await js(`[...document.querySelectorAll('#canon-here .ch-name')].map((b) => b.textContent + (b.classList.contains('here') ? '*' : ''))`);
   assert.equal(await js(`document.querySelector('#canon-here .ch-title').textContent`), 'In this chapter');
   assert.ok(names.includes('Bramble*') && names.includes('Ilsa Varr'), names.join());
@@ -566,8 +575,7 @@ test('Go to Anything: ⌘K, "grey mare", Enter: the Canon tab shows Bramble', as
   await js(`openBook('${SALT}')`);
   await until(`book && book.id === '${SALT}'`);
   await js(`switchTab('manuscript')`);
-  key('K', [CMD]);
-  await until(`!!document.querySelector('.go-box .go-input') && document.activeElement === document.querySelector('.go-input')`);
+  await until2(() => key('K', [CMD]), `!!document.querySelector('.go-box .go-input') && document.activeElement === document.querySelector('.go-input')`);
   assert.equal(await js(`document.querySelector('.go-input').placeholder`), 'Go to a chapter, an entry, a passage or a command');
   wc.insertText('grey mare');
   await until(`${goRows}.some((r) => / \\| Passage$/.test(r)) && go.shelf.length > 0`);
@@ -586,8 +594,7 @@ test('Go to Anything: a menu command runs as if picked; Esc puts the caret back;
   const caret = `(() => { const s = getSelection(); return s.rangeCount ? [s.anchorNode.textContent.slice(0, 20), s.anchorOffset, document.activeElement.className] : null; })()`;
   await js(`(() => { const p = [...document.querySelectorAll('.chapter[data-id="c2"] .chapter-body p')][1]; p.closest('.chapter-body').focus(); const r = document.createRange(); r.setStart(p.firstChild, 7); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()`);
   const was = await js(caret);
-  key('K', [CMD]);
-  await until(`!!go`);
+  await until2(() => key('K', [CMD]), `!!go`);
   wc.insertText('pap kdp');
   await until(`${goRows}.length > 0`);
   assert.equal((await js(goRows))[0], 'Paperback for KDP… | Command');
@@ -598,8 +605,7 @@ test('Go to Anything: a menu command runs as if picked; Esc puts the caret back;
   // a command: Take Snapshot, through the menu's own item
   const snaps = () => fs.readdirSync(path.join(LIB, SALT, 'snapshots')).length;
   const n = snaps();
-  key('K', [CMD]);
-  await until(`!!go`);
+  await until2(() => key('K', [CMD]), `!!go`);
   wc.insertText('snapshot');
   await until(`(${goRows}[0] || '') === 'Take Snapshot | Command'`);
   key('Return');
@@ -608,8 +614,7 @@ test('Go to Anything: a menu command runs as if picked; Esc puts the caret back;
   // a shelf without a Canon: chapters, passages and commands only
   await js(`stopCanon(library.shelves[0])`);
   await js(`canonTabUpdate()`);
-  key('K', [CMD]);
-  await until(`!!go`);
+  await until2(() => key('K', [CMD]), `!!go`);
   wc.insertText('bramble');
   await until(`${goRows}.some((r) => / \\| Passage$/.test(r))`);
   const groups = new Set((await js(goRows)).map((r) => r.split(' | ')[1].replace(/^.*?(Chapter|Passage|Command)$/, '$1')));
@@ -653,8 +658,7 @@ test('World Map: View → World Map shows every entry; clicking Rook opens Rook'
 });
 
 test('World Map: 2D and 3D, a drag that turns it, Find, the legend; in night and light; nothing written', async () => {
-  key('M', [CMD, 'shift']);
-  await until(`!!document.querySelector('#map-view') && NeoMap.nodes().length > 0`);
+  await until2(() => key('M', [CMD, 'shift']), `!!document.querySelector('#map-view') && NeoMap.nodes().length > 0`);
   await js(`document.querySelector('#map-view .map-modes button[data-mode="2d"]').click()`);
   await tick(900);
   assert.equal(await js(`JSON.parse(localStorage.getItem('neo.mapLook')).mode`), '2d');
@@ -719,8 +723,7 @@ test('World Map: 2D and 3D, a drag that turns it, Find, the legend; in night and
   await js(`mapClose()`);
   assert.deepEqual(libStamps(), stamps); // browsing wrote nothing
   await theme('light');
-  key('M', [CMD, 'shift']);
-  await until(`!!document.querySelector('#map-view') && NeoMap.nodes().length > 0`);
+  await until2(() => key('M', [CMD, 'shift']), `!!document.querySelector('#map-view') && NeoMap.nodes().length > 0`);
   await tick(500);
   wc.sendInputEvent({ type: 'mouseMove', x: 700, y: 400 });
   await tick(200);

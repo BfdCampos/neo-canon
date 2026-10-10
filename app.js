@@ -17879,6 +17879,27 @@ function canonReviewList(box, el) {
   });
 }
 
+// ⌘Z after an Apply brings the words back, and the passage back to the
+// list: an applied passage of the open book whose old words read again
+function canonReviewRecheck() {
+  const r = canonReview;
+  if (!r || !book) return;
+  let back = false;
+  for (const x of r.items) {
+    if (x.bookId !== book.id || (x.state !== 'applied' && x.state !== 'edited')) continue;
+    const range = canonPlace(x);
+    if (range && range.toString() === x.span) { x.state = 'todo'; back = true; }
+  }
+  if (back) canonSideUpdate();
+}
+if (CANON_ON) {
+  document.addEventListener('input', (e) => {
+    if (!canonReview || !e.target.closest || !e.target.closest('.chapter-body')) return;
+    clearTimeout(canonReviewRecheck.t);
+    canonReviewRecheck.t = setTimeout(canonReviewRecheck, 150);
+  }, true);
+}
+
 // the book open, and the passage lit (Edit… and "Needs your words")
 const canonOpenPassage = (x) => canonOpenSource({ book: x.bookId, ch: x.notes ? 'notes' : x.chId, quote: x.sentence });
 

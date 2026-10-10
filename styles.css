@@ -2243,7 +2243,8 @@ body.light .canon-pop button { color: #555; border-color: #ccc; }
 #canon-side .cs-sent b { color: var(--accent); font-weight: 600; }
 #canon-side .cs-sent mark { background: none; color: #d9a074; text-decoration: underline dotted; }
 #canon-side .cs-row button.cs-main { border-color: var(--accent); color: var(--accent); }
-#canon-side .cs-review-top { margin: 0 4px 10px; }
+#canon-side .cs-review-top { margin: 4px 0 12px; flex-wrap: nowrap; gap: 5px; }
+#canon-side .cs-review-top button { white-space: nowrap; padding: 3px 6px; font-size: 11px; flex: none; }
 #canon-side .cs-applied, #canon-side .cs-edited, #canon-side .cs-skipped { opacity: 0.6; }
 #canon-side .cs-done { color: var(--accent); font-size: 12.5px; padding: 4px 4px 10px; }
 .canon-pop .cp-ask { margin: 10px 0 2px; font-size: 12.5px; line-height: 1.45; max-width: 340px; }
