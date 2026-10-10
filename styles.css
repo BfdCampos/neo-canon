@@ -2358,3 +2358,62 @@ body.light .go-row.on { background: #f3f0ea; }
 body.light .go-title, body.light .go-snip b { color: #2b2926; }
 body.light .go-sub, body.light .go-group kbd { color: #8a8379; }
 body.light .go-group { color: #a39d90; }
+/* The World Map: the full view over the page, and the small one in the pane */
+#map-view { position: fixed; inset: 0 0 40px 0; z-index: 55; background: #121212; animation: map-in 0.25s ease-out; }
+@keyframes map-in { from { opacity: 0; } }
+#map-view .map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#map-view .map-title {
+  position: absolute; left: 36px; top: 30px; pointer-events: none;
+  font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: rgba(214, 208, 196, 0.42);
+}
+#map-view .map-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; font-family: var(--body-font); font-style: italic; font-size: 17px; color: #8f8a80; }
+#map-view .map-controls {
+  position: absolute; right: 24px; top: 24px; width: 214px; padding: 14px; border-radius: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  background: rgba(30, 30, 28, 0.72); border: 1px solid rgba(255, 255, 255, 0.06); backdrop-filter: blur(10px);
+  opacity: 0; transform: translateY(-4px); transition: opacity 0.18s, transform 0.18s;
+  font: 12.5px/1.3 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: #cfcac0;
+}
+#map-view:hover .map-controls, #map-view .map-controls:focus-within { opacity: 1; transform: none; }
+#map-view .map-modes { display: flex; background: rgba(0, 0, 0, 0.28); border-radius: 8px; padding: 3px; }
+#map-view .map-modes button { flex: 1; background: none; border: none; border-radius: 6px; color: #8f8a80; padding: 5px 0; font-size: 12px; letter-spacing: 1px; transition: background 0.15s, color 0.15s; }
+#map-view .map-modes button.on { background: rgba(255, 255, 255, 0.1); color: #f2eee5; }
+#map-view .map-find { width: 100%; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; color: #eee; font: inherit; padding: 6px 9px; outline: none; }
+#map-view .map-find:focus { border-color: var(--accent); }
+#map-view .map-find::placeholder { color: #77736b; }
+#map-view .map-legend { display: flex; flex-direction: column; gap: 2px; }
+#map-view .map-kind { display: flex; align-items: center; gap: 9px; background: none; border: none; padding: 3px 2px; color: #d6d1c6; text-align: left; font: inherit; border-radius: 5px; }
+#map-view .map-kind::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--kind); box-shadow: 0 0 8px var(--kind); transition: opacity 0.15s; }
+#map-view .map-kind:hover { color: #fff; }
+#map-view .map-kind.off { color: #6f6b64; }
+#map-view .map-kind.off::before { opacity: 0.25; box-shadow: none; }
+#map-view .map-together { display: flex; align-items: center; gap: 6px; color: #9a958b; cursor: pointer; }
+#map-view .map-together input { accent-color: var(--accent); }
+body.light #map-view { background: #f2efe8; }
+body.light #map-view .map-title { color: rgba(80, 74, 64, 0.5); }
+body.light #map-view .map-controls { background: rgba(255, 255, 255, 0.78); border-color: rgba(0, 0, 0, 0.07); color: #3a362f; box-shadow: 0 8px 28px rgba(40, 34, 24, 0.1); }
+body.light #map-view .map-modes { background: rgba(0, 0, 0, 0.05); }
+body.light #map-view .map-modes button.on { background: #fff; color: #2b2926; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
+body.light #map-view .map-find { background: #fff; border-color: #ddd8ce; color: #2b2926; }
+body.light #map-view .map-kind { color: #3a362f; }
+body.light #map-view .map-kind.off { color: #b0aa9e; }
+body.light #map-view .map-together { color: #6f6a60; }
+.map-small { position: relative; height: 180px; margin: 0 2px 18px; border-radius: 10px; overflow: hidden; border: 1px solid #2c2c2a; }
+.map-small canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.map-small .map-open {
+  position: absolute; right: 8px; bottom: 8px; padding: 4px 9px; border-radius: 6px; font-size: 11px;
+  background: rgba(20, 20, 19, 0.75); border: 1px solid rgba(255, 255, 255, 0.1); color: #d6d1c6;
+  opacity: 0; transition: opacity 0.15s;
+}
+.map-small:hover .map-open, .map-small .map-open:focus-visible { opacity: 1; }
+.map-small .map-open:hover { color: var(--accent); border-color: var(--accent); }
+body.light .map-small { border-color: #e2ddd3; }
+body.light .map-small .map-open { background: rgba(255, 255, 255, 0.85); border-color: #d9d4ca; color: #3a362f; }
+body.light #canon-side { color: #4a463f; }
+body.light #canon-side .cs-need, body.light #canon-side .cs-review { border-bottom-color: #e6e2da; }
+body.light #canon-side .cs-need strong { color: #2b2926; }
+body.light #canon-side .cs-src, body.light #canon-side .cs-where-btn { color: #7a756b; }
+body.light #canon-side q { color: #5f5a50; }
+body.light #canon-side .cs-row button { border-color: #d9d4ca; color: #5f5a50; }
+body.light #canon-side .cs-row button:hover { color: #2b2926; }
+body.light #canon-side .cs-sent { color: #3a362f; }

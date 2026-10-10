@@ -447,9 +447,16 @@ test('Merge Into…, the Dismissed list, and Read Everything Again', async () =>
 /* ---------- the writer's IDE (docs/semantics/IDE.md) ---------- */
 
 const ENTRIES = path.join(LIB, CANON, 'entries');
+// the chapters' and the entries' files, and when each was last written
 const libStamps = () => {
   const out = {};
-  const walk = (dir) => { for (const f of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, f.name); if (f.isDirectory()) walk(p); else out[p] = fs.statSync(p).mtimeMs; } };
+  const walk = (dir) => {
+    for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, f.name);
+      if (f.isDirectory()) walk(p);
+      else if (/[/\\](chapters|entries)[/\\][^/\\]+\.(html|md)$/.test(p)) out[p] = fs.statSync(p).mtimeMs;
+    }
+  };
   walk(LIB);
   return out;
 };
@@ -610,6 +617,122 @@ test('Go to Anything: a menu command runs as if picked; Esc puts the caret back;
   key('Escape');
   await until(`!go`);
   await js(`library.shelves[0].canonId = '${CANON}'; writeLibrary(library).then(() => canonTabUpdate())`);
+});
+
+// distinct colours in a canvas: a map that drew something has many
+const colours = (sel) => js(`(() => { const c = document.querySelector('${sel}'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; const seen = new Set(); for (let i = 0; i < d.length; i += 4 * 97) seen.add(d[i] << 16 | d[i + 1] << 8 | d[i + 2]); return seen.size; })()`);
+const theme = async (value) => { wc.send('menu', { type: 'pageTheme', value }); await until(`library.pageTheme === '${value}'`); await tick(300); };
+const zoomed = async (p) => { const z = await js(`parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-zoom')) || 1`); return { x: Math.round(p.x * z), y: Math.round(p.y * z) }; };
+let stamps;
+test('the small map: the open entry and its neighbours, at the top of the Canon tab\'s pane', async () => {
+  stamps = libStamps();
+  await js(`canonGo('bramble')`);
+  await until(`!!document.querySelector('#canon-side .map-small canvas') && document.querySelector('#canon-side').firstChild.classList.contains('map-small')`);
+  await tick(400);
+  assert.ok((await colours('#canon-side .map-small canvas')) > 8);
+  // the open entry and those one step from it
+  const shown = await js(`mapSmall.map.nodes().map((d) => d.id).sort().join()`);
+  assert.equal(shown, 'bramble,tamsin-hale');
+  await theme('night');
+  await js(`$('#nav-pane').classList.add('open'); $('#paper-scroll').scrollTop = 0`);
+  await tick(300);
+  await shot('canon-map-widget.png');
+  await js(`$('#nav-pane').classList.remove('open')`);
+});
+
+test('World Map: View → World Map shows every entry; clicking Rook opens Rook', async () => {
+  await js(`window.neo.menuRun('View › World Map')`);
+  await until(`!!document.querySelector('#map-view') && NeoMap.nodes().length > 0`);
+  assert.equal(await js(`NeoMap.nodes().length`), await js(`[...canon.entries.values()].filter((x) => x.data).length`));
+  await tick(300);
+  const at = await zoomed(await js(`NeoMap.screenPos('rook')`));
+  wc.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y });
+  wc.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+  wc.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+  await until(`!document.querySelector('#map-view') && canonShown === 'rook' && document.querySelector('#canon-view .cn-name')?.textContent === 'Rook'`);
+});
+
+test('World Map: 2D and 3D, a drag that turns it, Find, the legend; in night and light; nothing written', async () => {
+  key('M', [CMD, 'shift']);
+  await until(`!!document.querySelector('#map-view') && NeoMap.nodes().length > 0`);
+  await js(`document.querySelector('#map-view .map-modes button[data-mode="2d"]').click()`);
+  await tick(900);
+  assert.equal(await js(`JSON.parse(localStorage.getItem('neo.mapLook')).mode`), '2d');
+  assert.ok((await colours('#map-view .map-canvas')) > 8);
+  wc.sendInputEvent({ type: 'mouseMove', x: 700, y: 400 });
+  await tick(200);
+  await shot('canon-map-2d-night.png');
+  await js(`document.querySelector('#map-view .map-modes button[data-mode="3d"]').click()`);
+  await tick(900);
+  const where = `NeoMap.nodes().map((d) => NeoMap.screenPos(d.id)).map((p) => Math.round(p.x) + ',' + Math.round(p.y)).join(' ')`;
+  const before = await js(where);
+  // a drag across empty space turns the world
+  const from = await zoomed({ x: 120, y: 760 });
+  wc.sendInputEvent({ type: 'mouseDown', x: from.x, y: from.y, button: 'left', clickCount: 1 });
+  for (let i = 1; i <= 8; i++) { wc.sendInputEvent({ type: 'mouseMove', x: from.x + i * 18, y: from.y - i * 4, button: 'left', modifiers: ['leftButtonDown'] }); await tick(16); }
+  wc.sendInputEvent({ type: 'mouseUp', x: from.x + 144, y: from.y - 32, button: 'left', clickCount: 1 });
+  await tick(900);
+  assert.notEqual(await js(where), before);
+  assert.ok((await colours('#map-view .map-canvas')) > 8);
+  // who appears together, faintly; hovering a node lights it and its neighbours
+  await js(`document.querySelector('#map-view .map-together input').click()`);
+  assert.equal(await js(`JSON.parse(localStorage.getItem('neo.mapLook')).together`), true);
+  await tick(300);
+  const tamsin = await zoomed(await js(`NeoMap.screenPos('tamsin-hale')`));
+  wc.sendInputEvent({ type: 'mouseMove', x: tamsin.x, y: tamsin.y });
+  await tick(200);
+  await shot('canon-map-3d-night.png');
+  await js(`document.querySelector('#map-view .map-together input').click()`);
+  // ⌘K while the map is up finds on the map
+  key('K', [CMD]);
+  await until(`document.activeElement === document.querySelector('#map-view .map-find')`);
+  assert.equal(await js(`!!go`), false);
+  wc.insertText('salt laws');
+  await tick(800);
+  const p = await js(`NeoMap.screenPos('the-salt-laws')`);
+  const box = await js(`(() => { const r = document.querySelector('#map-view').getBoundingClientRect(); return [r.width, r.height]; })()`);
+  assert.ok(Math.abs(p.x - box[0] / 2) < 30 && Math.abs(p.y - box[1] / 2) < 30, JSON.stringify([p, box]));
+  // the legend hides a kind (and keeps it hidden on this device)
+  const n = await js(`NeoMap.nodes().length`);
+  await js(`[...document.querySelectorAll('#map-view .map-kind')].find((b) => b.textContent === 'Creatures').click()`);
+  assert.equal(await js(`NeoMap.nodes().length`), n - 2);
+  assert.deepEqual(await js(`JSON.parse(localStorage.getItem('neo.mapLook')).hidden`), ['creature']);
+  await js(`[...document.querySelectorAll('#map-view .map-kind')].find((b) => b.textContent === 'Creatures').click()`);
+  // three hundred entries turn smoothly (each frame drawn in under 16 ms)
+  const ms = await js(`(() => {
+    const K = Canon.KINDS;
+    const nodes = Array.from({ length: 300 }, (_, i) => ({ id: 'n' + i, name: 'Entry ' + i, kind: K[i % K.length], mentions: (i * 7) % 60 }));
+    const edges = [];
+    for (let i = 1; i < 300; i++) edges.push({ a: 'n' + i, b: 'n' + Math.floor(i / 3), why: 'fact', n: 1 });
+    NeoMap.active.setGraph({ nodes, edges });
+    const t = [];
+    const c = document.querySelector('#map-view .map-canvas').getContext('2d');
+    // (reading a pixel back makes each frame finish its drawing before it's timed)
+    for (let i = 0; i < 60; i++) { const t0 = performance.now(); NeoMap.active.turn(0.03, 0.005); c.getImageData(0, 0, 1, 1); t.push(performance.now() - t0); }
+    t.sort((a, b) => a - b);
+    return t[Math.floor(t.length * 0.9)];
+  })()`);
+  assert.ok(ms < 16, ms + ' ms a frame');
+  if (process.env.CANON_DEBUG) console.log('300 entries: ' + ms.toFixed(1) + ' ms a frame (90th percentile)');
+  await js(`mapFullDraw()`);
+  // the light theme
+  await js(`mapClose()`);
+  assert.deepEqual(libStamps(), stamps); // browsing wrote nothing
+  await theme('light');
+  key('M', [CMD, 'shift']);
+  await until(`!!document.querySelector('#map-view') && NeoMap.nodes().length > 0`);
+  await tick(500);
+  wc.sendInputEvent({ type: 'mouseMove', x: 700, y: 400 });
+  await tick(200);
+  await shot('canon-map-3d-light.png');
+  await js(`document.querySelector('#map-view .map-modes button[data-mode="2d"]').click()`);
+  await tick(900);
+  await shot('canon-map-2d-light.png');
+  assert.ok((await colours('#map-view .map-canvas')) > 8);
+  key('Escape');
+  await until(`!document.querySelector('#map-view')`);
+  assert.equal(await js(`$('#editor-view').hidden`), false); // Esc closed the map, not the book
+  await theme('night');
 });
 
 /* ---------- runner ---------- */

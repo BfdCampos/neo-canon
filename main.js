@@ -3075,6 +3075,12 @@ function buildMenu() {
           registerAccelerator: false, // the window answers the key itself, like ⌘;
           click: () => sendToWindow({ type: 'goto' })
         },
+        {
+          label: t('World Map'),
+          accelerator: 'CmdOrCtrl+Shift+M',
+          registerAccelerator: false, // the window answers it (a shelf without a Canon has no map)
+          click: () => sendToWindow({ type: 'worldMap' })
+        },
         { type: 'separator' },
         {
           label: t('Full Screen'),

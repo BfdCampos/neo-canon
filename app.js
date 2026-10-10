@@ -10575,7 +10575,7 @@ function sidePaneForTab(name) {
   $('#editor-view').classList.toggle('darlings-tab', dar);
   if (dar) { snapList(); $('#side-pane').classList.add('open'); }
   else if (was && $('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
-  if (CANON_ON) { canonSideUpdate(name); canonHereUpdate(true); }
+  if (CANON_ON) { mapClose(); canonSideUpdate(name); canonHereUpdate(true); }
 }
 
 // ---- the note walks ahead ----
@@ -16087,6 +16087,7 @@ window.neo.onMenu(async (msg) => {
   }
   if (msg.type === 'help') showHelp();
   if (msg.type === 'goto') goOpen();
+  if (msg.type === 'worldMap' && CANON_ON) { if (mapUp()) mapClose(); else mapOpen(); }
   if (msg.type === 'about') showAbout();
   if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'update') updateMessage(msg);
@@ -16596,6 +16597,7 @@ function canonTabUpdate() {
   if (!id || (canon && canon.id !== id)) { canon = null; canonShown = null; }
   // a notebook's pages left out of Canon wear their ring once it's known
   if (id && isNotebook()) canonLoad().then((c) => { if (c && currentTab !== 'canon') renderNav(); });
+  if (CANON_ON) mapClose();
   if (canonPassOn) canonPassOff(); // a pass belongs to the book it was run on
   else if (canonSlips.length) canonQuietClear(() => true);
 }
@@ -16677,7 +16679,7 @@ function canonWorld() {
 // an entry opened from a link, a name or the map
 function canonGo(id) {
   canonShown = id;
-  if (typeof mapClose === 'function') mapClose(true);
+  mapClose();
   if (currentTab !== 'canon') switchTab('canon');
   else renderCanon();
 }
@@ -17635,7 +17637,7 @@ function canonSideBox() {
 }
 function canonSideUpdate(tab = currentTab) {
   const mode = !CANON_ON || !book ? null : canonReview && (tab === 'manuscript' || tab === 'canon') ? 'review'
-    : canonPassOn && tab === 'manuscript' ? 'pass' : tab === 'canon' && canon && (canon.reader.installed || canon.notSlips.length) ? 'needs' : null;
+    : canonPassOn && tab === 'manuscript' ? 'pass' : tab === 'canon' && canon && (MAP_ON || canon.reader.installed || canon.notSlips.length) ? 'needs' : null;
   const on = !!mode;
   const was = $('#editor-view').classList.contains('canon-side');
   $('#editor-view').classList.toggle('canon-side', on);
@@ -17645,7 +17647,7 @@ function canonSideUpdate(tab = currentTab) {
   const box = canonSideBox();
   box.innerHTML = '';
   const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
-  if (mode === 'needs') { if (canon.reader.installed) canonNeedsList(box, el); canonDismissedList(box, el); return; }
+  if (mode === 'needs') { mapSmallBox(box); if (canon.reader.installed) canonNeedsList(box, el); canonDismissedList(box, el); return; }
   if (mode === 'review') { canonReviewList(box, el); return; }
   box.appendChild(el('div', 'cs-title', t('Continuity Pass')));
   const shown = canonShownSlips();
@@ -18072,6 +18074,199 @@ if (CANON_ON) {
     clearTimeout(canonQuietT);
     canonQuietT = canonQuietOn() && canonIdFor(book.id) ? setTimeout(canonQuietCheck, (canon && canon.reader.quietMs) || CANON_QUIET_MS) : null;
   }, true);
+}
+
+// ---- the World Map (IDE.md §5): map.js draws; this places it ----
+// A small map at the top of the Canon tab's right-hand pane (the open entry
+// and its neighbours, or the whole world), and the full view (View → World
+// Map, ⌘⇧M) over the page: 2D or 3D, a legend that hides kinds, Find on the
+// map. How it looks is this device's (neo.mapLook); positions are never
+// saved, the layout is seeded from the entries' ids. Pocket has no map.js.
+const MAP_ON = CANON_ON && !!window.NeoMap;
+let mapFull = null;  // { view, map }
+let mapSmall = null; // { wrap, map, sig }
+function mapLook() {
+  const look = { mode: '3d', hidden: [], together: false };
+  try { Object.assign(look, JSON.parse(localStorage.getItem('neo.mapLook') || '{}')); } catch { /* a convenience only */ }
+  return look;
+}
+function mapLookSave(change) {
+  const look = { ...mapLook(), ...change };
+  try { localStorage.setItem('neo.mapLook', JSON.stringify(look)); } catch { /* a convenience only */ }
+  return look;
+}
+const mapStyle = (el) => ({
+  colour: (kind) => getComputedStyle(el).getPropertyValue('--canon-' + kind).trim() || '#b3ada3',
+  theme: () => (document.body.classList.contains('light') ? 'light' : 'dark'),
+  kindName: (kind) => CANON_KIND()[kind] || kind
+});
+// the shelf's own index (sizes, who appears together), asked for when the
+// full map opens, and for the small one when the entries have changed
+async function canonCountsFetch() {
+  if (!canon) return;
+  const id = canon.id;
+  const sig = canonWorld().sig;
+  if (canonCountsFetch.asked === sig && !mapFull) return;
+  canonCountsFetch.asked = sig;
+  try {
+    const r = await window.neo.canonIndex(id);
+    if (!canon || canon.id !== id) return;
+    canonCounts = { id, ...r };
+    if (mapFull) mapFullDraw(true);
+    if (mapSmall && mapSmall.wrap.isConnected) mapSmallDraw();
+  } catch (err) { window.neo.logError('canon index: ' + (err && err.message || err)); }
+}
+
+function mapSmallBox(box) {
+  if (!MAP_ON || !canon || !canonWorld().entries.length) return;
+  if (!mapSmall) {
+    const wrap = document.createElement('div');
+    wrap.className = 'map-small';
+    const canvas = document.createElement('canvas');
+    const open = document.createElement('button');
+    open.className = 'map-open';
+    open.textContent = t('Open the Map');
+    open.onclick = () => mapOpen();
+    wrap.append(canvas, open);
+    // (flat: a few neighbours read best without perspective)
+    mapSmall = { wrap, sig: '', map: NeoMap.create(canvas, { compact: true, mode: '2d', ...mapStyle(wrap), onPick: (id) => canonGo(id) }) };
+  }
+  canonCountsFetch();
+  box.appendChild(mapSmall.wrap);
+  requestAnimationFrame(mapSmallDraw);
+}
+function mapSmallDraw() {
+  if (!mapSmall || !mapSmall.wrap.isConnected || !canon) return;
+  const look = mapLook();
+  let g = NeoMap.filterGraph(canonWorld().graph, look.hidden, false);
+  const at = canonShown && g.nodes.some((d) => d.id === canonShown) ? canonShown : null;
+  if (at) g = NeoMap.neighbourhood(g, at);
+  const sig = canonWorld().sig + (canonCounts && canonCounts.id) + at + look.hidden.join();
+  if (sig !== mapSmall.sig) {
+    mapSmall.sig = sig;
+    mapSmall.map.setGraph(g);
+    mapSmall.map.setFocus(at);
+  } else mapSmall.map.resize();
+}
+
+const mapUp = () => !!mapFull;
+async function mapOpen() {
+  if (!MAP_ON || !book || !canonIdFor(book.id) || $('#editor-view').hidden) {
+    if (MAP_ON && book && !$('#editor-view').hidden) toast(t('The World Map shows a shelf’s Canon, and this shelf doesn’t keep one yet.'));
+    return;
+  }
+  if (mapFull) { mapFindFocus(); return; }
+  if (!(await canonLoad())) return;
+  if (currentTab !== 'canon') switchTab('canon');
+  const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+  const view = el('div');
+  view.id = 'map-view';
+  const canvas = el('canvas', 'map-canvas');
+  const shelf = library.shelves.find((s) => s.canonId === canon.id);
+  const title = el('div', 'map-title', shelf ? shelf.name : '');
+  const empty = el('div', 'map-empty', t('The map fills in as Canon learns your world.'));
+  const ctl = el('div', 'map-controls');
+  const modes = el('div', 'map-modes');
+  const look = mapLook();
+  for (const [m, label] of [['2d', '2D'], ['3d', '3D']]) {
+    const b = el('button', m === look.mode ? 'on' : '', label);
+    b.dataset.mode = m;
+    b.onclick = () => {
+      mapLookSave({ mode: m });
+      for (const x of modes.children) x.classList.toggle('on', x === b);
+      mapFull.map.setMode(m);
+    };
+    modes.appendChild(b);
+  }
+  const find = el('input', 'map-find');
+  find.placeholder = t('Find on the map');
+  find.spellcheck = false;
+  find.oninput = () => mapFind(find.value, false);
+  find.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') mapFind(find.value, true);
+    if (e.key === 'Escape') { e.preventDefault(); if (find.value) { find.value = ''; } else find.blur(); }
+  };
+  const legend = el('div', 'map-legend');
+  const together = el('label', 'map-together');
+  const box = el('input');
+  box.type = 'checkbox';
+  box.checked = !!look.together;
+  box.onchange = () => { mapLookSave({ together: box.checked }); mapFullDraw(true); };
+  together.append(box, ' ' + t('Show who appears together'));
+  ctl.append(modes, find, legend, together);
+  view.append(canvas, title, empty, ctl);
+  $('#editor-view').appendChild(view);
+  const map = NeoMap.create(canvas, { mode: look.mode, ...mapStyle(view), onPick: (id) => canonGo(id) });
+  mapFull = { view, map, legend, empty };
+  NeoMap.active = map;
+  // the whole window is the map's: the pane steps aside until it closes
+  $('#editor-view').classList.remove('canon-side');
+  if ($('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
+  mapFullDraw();
+  canonCountsFetch();
+}
+// the legend shows the kinds there are; a click hides or shows one
+function mapFullDraw(keep) {
+  if (!mapFull) return;
+  const look = mapLook();
+  const graph = canonWorld().graph;
+  const kinds = CANON_KINDS();
+  const there = Canon.KINDS.filter((k) => graph.nodes.some((d) => d.kind === k));
+  mapFull.legend.textContent = '';
+  for (const k of there) {
+    const b = document.createElement('button');
+    b.className = 'map-kind' + (look.hidden.includes(k) ? ' off' : '');
+    b.style.setProperty('--kind', `var(--canon-${k})`);
+    b.textContent = kinds[k];
+    b.onclick = () => {
+      const hidden = new Set(mapLook().hidden);
+      if (hidden.has(k)) hidden.delete(k); else hidden.add(k);
+      mapLookSave({ hidden: [...hidden] });
+      mapFullDraw(true);
+    };
+    mapFull.legend.appendChild(b);
+  }
+  mapFull.empty.hidden = graph.nodes.length > 0;
+  mapFull.map.setGraph(NeoMap.filterGraph(graph, look.hidden, look.together), keep);
+}
+function mapClose() {
+  if (!mapFull) return;
+  mapFull.map.destroy();
+  mapFull.view.remove();
+  NeoMap.active = null;
+  mapFull = null;
+  canonSideUpdate();
+}
+function mapFindFocus() {
+  const f = mapFull && mapFull.view.querySelector('.map-find');
+  if (f) { f.focus(); f.select(); }
+}
+// the entry whose name (or alias) answers best: the eye goes there and it pulses
+function mapFind(q, go) {
+  if (!mapFull || !q.trim()) return;
+  const shown = new Set(mapFull.map.nodes().map((d) => d.id));
+  const best = goRank(q, canonWorld().entries.filter((e) => shown.has(e.id)).map((e) => ({ key: e.id, group: 'entry', texts: [e.name, ...e.aliases] })))[0];
+  if (!best) return;
+  mapFull.map.setFocus(best.key);
+  if (go || best.score >= 0.6) mapFull.map.focusOn(best.key, true);
+}
+if (MAP_ON) {
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.code === 'KeyM') {
+      if (document.querySelector('.modal-backdrop:not([hidden])') || $('#editor-view').hidden) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (mapFull) mapClose(); else mapOpen();
+      return;
+    }
+    if (e.key === 'Escape' && mapFull && !go && !document.querySelector('.pop-menu, .modal-backdrop:not([hidden])')) {
+      e.preventDefault();
+      e.stopPropagation(); // the map closes; the book stays open
+      mapClose();
+    }
+  }, true);
+  window.addEventListener('resize', () => { if (mapFull) mapFull.map.resize(); });
 }
 
 /* ================================================================== */
