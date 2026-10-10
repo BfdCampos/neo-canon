@@ -236,3 +236,14 @@ Files touched:
 - No link autocompletion while typing in *In my words*. Typing `[[` offers nothing; ⌘K finds names. This keeps "nothing interrupts a writer" intact.
 - No saved map positions. Seeding the layout from entry ids gives a stable layout with nothing to sync.
 - No backlinks inside chapters: the manuscript is never marked with links.
+
+---
+
+## 9. Decisions made while building M12–M15
+
+1. **Direction of a link.** A link runs from the entry that holds it to the entry it names: Bramble's `Owner: Tamsin Hale` is an edge Bramble → Tamsin, so *Linked from* on Tamsin's page lists "Bramble · Owner", and Bramble's own page shows Tamsin as a link among its facts. §7's "Bramble's entry shows *Linked from* Tamsin Hale" is tested with Tamsin's *In my words* holding `[[Bramble]]` ("Tamsin Hale · in my words"). `backlinks` leaves out *appear together* edges.
+2. **Fixture additions** live in `scripts/fixtures/canon/ide/` (`the-salt-laws.md`: a `rule` entry, aliases `salt tax`, words with `[[Corwick]]` and `[[Saltmere|the coast]]`), not in `library/`, so every M0–M11 test still starts from an empty Canon. The unit test reads it beside `expected.json`; the e2e copies it into the Canon after Read the Shelf. The unresolved case is `[[Saltmere]]` before Saltmere has an entry (the unit test leaves Saltmere out); notebook pages are not link sources (the manuscript and its pages are never marked with links), so the e2e's unresolved link is `[[Ashby]]` in Tamsin's words.
+3. **Shapes.** `linkGraph(entries, index, world)` takes canon:index's whole answer (`mentions` sizes the nodes, `together` adds the faint edges). `canon:mentions` returns `{ total, books, passages: [{ bookId, chId, book, label, notes, notebook, para, snippet, at, span }] }` (the header needs the totals). Mentions count paragraphs, not occurrences. `resolveName` tries names, then aliases, then a person's unshared name parts. The reader's `propose` kind enum gains `rule`; the prompt text is unchanged, so no cached proposal is asked again.
+4. ***In my words*** shows `[[links]]` set as links until it is clicked into (or tabbed to); then it is the file's text, brackets and all, and blurring saves it as before. A relation fact's value that names an entry is a link on the entry page. **Rename** keeps the old name as an alias and drops the new one from the aliases.
+5. **Passages open lit by `neo-search`** (Find's own highlight) on the name only, found by the snippet's text and then the name's offset in it; any key or click clears it.
+6. **Kind colours** are bright on the dark room and the night page (`:root`), deeper on white paper and in the light theme (`body.light, body:not(.night) #aux-paper`).

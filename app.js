@@ -16223,8 +16223,8 @@ let canon = null;      // the open book's Canon: { id, meta, entries: Map(id →
 let canonShown = null; // the entry on the page
 let canonFind = '';    // the list's filter
 
-const CANON_KINDS = () => ({ person: t('People'), creature: t('Creatures'), place: t('Places'), thing: t('Things'), group: t('Groups'), other: t('Other') });
-const CANON_KIND = () => ({ person: t('Person'), creature: t('Creature'), place: t('Place'), thing: t('Thing'), group: t('Group'), other: t('Other') });
+const CANON_KINDS = () => ({ person: t('People'), creature: t('Creatures'), place: t('Places'), thing: t('Things'), group: t('Groups'), rule: t('Rules and Systems'), other: t('Other') });
+const CANON_KIND = () => ({ person: t('Person'), creature: t('Creature'), place: t('Place'), thing: t('Thing'), group: t('Group'), rule: t('Rule or System'), other: t('Other') });
 const CANON_LABELS = () => ({ sex: t('Sex'), species: t('Species'), eyes: t('Eyes'), hair: t('Hair'), birthplace: t('Born in'), sibling: t('Sibling'),
   parent: t('Parent of'), child: t('Child of'), spouse: t('Married to'), owner: t('Owner'), home: t('Lives in'), title: t('Title'), state: t('State'), other: t('Other') });
 const canonLabel = (f) => (f.attr === 'other' && f.label) || CANON_LABELS()[f.attr];
@@ -16315,6 +16315,44 @@ async function canonRefreshNow() {
 }
 
 const canonName = (x) => (x.data ? x.data.name : x.name || x.id);
+
+// The entries as one world (IDE.md §2): the index that names them and the
+// graph of their links, made again only when an entry changed. `canonCounts`
+// is the shelf's own index (canon:index), fetched for the map.
+let canonWorldMemo = null;
+let canonCounts = null;
+function canonWorld() {
+  if (!canon) return null;
+  const sig = canon.id + [...canon.entries.values()].map((x) => x.id + ':' + x.stamp).join();
+  const counts = canonCounts && canonCounts.id === canon.id ? canonCounts : null;
+  if (canonWorldMemo && canonWorldMemo.sig === sig && canonWorldMemo.counts === counts) return canonWorldMemo;
+  const entries = [...canon.entries.values()].filter((x) => x.data).map((x) => x.data);
+  const index = Canon.mentionIndex(entries);
+  canonWorldMemo = { sig, counts, entries, index, graph: Canon.linkGraph(entries, index, counts || {}) };
+  return canonWorldMemo;
+}
+// an entry opened from a link, a name or the map
+function canonGo(id) {
+  canonShown = id;
+  if (typeof mapClose === 'function') mapClose(true);
+  if (currentTab !== 'canon') switchTab('canon');
+  else renderCanon();
+}
+// a link set like a NEO link; one that names no entry offers to make it
+function canonLinkEl(text, to, name, cls = 'cn-link') {
+  const a = document.createElement('button');
+  a.className = cls + (to ? '' : ' cn-unresolved');
+  a.textContent = text;
+  a.onmousedown = (ev) => ev.preventDefault();
+  a.onclick = async (ev) => {
+    ev.stopPropagation();
+    if (to) { canonGo(to); return; }
+    const r = a.getBoundingClientRect();
+    const pick = await popMenu(r.left, r.bottom + 4, [{ label: t('Make an entry for “{name}”', { name }), value: 'make' }]);
+    if (pick === 'make') canonNewEntry(a, name);
+  };
+  return a;
+}
 const canonSorted = () => [...canon.entries.values()].sort((a, b) => canonName(a).localeCompare(canonName(b)));
 
 function renderCanonNav() {
@@ -16397,8 +16435,8 @@ function canonNamed(name, except) {
   return [...canon.entries.values()].find((x) => x.id !== except && (nn(canonName(x)) === n || (x.data && x.data.aliases.some((a) => nn(a) === n))));
 }
 
-async function canonNewEntry(from) {
-  const name = (await askInput(t('New Entry'), t('Name')) || '').replace(/\s+/g, ' ').trim();
+async function canonNewEntry(from, named) {
+  const name = (named || await askInput(t('New Entry'), t('Name')) || '').replace(/\s+/g, ' ').trim();
   if (!name || !canon) return;
   const same = canonNamed(name);
   if (same) { canonShown = same.id; renderCanon(); toast(t('There’s already an entry called {name}. Here it is.', { name })); return; }
@@ -16750,7 +16788,14 @@ function canonEntryPage(e) {
   name.onblur = () => {
     const v = name.textContent.replace(/\s+/g, ' ').trim();
     if (v && v !== e.name && canonNamed(v, e.id)) { toast(t('There’s already an entry called {name}.', { name: v })); name.textContent = e.name; }
-    else if (v && v !== e.name) edit((d) => { d.name = v; });
+    // the old name stays an alias, so every link to it keeps resolving
+    else if (v && v !== e.name) {
+      edit((d) => {
+        d.aliases = d.aliases.filter((a) => Canon.norm(a) !== Canon.norm(v));
+        if (!d.aliases.some((a) => Canon.norm(a) === Canon.norm(d.name))) d.aliases.push(d.name);
+        d.name = v;
+      });
+    }
     else name.textContent = e.name;
   };
   page.appendChild(name);
@@ -16777,7 +16822,8 @@ function canonEntryPage(e) {
       const li = el('li', 'cn-fact st-' + f.state.replace(' ', '-'));
       const row = el('div', 'cn-row');
       if (!aside) { const dot = el('span', 'cn-dot'); dot.title = CANON_DOT()[f.state] || ''; row.appendChild(dot); }
-      row.append(el('span', 'cn-fl', canonLabel(f) + ': '), el('span', 'cn-fv', canonValue(f)));
+      const to = !aside && (Canon.ATTRS[f.attr].ref || f.attr === 'other') && Canon.resolveName(f.value, canonWorld().index);
+      row.append(el('span', 'cn-fl', canonLabel(f) + ': '), to && to !== e.id ? canonLinkEl(canonValue(f), to, f.value, 'cn-fv cn-link') : el('span', 'cn-fv', canonValue(f)));
       const ctl = el('span', 'cn-ctl');
       if (aside) ctl.appendChild(button(t('Restore'), () => edit((d) => Canon.restoreFact(d, i))));
       else {
@@ -16850,18 +16896,88 @@ function canonEntryPage(e) {
     page.appendChild(el('h3', 'cn-h', t('Set aside')));
     page.appendChild(factList(e.setAside, true));
   }
+  canonBacklinks(page, e, el);
   page.appendChild(el('h3', 'cn-h', t('In my words')));
-  const words = el('div', 'cn-words', e.words.replace(/\n$/, ''));
-  words.contentEditable = 'plaintext-only';
+  // [[links]] are set as links until the words are clicked into; then the
+  // text is the file's, brackets and all
+  const raw = e.words.replace(/\n$/, '');
+  const words = el('div', 'cn-words');
+  words.tabIndex = 0;
   words.dataset.ph = t('Anything you want to remember about {name}. Canon never writes here.', { name: e.name });
+  const show = () => {
+    words.textContent = '';
+    words.contentEditable = 'false';
+    let at = 0;
+    for (const l of Canon.parseLinks(raw)) {
+      words.append(raw.slice(at, l.start), canonLinkEl(l.shown, Canon.resolveName(l.target, canonWorld().index), l.target));
+      at = l.end;
+    }
+    words.append(raw.slice(at));
+  };
+  const write = () => {
+    if (words.isContentEditable) return;
+    words.textContent = raw;
+    words.contentEditable = 'plaintext-only';
+  };
+  words.onmousedown = (ev) => { if (!ev.target.closest('.cn-link')) write(); };
+  words.onfocus = write;
   words.onblur = () => {
     const v = words.innerText.replace(/\s+$/, '');
     const next = v ? v + '\n' : '';
     if (next !== e.words) edit((d) => { d.words = next; });
+    else show();
   };
+  show();
   page.appendChild(words);
   return page;
 }
+
+// Linked from and Mentioned in, below the facts (IDE.md §2.2): hidden when
+// empty, folded after eight. Snippets are made when the page is shown.
+function canonFold(el, title, rows) {
+  const box = el('div', 'cn-backs');
+  box.appendChild(el('h3', 'cn-h', title));
+  const ul = el('ul', 'cn-back-list');
+  rows.forEach((li, i) => { li.hidden = i >= 8; ul.appendChild(li); });
+  box.appendChild(ul);
+  if (rows.length > 8) {
+    const more = el('button', 'cn-btn cn-show-all', t('Show all {n}', { n: rows.length }));
+    more.onclick = () => { for (const li of ul.children) li.hidden = false; more.remove(); };
+    box.appendChild(more);
+  }
+  return box;
+}
+function canonBacklinks(page, e, el) {
+  const from = Canon.backlinks(canonWorld().graph, e.id);
+  if (from.length) {
+    page.appendChild(canonFold(el, t('Linked from'), from.map((x) => {
+      const li = el('li', 'cn-back');
+      li.append(canonLinkEl(canonName(canon.entries.get(x.a)), x.a), el('span', 'cn-why', ' · ' + (x.why === 'words' ? t('in my words') : canonLabel(x))));
+      return li;
+    })));
+  }
+  const slot = el('div', 'cn-backs-slot');
+  page.appendChild(slot);
+  const id = canon.id;
+  window.neo.canonMentions(id, e.id, { limit: 500 }).then((r) => {
+    if (!slot.isConnected || !r.total || !canon || canon.id !== id) return;
+    const head = t('Mentioned in') + ' · ' + t('{passages} in {books}', { passages: t('{n} passages', { n: r.total }), books: t('{n} books', { n: r.books }) });
+    slot.replaceWith(canonFold(el, head, r.passages.map((x) => {
+      const li = el('li', 'cn-back cn-passage');
+      const b = el('button', 'cn-pass');
+      const k = x.at;
+      b.append(el('i', '', x.book), el('span', 'cn-where-in', ', ' + x.label + ' — '),
+        el('q', 'cn-quote', ''));
+      b.querySelector('q').append(x.snippet.slice(0, k), el('b', '', x.span), x.snippet.slice(k + x.span.length));
+      b.onclick = () => canonOpenMention(x);
+      li.appendChild(b);
+      return li;
+    })));
+  }).catch((err) => window.neo.logError('canon mentions: ' + (err && err.message || err)));
+}
+// a passage opens with the name lit the way Find lights it
+const canonOpenMention = (x) => canonOpenSource({ book: x.bookId, ch: x.notes ? 'notes' : x.chId, quote: x.snippet.replace(/^…|…$/g, ''),
+  name: { at: x.at - (x.snippet.startsWith('…') ? 1 : 0), span: x.span } });
 
 // A new value where the entry has one (Edit, or + Add a fact on a trait that
 // takes one value): replaced, the old one to Set aside with its passages, or
@@ -16905,12 +17021,21 @@ function canonRange(segs, a, b) {
   r.setEnd(e[0], e[1]);
   return r;
 }
-function canonFindRange(root, quote) {
+// (with `name`, { at, span } in the quote: just those words of it)
+function canonFindRange(root, quote, name) {
   const { segs, text } = canonTextOf(root);
   const src = Canon.normMap(text);
   const q = Canon.norm(quote);
   const i = q ? src.text.indexOf(q) : -1;
-  return i < 0 ? null : canonRange(segs, src.map[i], src.map[i + q.length - 1] + 1);
+  if (i < 0) return null;
+  let a = src.map[i];
+  let b = src.map[i + q.length - 1] + 1;
+  if (name) {
+    const at = text.slice(a + name.at, a + name.at + name.span.length) === name.span ? a + name.at : text.indexOf(name.span, a);
+    if (at < 0 || at >= b) return null;
+    [a, b] = [at, at + name.span.length];
+  }
+  return canonRange(segs, a, b);
 }
 
 async function canonOpenSource(s) {
@@ -16923,19 +17048,20 @@ async function canonOpenSource(s) {
     switchTab('notes');
     const ed = $('#aux-editor');
     for (let i = 0; i < 40 && ed.dataset.kind !== 'notes'; i++) await new Promise((resolve) => setTimeout(resolve, 50)); // Notes comes from disk
-    canonLight(ed.dataset.kind === 'notes' && ed, s.quote);
+    canonLight(ed.dataset.kind === 'notes' && ed, s.quote, s.name);
     return;
   }
   const body = book.chapterOrder.includes(s.ch) && document.querySelector(`.chapter[data-id="${s.ch}"] .chapter-body`);
   switchTab('manuscript');
-  canonLight(body, s.quote);
+  canonLight(body, s.quote, s.name);
 }
-function canonLight(root, quote) {
-  const r = root && canonFindRange(root, quote);
+function canonLight(root, quote, name) {
+  const r = root && canonFindRange(root, quote, name);
   if (!r) { toast(t('This passage has changed')); return; }
-  CSS.highlights.set('neo-canon-quote', new Highlight(r));
+  const hl = name ? 'neo-search' : 'neo-canon-quote';
+  CSS.highlights.set(hl, new Highlight(r));
   r.startContainer.parentElement.scrollIntoView({ block: 'center' });
-  const off = () => CSS.highlights.delete('neo-canon-quote');
+  const off = () => CSS.highlights.delete(hl);
   document.addEventListener('keydown', off, { once: true });
   document.addEventListener('mousedown', off, { once: true });
 }

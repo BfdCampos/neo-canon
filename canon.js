@@ -206,6 +206,147 @@
     return found.sort((a, b) => a.start - b.start);
   }
 
+  /* ---------- links, backlinks and the world's graph (IDE.md §2) ---------- */
+
+  // [[Name]] or [[Name|words shown]] in an entry's own words. A [[ that
+  // never closes is no link.
+  function parseLinks(text) {
+    const out = [];
+    const re = /\[\[([^[\]|\n]+)(?:\|([^[\]\n]*))?\]\]/g;
+    let m;
+    while ((m = re.exec(String(text || '')))) {
+      const target = m[1].trim();
+      if (target) out.push({ target, shown: (m[2] || '').trim() || target, start: m.index, end: m.index + m[0].length });
+    }
+    return out;
+  }
+
+  // A name to the entry it means, through mentions()'s own index: a name
+  // first, then an alias, then a part of a person's name; case and curly
+  // quotes don't matter
+  const resolvers = new WeakMap();
+  function resolveName(name, index) {
+    let map = resolvers.get(index);
+    if (!map) {
+      map = new Map();
+      for (const via of ['name', 'alias', 'part']) for (const m of index) if (m.via === via && !map.has(norm(m.phrase.normalize('NFC')))) map.set(norm(m.phrase.normalize('NFC')), m.id);
+      resolvers.set(index, map);
+    }
+    return map.get(norm(String(name || '').normalize('NFC'))) || null;
+  }
+
+  // What an entry links to: a relation fact whose value names an entry, and
+  // each [[link]] in its words (one that names no entry: to null, its name)
+  const LINK_ATTRS = new Set(['sibling', 'parent', 'child', 'spouse', 'birthplace', 'owner', 'home', 'other']);
+  function entryLinks(entry, index) {
+    const out = [];
+    for (const f of entry.facts) {
+      const to = LINK_ATTRS.has(f.attr) ? resolveName(f.value, index) : null;
+      if (to && to !== entry.id) out.push({ to, via: 'fact', attr: f.attr, label: f.label });
+    }
+    for (const l of parseLinks(entry.words)) {
+      const to = resolveName(l.target, index);
+      if (to !== entry.id) out.push(to ? { to, via: 'words' } : { to: null, name: l.target, via: 'words' });
+    }
+    return out;
+  }
+
+  // The world as a graph: an edge a → b for each link, and (from the
+  // shelf's index) a → b, why 'together', for two entries that share at
+  // least two paragraphs. `world` is canon:index's answer, or nothing.
+  function linkGraph(entries, index, world = {}) {
+    const ids = new Set(entries.map((e) => e.id));
+    const nodes = entries.map((e) => ({ id: e.id, name: e.name, kind: e.kind, mentions: (world.mentions || {})[e.id] || 0 }));
+    const edges = [];
+    const seen = new Map();
+    for (const e of entries) {
+      for (const l of entryLinks(e, index)) {
+        if (!l.to || !ids.has(l.to)) continue;
+        const k = [e.id, l.to, l.via, l.attr || ''].join('\n');
+        if (seen.has(k)) { seen.get(k).n++; continue; }
+        const edge = { a: e.id, b: l.to, why: l.via, n: 1, ...(l.attr ? { attr: l.attr, label: l.label } : {}) };
+        seen.set(k, edge);
+        edges.push(edge);
+      }
+    }
+    for (const [a, b, n] of world.together || []) if (ids.has(a) && ids.has(b)) edges.push({ a, b, why: 'together', n });
+    return { nodes, edges };
+  }
+  // the links into an entry (appearing together is not a link)
+  const backlinks = (graph, id) => graph.edges.filter((x) => x.b === id && x.why !== 'together');
+
+  // per paragraph, the entries it names, in the order they appear
+  const paraEntries = (paras, index) => paras.map((p) => [...new Set(mentions(p.text, index).map((m) => m.id))]);
+
+  // A few words either side of text[a, b): the snippet, where the words
+  // are in it, and the words as written
+  function snippetAround(text, a, b, n = 12) {
+    const before = new RegExp(`(?:\\S*\\s+){0,${n}}\\S*$`).exec(text.slice(0, a))[0];
+    const after = new RegExp(`^\\S*(?:\\s+\\S+){0,${n}}`).exec(text.slice(b))[0];
+    const open = before.length < a ? '…' : '';
+    return { snippet: open + before + text.slice(a, b) + after + (b + after.length < text.length ? '…' : ''), at: open.length + before.length, span: text.slice(a, b) };
+  }
+
+  // The shelf's index, kept only in memory: how many paragraphs name each
+  // entry, which pairs share at least two, and who is in each chapter
+  function worldIndex(sources, entries) {
+    const index = mentionIndex(entries);
+    const count = {};
+    const pairs = new Map();
+    const byChapter = {};
+    for (const src of sources) {
+      const here = new Set();
+      for (const ids of paraEntries(sourceParas(src.html), index)) {
+        for (const id of ids) { count[id] = (count[id] || 0) + 1; here.add(id); }
+        for (let i = 0; i < ids.length; i++) {
+          for (let j = i + 1; j < ids.length; j++) {
+            const k = [ids[i], ids[j]].sort().join('\n');
+            pairs.set(k, (pairs.get(k) || 0) + 1);
+          }
+        }
+      }
+      if (here.size) byChapter[src.bookId + '/' + src.chId] = [...here];
+    }
+    const together = [...pairs].filter(([, n]) => n >= 2).map(([k, n]) => [...k.split('\n'), n]);
+    return { mentions: count, together, byChapter };
+  }
+
+  // Every paragraph that names one entry, in reading order, as snippets
+  const where = (src) => ({ bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, notes: !!src.notes, notebook: !!src.notebook });
+  function mentionPassages(sources, entries, id, { limit = Infinity } = {}) {
+    const index = mentionIndex(entries);
+    const passages = [];
+    const books = new Set();
+    let total = 0;
+    for (const src of sources) {
+      for (const p of sourceParas(src.html)) {
+        const m = mentions(p.text, index).find((x) => x.id === id);
+        if (!m) continue;
+        total++;
+        books.add(src.bookId);
+        if (passages.length < limit) passages.push({ ...where(src), para: p.hash, ...snippetAround(p.text, m.start, m.end) });
+      }
+    }
+    return { total, books: books.size, passages };
+  }
+
+  // Passages holding some words (normalised), in reading order, 20 at most
+  function searchPassages(sources, q, limit = 20) {
+    const nq = norm(q);
+    const out = [];
+    if (nq.length < 3) return out;
+    for (const src of sources) {
+      for (const p of sourceParas(src.html)) {
+        const nm = normMap(p.text);
+        const i = nm.text.indexOf(nq);
+        if (i < 0) continue;
+        out.push({ ...where(src), para: p.hash, ...snippetAround(p.text, nm.map[i], nm.map[i + nq.length - 1] + 1, 8) });
+        if (out.length >= limit) return out;
+      }
+    }
+    return out;
+  }
+
   // The quote gate: a quote counts only if it is in the source, after
   // normalising quotes, dashes and spaces, and is at most 30 words. What
   // comes back is the writer's own text, cut from the source.
@@ -245,7 +386,7 @@
   };
   const LABEL_ATTR = { gender: 'sex', pronouns: 'sex', eye: 'eyes', 'eye colour': 'eyes', 'eye color': 'eyes', 'hair colour': 'hair', 'hair color': 'hair', born: 'birthplace', birthplace: 'birthplace', 'born at': 'birthplace' };
   for (const [attr, a] of Object.entries(ATTRS)) { LABEL_ATTR[attr] = attr; LABEL_ATTR[a.label.toLowerCase()] = attr; }
-  const KINDS = ['person', 'creature', 'place', 'thing', 'group', 'other'];
+  const KINDS = ['person', 'creature', 'place', 'thing', 'group', 'rule', 'other'];
   const STATES = ['verified', 'unverified', 'yours', 'disagree', 'set aside', 'not right'];
 
   // word → [sex, the word for the other sex, the species it implies]
@@ -853,6 +994,10 @@
     // the file's name is the entry's id, whatever its front matter says
     const parsed = async () => (await io.entries()).map((x) => ({ ...parseEntry(x.text), id: x.id }));
     const loadEntries = async () => (await parsed()).filter((e) => !e.error);
+    const shelf = async () => {
+      const out = (await io.meta()).out || {};
+      return { sources: (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId)), entries: await loadEntries() };
+    };
     return {
       // the Continuity Pass: one book's chapters (or the shelf's), with the
       // window's unsaved text standing in for the files (`html` by chapter)
@@ -907,6 +1052,12 @@
           return { bookId, chId, book, label, notes: !!sources[rank.get(bookId + '/' + chId)].notes, para, sentence, sat, at, span, to, kind };
         });
       },
+
+      // The shelf as the IDE views read it (IDE.md §6): built on demand,
+      // never written; pages left out of Canon are not in it
+      async index() { const w = await shelf(); return worldIndex(w.sources, w.entries); },
+      async mentionsOf(entryId, opts) { const w = await shelf(); return mentionPassages(w.sources, w.entries, entryId, opts); },
+      async search(q) { const w = await shelf(); return searchPassages(w.sources, q); },
 
       // Read the Shelf, and every read after it: only sources whose text
       // changed since canon.json last saw them (`again` reads everything),
@@ -1086,7 +1237,7 @@
   // model, sent through `ask` (main.js → canon-worker.js). Small models do
   // best with one paragraph, a closed list of attributes and a compact
   // answer, so that is what they get; the gates above do the rest.
-  const ASK_KINDS = ['person', 'creature', 'place', 'thing', 'group'];
+  const ASK_KINDS = ['person', 'creature', 'place', 'thing', 'group', 'rule'];
   const ASK_ATTRS = ['sex', 'species', 'eyes', 'hair', 'born', 'sibling', 'parent', 'child', 'spouse', 'owner', 'home'];
   const PROPOSE_SYSTEM = [
     'You find facts about the characters, animals and places named in one paragraph of a novel.',
@@ -1160,6 +1311,7 @@
     localReader, PROPOSE_SCHEMA, ANSWER_SCHEMA,
     textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
     inSpans, nameParts, WORD, replaceInHtml,
+    parseLinks, resolveName, entryLinks, linkGraph, backlinks, paraEntries, snippetAround, worldIndex, mentionPassages, searchPassages,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
     newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader

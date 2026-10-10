@@ -71,7 +71,8 @@ const until = async (code, ms = 8000) => {
   throw new Error('timed out waiting for ' + code);
 };
 const shot = async (name) => {
-  if (!process.env.CANON_SHOTS) return;
+  const want = process.env.CANON_SHOTS; // 1 for all, or a part of the names wanted
+  if (!want || (want !== '1' && !want.split(',').some((w) => name.includes(w)))) return;
   fs.mkdirSync(SCREENS, { recursive: true });
   const img = await wc.capturePage();
   fs.writeFileSync(path.join(SCREENS, name), img.toPNG());
@@ -442,6 +443,67 @@ test('Merge Into…, the Dismissed list, and Read Everything Again', async () =>
   assert.equal(await js(`!!document.querySelector('#canon-view .cn-again')`), true);
 });
 
+/* ---------- the writer's IDE (docs/semantics/IDE.md) ---------- */
+
+const ENTRIES = path.join(LIB, CANON, 'entries');
+const libStamps = () => {
+  const out = {};
+  const walk = (dir) => { for (const f of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, f.name); if (f.isDirectory()) walk(p); else out[p] = fs.statSync(p).mtimeMs; } };
+  walk(LIB);
+  return out;
+};
+const backs = `[...document.querySelectorAll('#canon-view .cn-backs')].map((b) => b.textContent)`;
+
+test('links: a rule entry, [[links]] set as links, Linked from both ways, a rename that keeps them', async () => {
+  fs.copyFileSync(path.join(FIXTURE, 'ide', 'the-salt-laws.md'), path.join(ENTRIES, 'the-salt-laws.md'));
+  await js(`canonRefreshNow()`);
+  await until(`canon.entries.has('the-salt-laws')`);
+  await until(`[...document.querySelectorAll('#nav-list .cn-kind-head')].some((x) => x.textContent === 'Rules and Systems')`);
+  await js(`canonEdit('tamsin-hale', (d) => { d.words = 'Rides [[Bramble]] most days, and keeps [[The Salt Laws|the salt accounts]]. Born somewhere near [[Ashby]]?\\n'; })`);
+  await js(`canonGo('tamsin-hale')`);
+  await until(`document.querySelectorAll('#canon-view .cn-words .cn-link').length === 3`);
+  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-words .cn-link')].map((a) => a.textContent + (a.classList.contains('cn-unresolved') ? '?' : ''))`), ['Bramble', 'the salt accounts', 'Ashby?']);
+  assert.equal(await js(`document.querySelector('#canon-view .cn-fv.cn-link').textContent`), 'Oren Hale (younger)');
+  await until(`${backs}.some((t) => /^Linked from/.test(t))`);
+  assert.match((await js(backs))[0], /Linked fromBramble · Owner/);
+  await until(`${backs}.some((t) => /^Mentioned in · \\d+ passages in 2 books/.test(t))`);
+  await js(`$('#nav-pane').classList.add('open')`);
+  await tick(400);
+  await shot('canon-entry-backlinks.png');
+  // the unresolved link offers to make the entry
+  await js(`[...document.querySelectorAll('#canon-view .cn-words .cn-link')].at(-1).click()`);
+  await until(`[...document.querySelectorAll('.pop-menu button')].some((b) => b.textContent === 'Make an entry for “Ashby”')`);
+  await js(`popMenu.close()`);
+  // a link opens its entry; Bramble shows Tamsin among those linking to it
+  await js(`document.querySelector('#canon-view .cn-words .cn-link').click()`);
+  await until(`document.querySelector('#canon-view .cn-name')?.textContent === 'Bramble' && ${backs}.some((t) => /^Linked from/.test(t))`);
+  assert.match((await js(backs))[0], /Tamsin Hale · in my words/);
+  // a rename: the old name becomes an alias and Bramble's Owner still finds her
+  await js(`canonGo('tamsin-hale')`);
+  await until(`document.querySelector('#canon-view .cn-name')?.textContent === 'Tamsin Hale'`);
+  await js(`(() => { const n = document.querySelector('#canon-view .cn-name'); n.textContent = 'Tamsin Ashe'; n.dispatchEvent(new FocusEvent('blur')); })()`);
+  await until(`canon.entries.get('tamsin-hale').data.name === 'Tamsin Ashe'`);
+  assert.match(fs.readFileSync(path.join(ENTRIES, 'tamsin-hale.md'), 'utf8'), /^aliases: \[Tamsin Hale\]$/m);
+  await until(`${backs}.some((t) => /Linked fromBramble · Owner/.test(t))`);
+  await js(`(() => { const n = document.querySelector('#canon-view .cn-name'); n.textContent = 'Tamsin Hale'; n.dispatchEvent(new FocusEvent('blur')); })()`);
+  await until(`canon.entries.get('tamsin-hale').data.name === 'Tamsin Hale'`);
+});
+
+test('Mentioned in: reading order, folded after eight, a passage opens its chapter with the name lit', async () => {
+  // (Merge Into gave Bramble "The Grey", which names any grey: not this test's)
+  await js(`canonEdit('bramble', (d) => { d.aliases = d.aliases.filter((a) => a !== 'The Grey'); })`);
+  await js(`canonGo('bramble')`);
+  await until(`${backs}.some((t) => /^Mentioned in/.test(t))`);
+  const rows = `[...document.querySelectorAll('#canon-view .cn-passage')]`;
+  assert.equal(await js(`${rows}.filter((r) => !r.hidden).length`), 8);
+  assert.match(await js(`document.querySelector('#canon-view .cn-show-all').textContent`), /^Show all \d+$/);
+  assert.match(await js(`${rows}[0].textContent`), /^Ember and Thorn, Ch 2 — …to be in autumn.*Bramble, the grey stallion, would not cross the ford/);
+  await js(`${rows}[0].querySelector('button').click()`);
+  await until(`book && book.id === '${EMBER}' && currentTab === 'manuscript' && CSS.highlights.has('neo-search')`);
+  assert.equal(await js(`[...CSS.highlights.get('neo-search')][0].toString()`), 'Bramble');
+  assert.equal(await js(`[...CSS.highlights.get('neo-search')][0].startContainer.parentElement.closest('.chapter').dataset.id`), 'c2');
+});
+
 /* ---------- runner ---------- */
 
 async function main() {
@@ -457,6 +519,7 @@ async function main() {
   try {
     while (!(win = BrowserWindow.getAllWindows()[0])) await tick(50);
     wc = win.webContents;
+    if (process.env.CANON_DEBUG) wc.on('console-message', (e) => console.log('renderer:', e.message, e.lineNumber));
     win.setSize(1400, 900);
     while (!(await js(`typeof library !== 'undefined' && !!library`).catch(() => false))) await tick(50);
     await tick(300);

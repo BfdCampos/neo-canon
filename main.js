@@ -2407,6 +2407,14 @@ ipcMain.handle('canon:readShelf', async (e, canonId, opts = {}) => {
 // applies each one the writer accepts, through the chapter write path)
 ipcMain.handle('canon:passages', (_e, opts) => Canon.createEngine({ io: canonIO(opts.canonId), reader: canonReader() }).passages(opts));
 
+// The writer's IDE (docs/semantics/IDE.md): who is where, the passages
+// naming an entry, and words found anywhere on the shelf. Built from the
+// files each time, written nowhere.
+const canonEngine = (canonId) => Canon.createEngine({ io: canonIO(canonId) });
+ipcMain.handle('canon:index', (_e, canonId) => canonEngine(canonId).index());
+ipcMain.handle('canon:mentions', (_e, canonId, entryId, opts) => canonEngine(canonId).mentionsOf(entryId, opts || {}));
+ipcMain.handle('canon:search', async (_e, canonId, q, seq) => ({ seq, passages: await canonEngine(canonId).search(String(q || '')) }));
+
 // Not a slip: remembered against the sentence, so an edit brings it back
 ipcMain.handle('canon:notSlip', (_e, canonId, record) => {
   const file = canonFile(canonId, 'not-slips.json');

@@ -17,6 +17,24 @@
   --page-w: clamp(680px, 44vw, 760px);
   /* the room the scrollbar and the page's own shadow need beside it */
   --page-gutter: 80px;
+  /* Canon's kinds (IDE.md §1): the map and the lists read these. Bright on
+     the dark room; deeper on white paper and in the light theme. */
+  --canon-person: #e8b465;
+  --canon-creature: #93c98a;
+  --canon-place: #72aee6;
+  --canon-thing: #e48f7c;
+  --canon-group: #b496e8;
+  --canon-rule: #5fcfc0;
+  --canon-other: #b3ada3;
+}
+body.light, body:not(.night) #aux-paper {
+  --canon-person: #b07a22;
+  --canon-creature: #4b8a45;
+  --canon-place: #2f72b0;
+  --canon-thing: #b5573f;
+  --canon-group: #7653b8;
+  --canon-rule: #1f8c80;
+  --canon-other: #8a8379;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2254,3 +2272,25 @@ body.light .canon-pop button { color: #555; border-color: #ccc; }
 #canon-side .cs-dismissed-head:hover { color: var(--accent); }
 #canon-side q.cs-src { display: block; font-style: italic; }
 .cn-home .cn-again { margin: 0 0 12px 18px; }
+/* Canon as an IDE (docs/semantics/IDE.md): links, Linked from, Mentioned in */
+.cn-link {
+  background: none; border: none; padding: 0; font: inherit; color: inherit; text-align: inherit; cursor: pointer;
+  text-decoration: underline transparent; text-underline-offset: 3px; text-decoration-thickness: 1px; transition: text-decoration-color 0.12s;
+}
+.cn-link:hover, .cn-link:focus-visible { text-decoration-color: currentColor; outline: none; }
+.cn-link.cn-unresolved { text-decoration: underline dotted; text-decoration-color: #9a9384; }
+.cn-link.cn-unresolved:hover { color: var(--accent); }
+.cn-fv.cn-link { font-family: var(--body-font); }
+.cn-words .cn-link { font-style: inherit; }
+.cn-back-list { list-style: none; }
+.cn-back { margin: 0 0 7px; line-height: 1.45; }
+.cn-why, .cn-where-in { color: #8a8478; }
+.cn-pass { background: none; border: none; padding: 0; color: inherit; text-align: left; font-family: var(--body-font) !important; font-size: 0.92em; cursor: pointer; }
+.cn-pass i { font-style: italic; }
+.cn-pass q { color: #6f6a60; font-style: normal; transition: color 0.12s; }
+.cn-pass q b { font-weight: 600; color: var(--ink); }
+.cn-pass:hover q, .cn-pass:focus-visible q { color: inherit; }
+.cn-pass:focus-visible { outline: none; }
+.cn-show-all { margin: 2px 0 0; }
+#canon-view .cn-link, #canon-view .cn-pass, #canon-here .cn-link { font-family: var(--body-font); }
+body.night .cn-pass q { color: #8f897d; }
