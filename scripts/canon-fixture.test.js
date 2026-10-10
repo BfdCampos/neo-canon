@@ -142,7 +142,7 @@ test('Read the Shelf gives the expected entries and facts, each quote the writer
     const texts = new Map(shelfSources(lib).map((s) => [s.bookId + '/' + s.chId, Canon.sourceParas(s.html).map((p) => p.text).join('\n')]));
     for (const e of got) for (const f of e.facts) for (const s of f.sources) assert.ok(texts.get(s.book + '/' + s.ch).includes(s.quote), s.quote);
     assert.equal(got.find((e) => e.id === 'bramble').facts.find((f) => f.attr === 'sex' && f.value === 'male').sources[0].said, 'the horse-trader');
-    assert.deepEqual(summary, { entries: 7, facts: 17, written: 7, calls: summary.calls, verified: 15, needs: 2 });
+    assert.deepEqual(summary, { entries: 7, facts: 17, written: 7, calls: summary.calls, stopped: false, verified: 15, needs: 2 });
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -222,4 +222,54 @@ test('Not right is remembered: the same value from the same quote is not propose
     assert.equal(after.facts.some((f) => f.attr === 'owner'), false);
     assert.equal(after.setAside.find((f) => f.attr === 'owner').state, 'not right');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a reading that contradicts an established fact waits in Needs You; the fact keeps its slips', async () => {
+  // a reader that also takes the slips at their word, as a small model does
+  const answers = structuredClone(ANSWERS);
+  answers.propose.unshift(
+    { para: 'Bramble did not like the convoy', facts: [{ entity: 'Bramble', kind: 'creature', attr: 'sex', value: 'male', quote: 'Bramble tossed his head' }] },
+    { para: 'Ilsa rode back along the line', facts: [{ entity: 'Ilsa Varr', kind: 'person', attr: 'eyes', value: 'brown', quote: 'Ilsa’s brown eyes narrowed.' }] });
+  const where = copyLibrary();
+  const io = folderIO(where);
+  try {
+    const check = async () => (await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).check({ bookId: SALT })).slips.map(pick);
+    const states = () => {
+      const got = readEntries(where.dir);
+      const of = (id, attr) => got.find((e) => e.id === id).facts.filter((f) => f.attr === attr && !f.sources.every((s) => s.said)).map((f) => f.value + ' ' + f.state).sort();
+      return [of('bramble', 'sex'), of('ilsa-varr', 'eyes')];
+    };
+    // all in one first read: what was said first goes on to checking
+    const first = await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).readShelf();
+    assert.deepEqual(states(), [['female verified', 'male disagree'], ['brown disagree', 'grey verified']]);
+    assert.equal(first.needs, 3); // these two, and the foal question (the trader's gelding joins the male one)
+    assert.deepEqual(await check(), EXPECTED.slips);
+    // and read again with the facts already checked: nothing moves
+    await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).readShelf({ again: true });
+    assert.deepEqual(states(), [['female verified', 'male disagree'], ['brown disagree', 'grey verified']]);
+    assert.deepEqual(await check(), EXPECTED.slips);
+    // That's right on the newcomer: it becomes the writer's, the other steps aside
+    const file = path.join(where.dir, 'entries', 'bramble.md');
+    const e = Canon.parseEntry(fs.readFileSync(file, 'utf8'));
+    Canon.confirmFact(e, e.facts.findIndex((f) => f.attr === 'sex' && f.value === 'male' && f.state === 'disagree'));
+    assert.deepEqual(e.facts.filter((f) => f.attr === 'sex').map((f) => f.value + ' ' + f.state), ['male yours']);
+    assert.ok(e.setAside.some((f) => f.attr === 'sex' && f.value === 'female'));
+  } finally { fs.rmSync(where.root, { recursive: true, force: true }); }
+});
+
+test('what a small reader gets wrong stays out: unnamed things, values that aren\'t names, a coat for hair', async () => {
+  const answers = structuredClone(ANSWERS);
+  const ford = answers.propose.find((x) => x.para === 'The ford below Corwick');
+  ford.facts.push(
+    { entity: 'the ford', kind: 'place', attr: 'home', value: 'Corwick', quote: 'The ford below Corwick' },
+    { entity: 'Bramble', kind: 'creature', attr: 'home', value: 'below Corwick', quote: 'The ford below Corwick' },
+    { entity: 'Bramble', kind: 'creature', attr: 'hair', value: 'grey', quote: 'Bramble, the grey mare' });
+  answers.propose.find((x) => x.para === 'Bramble — mare, eleven').facts.push({ entity: 'Bramble', kind: 'creature', attr: 'birthplace', value: 'eleven', quote: 'Bramble — mare, eleven' });
+  const where = copyLibrary();
+  try {
+    await Canon.createEngine({ io: folderIO(where), reader: Canon.fakeReader(answers) }).readShelf();
+    const files = entryFiles(where.dir);
+    assert.ok(!Object.keys(files).some((f) => /ford/.test(f)));
+    assert.doesNotMatch(files['bramble.md'], /Lives in|Hair|Born in/);
+  } finally { fs.rmSync(where.root, { recursive: true, force: true }); }
 });

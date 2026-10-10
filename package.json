@@ -104,7 +104,9 @@
       "node_modules/dictionary-ro/**",
       "node_modules/dictionary-pt/**",
       "node_modules/dictionary-hu/**",
-      "node_modules/dictionary-sv/**"
+      "node_modules/dictionary-sv/**",
+      "node_modules/node-llama-cpp/**",
+      "node_modules/@node-llama-cpp/**"
     ],
     "extraResources": [
       {
@@ -137,7 +139,10 @@
       "!dictionaries/**",
       "!locales/_template.json",
       "!node_modules/koffi/build/koffi/{freebsd,linux,musl,openbsd,win32}_*/**",
-      "!node_modules/koffi/{src,vendor,doc}/**"
+      "!node_modules/koffi/{src,vendor,doc}/**",
+      "!node_modules/@node-llama-cpp/*cuda*/**",
+      "!node_modules/node-llama-cpp/llama/gitRelease.bundle",
+      "!node_modules/node-llama-cpp/llama/llama.cpp/**"
     ],
     "toolsets": {
       "appimage": "1.0.3"
@@ -169,7 +174,8 @@
     "dictionary-sv": "4.0.0",
     "electron-updater": "^6.3.9",
     "jszip": "^3.10.1",
-    "koffi": "2.16.3"
+    "koffi": "2.16.3",
+    "node-llama-cpp": "3.22.1"
   },
   "allowScripts": {
     "electron@33.4.11": true

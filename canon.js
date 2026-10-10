@@ -341,8 +341,8 @@
     const f = e.facts[i];
     f.state = 'yours';
     for (const s of f.sources) delete s.changed;
-    // the other values it disagreed with step aside
-    for (const o of e.facts.filter((x) => x !== f && x.attr === f.attr && x.state === 'disagree' && ATTRS[f.attr].single)) setAsideFact(e, e.facts.indexOf(o), false);
+    // the other values (checked or not) step aside
+    for (const o of e.facts.filter((x) => x !== f && x.attr === f.attr && x.state !== 'yours' && norm(x.value) !== norm(f.value) && ATTRS[f.attr] && ATTRS[f.attr].single)) setAsideFact(e, e.facts.indexOf(o), false);
   }
   function setAsideFact(e, i, notRight) {
     const [f] = e.facts.splice(i, 1);
@@ -527,7 +527,7 @@
   // The Continuity Pass over some sources: [{ bookId, chId, label, html }].
   // `knownWords(words)` asks the spelling dictionary; `reader` (or null)
   // confirms the weak candidates; `notSlips` are the writer's dismissals.
-  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null }) {
+  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null }) {
     const idx = mentionIndex(entries);
     const world = worldOf(entries, out);
     const names = nameTokens(entries);
@@ -541,6 +541,7 @@
       const slips = [];
       const found = [];
       for (const p of sourceParas(src.html)) {
+        if (paraOk && !paraOk(src, p)) continue;
         const sents = sentences(p.text);
         for (const c of paraCandidates(p.text, idx, world, names)) found.push({ c, p, s: sents[c.si] });
       }
@@ -611,9 +612,12 @@
     const w = new Set(wordsOf(quote).map((x) => x.replace(/'s$/, '')));
     const any = (test) => [...w].some(test);
     if (f.attr === 'sex') return any((x) => (SEX_WORDS[x] && SEX_WORDS[x][0] === f.value) || PRONOUNS[x] === f.value);
-    if (f.attr === 'eyes' || f.attr === 'hair') return any((x) => COLOURS[x] === f.value);
+    // a colour counts for eyes or hair only beside the word (grey eyes, grey-eyed), not a grey coat
+    if (f.attr === 'eyes' || f.attr === 'hair') return any((x) => COLOURS[x] === f.value) && any((x) => (f.attr === 'eyes' ? /^eye[sd]?$|-eyed$/ : /^hair(ed)?$|-haired$/).test(x));
     if (f.attr === 'species') return any((x) => SPECIES[x] === f.value);
     if (f.attr === 'sibling' && f.as && !any((x) => KIN[x] === f.as)) return false;
+    // who or where: a name, as the quote writes it ("Saltmere", not "the town")
+    if (ATTRS[f.attr].ref && !/^\p{Lu}[\p{L}\p{M}'’-]*(?:\s+\p{Lu}[\p{L}\p{M}'’-]*)*$/u.test(f.value)) return false;
     const parts = ATTRS[f.attr].ref ? nameParts(f.value).map(norm) : wordsOf(f.value).filter((x) => x.length >= 3 && !STOP.has(x));
     return parts.length > 0 && parts.some((x) => w.has(x));
   }
@@ -633,7 +637,8 @@
   // its paragraph or the one before (which the reader saw too), a value the
   // quote doesn't hold, a value the writer already said is not right.
   function accept(entries, prop, src, para, prev, full) {
-    if (!prop || !prop.entity || !prop.quote) return;
+    // an entry is someone or something with a name: "the drover" is not one
+    if (!prop || !prop.entity || !prop.quote || !/^\p{Lu}/u.test(stripTitles(prop.entity))) return;
     const quote = gateQuote(prop.quote, full);
     if (!quote || !reaches(entries, prop.entity, quote, prev + '\n' + para.text)) return;
     let e = findEntry(entries, prop.entity);
@@ -693,20 +698,24 @@
     return {
       // the Continuity Pass: one book's chapters (or the shelf's), with the
       // window's unsaved text standing in for the files (`html` by chapter)
-      async check({ bookId, scope = 'book', html = {}, onSource = null, stop = null }) {
+      // A quiet check (`chId`) is one chapter, without the paragraph being
+      // written (`skip`, its text) and those already checked (`done`, hashes).
+      async check({ bookId, scope = 'book', chId = null, skip = null, done = null, html = {}, onSource = null, stop = null }) {
         const meta = await io.meta();
         const out = meta.out || {};
         const sources = (await io.sources())
-          .filter((s) => !s.notes && (scope === 'shelf' || s.bookId === bookId) && !(out[s.bookId] || []).includes(s.chId))
+          .filter((s) => !s.notes && (scope === 'shelf' || s.bookId === bookId) && (!chId || s.chId === chId) && !(out[s.bookId] || []).includes(s.chId))
           .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
-        return checkSources({ sources, entries: await loadEntries(), notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop });
+        const skipped = skip ? norm(skip) : null;
+        const paraOk = skip || done ? (src, p) => !(done && done.has(p.hash)) && norm(p.text) !== skipped : null;
+        return checkSources({ sources, entries: await loadEntries(), notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk });
       },
 
       // Read the Shelf, and every read after it: only sources whose text
       // changed since canon.json last saw them (`again` reads everything),
       // only paragraphs with cues, and a proposal is asked once per paragraph
       // and the one before it (the cache). The writer's facts are never touched.
-      async readShelf({ again = false, onProgress = null, stop = null } = {}) {
+      async readShelf({ again = false, only = null, onProgress = null, stop = null } = {}) {
         const meta = await io.meta();
         const metaWas = JSON.stringify(meta);
         meta.read = meta.read || {};
@@ -726,37 +735,59 @@
         const taken = new Set(files.map((x) => x.id));
         const sources = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId));
         const texts = new Map();
-        let calls = 0;
-        for (const [i, src] of sources.entries()) {
-          if (stop && stop()) break;
+        // what there is to read: changed sources (or `only` the one), and in
+        // them the paragraphs with cues the cache has no answer for
+        const ctxKey = (paras, j) => textHash([reader.id, PROMPT, j ? paras[j - 1].text : '', paras[j].text].join('\n'));
+        const todo = [];
+        let left = 0;
+        for (const src of sources) {
           const key = src.bookId + '/' + src.chId;
           const paras = sourceParas(src.html);
           texts.set(key, paras.map((p) => p.text).join('\n'));
-          const h = textHash(src.html);
-          if (!again && meta.read[key] === h) continue;
-          if (onProgress) onProgress({ phase: 'read', book: src.book, label: src.label, n: i + 1, of: sources.length });
-          for (let j = 0; j < paras.length; j++) {
+          if ((only && key !== only) || (!again && meta.read[key] === textHash(src.html))) continue;
+          todo.push({ src, key, paras });
+          const idx = mentionIndex(entries);
+          left += paras.filter((p, j) => cueful(p.text, idx) && !cache.proposals[ctxKey(paras, j)]).length;
+        }
+        let calls = 0;
+        let spent = 0;
+        let stopped = false;
+        const tell = (src, n) => onProgress && onProgress({ phase: 'read', book: src.book, label: src.label, n, of: todo.length, calls, left: Math.max(0, left - calls), ms: calls ? Math.round(spent / calls) : 0 });
+        for (const [n, { src, key, paras }] of todo.entries()) {
+          if (stop && stop()) { stopped = true; break; }
+          tell(src, n + 1);
+          for (let j = 0; j < paras.length && !stopped; j++) {
             const p = paras[j];
             const idx = mentionIndex(entries);
             if (!cueful(p.text, idx)) continue;
             const prev = j ? paras[j - 1].text : '';
-            const ck = textHash([reader.id, PROMPT, prev, p.text].join('\n'));
+            const ck = ctxKey(paras, j);
             let props = cache.proposals[ck];
             if (!props) {
               const near = new Set(mentions(prev + '\n' + p.text, idx).map((m) => m.id));
-              props = await reader.propose({ text: p.text, before: prev, known: entries.filter((e) => near.has(e.id)).map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases })) });
+              const t0 = Date.now();
+              try {
+                props = await reader.propose({ text: p.text, before: prev, known: entries.filter((e) => near.has(e.id)).map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases })) });
+              } catch (err) {
+                if (stop && stop()) { stopped = true; break; } // what was read so far is kept; this source is read again next time
+                throw err;
+              }
+              spent += Date.now() - t0;
               calls++;
               cache.proposals[ck] = props;
+              tell(src, n + 1);
             }
             for (const prop of props || []) accept(entries, prop, src, p, prev, texts.get(key));
           }
-          meta.read[key] = h;
+          if (!stopped) meta.read[key] = textHash(src.html);
         }
         // a new entry never takes the name of a file Canon couldn't read
         for (const e of entries) if (!before.has(e.id) && taken.has(e.id)) e.id += '-' + entries.length;
 
         // passages edited away, values that disagree, then checking
         const idx = mentionIndex(entries);
+        const order = new Map(sources.map((s, i) => [s.bookId + '/' + s.chId, i]));
+        const firstAt = (f) => Math.min(Infinity, ...f.sources.filter((s) => !s.written).map((s) => order.has(s.book + '/' + s.ch) ? order.get(s.book + '/' + s.ch) : Infinity));
         const paraOf = (s) => (texts.get(s.book + '/' + s.ch) || '').split('\n').find((t) => norm(t).includes(norm(s.quote))) || s.quote;
         for (const e of entries) {
           for (const f of e.facts) {
@@ -770,19 +801,45 @@
           for (const attr of Object.keys(ATTRS).filter((a) => ATTRS[a].single)) {
             const these = e.facts.filter((f) => f.attr === attr && solid(f));
             const split = new Set(these.map((f) => norm(f.value))).size > 1;
+            // A value read against one already established (the writer's,
+            // or checked) doesn't unsettle it: the established fact keeps
+            // raising its slips, and the newcomer waits in Needs You. With
+            // nothing established yet, the value said first in reading order
+            // goes on to checking and the later ones wait.
+            const firm = these.filter((f) => f.state === 'yours').length ? these.filter((f) => f.state === 'yours') : these.filter((f) => f.state === 'verified');
+            const keep = !split ? null
+              : firm.length ? (new Set(firm.map((f) => norm(f.value))).size === 1 || firm[0].state === 'yours' ? norm(firm[0].value) : null)
+                : norm(these.reduce((a, b) => (firstAt(b) < firstAt(a) ? b : a)).value);
             for (const f of e.facts.filter((x) => x.attr === attr && x.state !== 'yours')) {
-              if (split && these.includes(f)) f.state = 'disagree';
+              if (split && these.includes(f) && norm(f.value) !== keep) f.state = 'disagree';
               else if (f.state === 'disagree') f.state = 'unverified';
             }
           }
+        }
+        // checking: by rule where the quote says it outright, else the reader
+        const check = [];
+        for (const e of entries) {
           for (const f of e.facts) {
             if (f.state !== 'unverified' || !solid(f)) continue; // speech and plans stay unchecked
             if (ruleSupported(e, f, idx)) { f.state = 'verified'; continue; }
             const s = f.sources.find((x) => live(x) && !x.said && !x.plan);
-            const jk = factKey(e, f) + '|' + textHash(norm(s.quote));
-            if (!cache.judged[jk]) cache.judged[jk] = await reader.judge({ claim: { entity: e.name, attr: f.attr, value: f.value, as: f.as }, quote: s.quote, paragraph: paraOf(s) });
-            if (cache.judged[jk] === 'yes') f.state = 'verified';
+            check.push({ e, f, s, jk: factKey(e, f) + '|' + textHash(norm(s.quote)) });
           }
+        }
+        const toJudge = check.filter((x) => !cache.judged[x.jk]).length;
+        let judging = 0;
+        for (const { e, f, s, jk } of check) {
+          if (!cache.judged[jk]) {
+            if (stopped || (stop && stop())) { stopped = true; continue; }
+            if (onProgress) onProgress({ phase: 'check', n: ++judging, of: toJudge, facts: check.length });
+            try {
+              cache.judged[jk] = await reader.judge({ claim: { entity: e.name, attr: f.attr, value: f.value, as: f.as }, quote: s.quote, paragraph: paraOf(s) });
+            } catch (err) {
+              if (stop && stop()) { stopped = true; continue; }
+              throw err;
+            }
+          }
+          if (cache.judged[jk] === 'yes') f.state = 'verified';
         }
 
         // written only where something changed: an idle read writes nothing
@@ -795,7 +852,7 @@
         if (JSON.stringify(cache) !== cacheWas) await io.saveCache(cache);
         const facts = entries.flatMap((e) => e.facts);
         return {
-          entries: entries.length, facts: facts.length, written, calls,
+          entries: entries.length, facts: facts.length, written, calls, stopped,
           verified: facts.filter((f) => f.state === 'verified' || f.state === 'yours').length,
           needs: facts.filter((f) => f.state === 'unverified' || f.state === 'disagree').length
         };
@@ -827,7 +884,82 @@
     };
   }
 
+  // The reader on this computer: the prompts and answer shapes for a small
+  // model, sent through `ask` (main.js → canon-worker.js). Small models do
+  // best with one paragraph, a closed list of attributes and a compact
+  // answer, so that is what they get; the gates above do the rest.
+  const ASK_KINDS = ['person', 'creature', 'place', 'thing', 'group'];
+  const ASK_ATTRS = ['sex', 'species', 'eyes', 'hair', 'born', 'sibling', 'parent', 'child', 'spouse', 'owner', 'home'];
+  const PROPOSE_SYSTEM = [
+    'You find facts about the characters, animals and places named in one paragraph of a novel.',
+    'Report a fact only if the paragraph states it plainly about someone or something named in it.',
+    'Attributes (a): sex (the word used: mare, stallion, woman, sister; or female, male), species (horse, wolf, human), eyes (colour), hair (colour), born (place of birth), sibling, parent, child, spouse (another named character), owner (who owns an animal or thing), home (where they live).',
+    'For each fact: e = the name as written, k = person, creature, place, thing or group, a = the attribute, v = the value in one or two words, q = the few words of the paragraph that state it, copied exactly.',
+    'Leave out guesses, questions, plans, comparisons and what a character only says in dialogue. No fact: {"f":[]}.',
+    'Example. Paragraph: Wren, the old bay gelding, dozed by the gate while Moll Teague, Tom\'s elder sister, brushed her own red hair.',
+    'Answer: {"f":[{"e":"Wren","k":"creature","a":"sex","v":"gelding","q":"Wren, the old bay gelding"},{"e":"Wren","k":"creature","a":"species","v":"horse","q":"Wren, the old bay gelding"},{"e":"Moll Teague","k":"person","a":"sibling","v":"Tom","q":"Moll Teague, Tom\'s elder sister"},{"e":"Moll Teague","k":"person","a":"sex","v":"sister","q":"Tom\'s elder sister"},{"e":"Moll Teague","k":"person","a":"hair","v":"red","q":"her own red hair"}]}'
+  ].join('\n');
+  const PROPOSE_SCHEMA = {
+    type: 'object',
+    properties: {
+      f: {
+        type: 'array',
+        maxItems: 5,
+        items: {
+          type: 'object',
+          properties: { e: { type: 'string' }, k: { enum: ASK_KINDS }, a: { enum: ASK_ATTRS }, v: { type: 'string' }, q: { type: 'string' } },
+          required: ['e', 'k', 'a', 'v', 'q']
+        }
+      }
+    },
+    required: ['f']
+  };
+  const ANSWER_SCHEMA = { type: 'object', properties: { a: { enum: ['yes', 'no', 'unclear'] } }, required: ['a'] };
+  const JUDGE_SYSTEM = 'You check one claimed fact against a paragraph of a novel. Answer yes only if the paragraph plainly states the claim as true in the story. Answer no if it states something else. Answer unclear if it does not say, or the claim rests on a question, a plan, a comparison or what a character says.';
+  const REFERS_SYSTEM = 'You read a paragraph of a novel and say whether a word in one of its sentences refers to a given character or animal.';
+  const said = (claim) => `${claim.entity}: ${claim.attr === 'birthplace' ? 'born in' : claim.attr} = ${claim.value}${claim.as ? ` (${claim.as})` : ''}`;
+
+  function localReader({ id, ask }) {
+    // an answer that went wrong is no answer; stopping is passed on
+    const safe = async (msg, none) => {
+      try { return await ask(msg); } catch (err) { if (err && err.code) throw err; return none; }
+    };
+    return {
+      id,
+      calls: 0,
+      async propose({ text, known = [] }) {
+        this.calls++;
+        const names = known.map((k) => `${k.name} (${k.kind})`).join(', ');
+        const r = await safe({ system: PROPOSE_SYSTEM, user: (names ? `Known names: ${names}\n\n` : '') + `Paragraph:\n${text}`, schema: PROPOSE_SCHEMA, maxTokens: 320 }, null);
+        return ((r && r.f) || []).flatMap((x) => {
+          const p = {
+            entity: x.e, kind: x.k, attr: x.a === 'born' ? 'birthplace' : x.a, quote: x.q,
+            value: String(x.v || '').replace(/\([^()]*\)/g, '').trim(),
+            asWritten: x.a === 'sibling' ? x.q : ''
+          };
+          // "species: mare" says a sex too (the gates still want it in the quote)
+          const w = norm(p.value);
+          return p.attr === 'species' && SEX_WORDS[w] ? [p, { ...p, attr: 'sex', value: w }] : [p];
+        });
+      },
+      async judge({ claim, quote, paragraph }) {
+        // a sex read from a pronoun alone ("Tamsin rode her") is left to the
+        // writer: who a pronoun means is where small models go wrong
+        if (claim.attr === 'sex' && !wordsOf(quote).some((x) => SEX_WORDS[x.replace(/'s$/, '')])) return 'unclear';
+        const r = await safe({ system: JUDGE_SYSTEM, user: `Paragraph:\n${paragraph}\n\nQuote: "${quote}"\nClaim: ${said(claim)}\nIs the claim true in the story, by this paragraph?`, schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
+        return (r && r.a) || 'unclear';
+      },
+      async refers({ sentence, span, entity, paragraph }) {
+        const r = await safe({ system: REFERS_SYSTEM, user: `Paragraph:\n${paragraph}\n\nSentence: "${sentence}"\nDoes the word "${span}" in this sentence refer to ${entity}?`, schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
+        return (r && r.a) || 'unclear';
+      },
+      async pick() { return null; },
+      abort() {}
+    };
+  }
+
   return {
+    localReader, PROPOSE_SCHEMA, ANSWER_SCHEMA,
     textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
     inSpans, nameParts, WORD,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
