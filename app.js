@@ -226,7 +226,7 @@ function writeLibrary(lib = library) {
 // library's copy is the last device's, so a device opening the library for
 // the first time starts out the way the writer last had it, and from then on
 // keeps its own.
-const DEVICE_LOOK = ['pageTheme', 'uiBright', 'uiBrightAside', 'uiZoom', 'editorFontSize', 'typewriter', 'focus', 'posMode', 'outlineView', 'vimKeys'];
+const DEVICE_LOOK = ['pageTheme', 'uiBright', 'uiBrightAside', 'uiZoom', 'editorFontSize', 'typewriter', 'focus', 'posMode', 'outlineView', 'vimKeys', 'canonQuiet'];
 const DEVICE_LOOK_KEY = 'neo-device-look';
 function deviceLookOf(lib) {
   const out = {};
@@ -738,6 +738,7 @@ async function loadLibrary() {
   for (const s of untouched) s.name = own;
   if (untouched.length) await writeLibrary(library);
   if (window.neo.writingStyleState) window.neo.writingStyleState(library.writingStyle);
+  if (CANON_ON) canonQuietMenu(); // Edit → Check Continuity When I Pause
   if (!library.firstRunDone) {
     showFirstRun();
   }
@@ -16048,6 +16049,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'find') openSearch();
   if (msg.type === 'spellcheck') toggleSpellcheck();
   if (msg.type === 'continuity') toggleContinuity();
+  if (msg.type === 'canonQuiet' && CANON_ON) toggleCanonQuiet();
   if (msg.type === 'spellLanguage') changeSpellLanguage(msg.value);
   if (msg.type === 'reshelve') reshelveBook();
   if (msg.type === 'typewriter') toggleTypewriter();
@@ -16173,7 +16175,7 @@ async function canonLoad(force) {
   if (canon && canon.id === id && !force) return canon;
   const r = await window.neo.canonOpen(id);
   if (!book || canonIdFor(book.id) !== id) return null;
-  canon = { id, meta: r.meta, notSlips: r.notSlips, reader: r.reader, setAside: r.setAside, entries: new Map(r.entries.map((x) => [x.id, x])) };
+  canon = { id, meta: r.meta, notSlips: r.notSlips, reader: r.reader, shelf: r.shelf, setAside: r.setAside, entries: new Map(r.entries.map((x) => [x.id, x])) };
   return canon;
 }
 
@@ -16184,6 +16186,7 @@ function canonTabUpdate() {
   if (tab) tab.hidden = !id;
   if (!id || (canon && canon.id !== id)) { canon = null; canonShown = null; }
   if (canonPassOn) canonPassOff(); // a pass belongs to the book it was run on
+  else if (canonSlips.length) canonQuietClear(() => true);
 }
 
 // One change to one entry, saved. When the file changed underneath (a text
@@ -16333,12 +16336,19 @@ async function renderCanon() {
 }
 
 // ---- Read the Shelf (with a reader) ----
+// Progress shows on the Canon tab only. The reader steps aside whenever the
+// writer types (main pauses it within a token) and carries on after ten
+// seconds of quiet; leaving the tab doesn't stop it.
 let canonReading = false;
 let canonReadLine = '';
+let canonReadAt = null;   // the last progress: { phase, book, label, n, of, calls, left, ms }
+let canonPaused = false;
 async function canonReadShelfNow() {
   if (!canon || canonReading) return;
   const id = canon.id;
   canonReading = true;
+  canonPaused = false;
+  canonReadAt = null;
   canonReadLine = t('Reading…');
   renderCanon();
   let res;
@@ -16349,17 +16359,149 @@ async function canonReadShelfNow() {
     res = { error: 'failed' };
   }
   canonReading = false;
-  canonReadLine = res.error ? t('Canon couldn’t read the shelf just now. Try again in a moment.')
-    : t('Canon found {entries} entries and {facts} facts. {ok} checked out; {needs} need you.', { entries: res.entries, facts: res.facts, ok: res.verified, needs: res.needs });
+  canonPaused = false;
+  canonReadAt = null;
+  canonReadLine = res.error === 'stopped' || res.stopped ? t('Canon stopped reading. What it read is kept; Read the Shelf carries on from there.')
+    : res.error ? t('Canon couldn’t read the shelf just now. Try again in a moment.')
+      : t('Canon found {entries} entries and {facts} facts. {ok} checked out; {needs} need you.', { entries: res.entries, facts: res.facts, ok: res.verified, needs: res.needs });
   if (canon && canon.id === id && (await canonLoad(true)) && currentTab === 'canon') renderCanon();
+}
+
+const canonAbout = (secs) => secs >= 5400 ? t('about {n} hours', { n: Math.round(secs / 3600) }) : t('about {n} minutes', { n: Math.max(1, Math.round(secs / 60)) });
+function canonReadText() {
+  const p = canonReadAt;
+  if (!p) return canonReadLine;
+  if (p.phase === 'check') return t('Checking {facts} facts · {n} done', { facts: p.facts, n: p.n - 1 });
+  let line = t('Reading {book} · {where} ({n} of {of})', { book: p.book, where: p.label, n: p.n, of: p.of });
+  // a guess only once three answers have been timed on this computer
+  if (p.calls >= 3 && p.left) line += ' · ' + t('{about} left', { about: canonAbout((p.left * p.ms) / 1000) });
+  return line;
+}
+function canonReadProgress() {
+  const box = document.createElement('div');
+  box.className = 'cn-progress';
+  const p = canonReadAt;
+  const bar = document.createElement('div');
+  bar.className = 'cn-bar';
+  const fill = document.createElement('i');
+  const done = !p ? 0 : p.phase === 'check' ? (p.n - 1) / Math.max(1, p.of) : p.calls / Math.max(1, p.calls + p.left);
+  fill.style.width = Math.round(done * 100) + '%';
+  bar.appendChild(fill);
+  const line = document.createElement('p');
+  line.className = 'cn-note cn-read-line';
+  line.textContent = canonReadText();
+  const pause = document.createElement('p');
+  pause.className = 'cn-note cn-paused';
+  pause.textContent = canonPaused ? t('Paused while you write. Canon carries on after ten seconds of quiet.') : '';
+  const stop = document.createElement('button');
+  stop.className = 'cn-btn cn-stop';
+  stop.textContent = t('Stop Reading');
+  stop.onclick = () => window.neo.canonStop();
+  box.append(bar, line, pause, stop);
+  return box;
+}
+function canonProgressRefresh() {
+  const old = $('#canon-view .cn-progress');
+  if (old) old.replaceWith(canonReadProgress());
 }
 if (CANON_ON) {
   window.neo.onCanon((msg) => {
+    if (msg.type === 'paused' || msg.type === 'resumed') {
+      canonPaused = msg.type === 'paused';
+      canonProgressRefresh();
+      return;
+    }
+    if (msg.type === 'download') { canonDownloadEvent(msg); return; }
     if (msg.type !== 'progress' || !canon || msg.canonId !== canon.id) return;
-    canonReadLine = t('Reading {book} · {where} ({n} of {of})', { book: msg.book, where: msg.label, n: msg.n, of: msg.of });
-    const line = $('#canon-view .cn-read-line');
-    if (line) line.textContent = canonReadLine;
+    canonReadAt = msg;
+    canonProgressRefresh();
   });
+}
+
+// ---- the reader's setup page: one button, inside the Canon tab ----
+const canonGB = (bytes) => fmtNum(Math.round(bytes / 1e8) / 10);
+const CANON_TIERS = () => ({
+  careful: { name: t('Careful reader'), desc: t('Reads closely and misses less. For computers with 16 GB of memory.') },
+  quick: { name: t('Quick reader'), desc: t('Faster, misses more. For computers with 8 GB of memory.') }
+});
+let canonJustReady = false;
+async function canonDownloadEvent(msg) {
+  if (!canon) return;
+  canon.reader.download = msg;
+  if (msg.state === 'done') {
+    canon.reader = await window.neo.canonReaderStatus();
+    canonJustReady = true;
+    if (currentTab === 'canon') renderCanon();
+    return;
+  }
+  const old = $('#canon-view .cn-setup');
+  if (old && currentTab === 'canon') old.replaceWith(canonSetup());
+}
+function canonSetup() {
+  const box = document.createElement('div');
+  box.className = 'cn-setup';
+  const say = (text, cls = 'cn-note') => { const p = document.createElement('p'); p.className = cls; p.textContent = text; box.appendChild(p); return p; };
+  const button = (label, fn, cls = 'btn-gold') => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; box.appendChild(b); return b; };
+  const r = canon.reader;
+  const tiers = CANON_TIERS();
+  const dl = r.download || { state: 'idle' };
+  say(t('Canon needs a reader'), 'cn-h');
+  say(t('Canon reads your books and notes to keep track of who and what is in your world. The reader runs on this computer. Nothing you write is sent anywhere.'));
+  const get = (tier) => { window.neo.canonDownload(tier); canon.reader.download = { state: 'downloading', tier, got: 0, total: r.catalogue[tier].size }; box.replaceWith(canonSetup()); };
+  if (dl.state === 'downloading' || dl.state === 'paused') {
+    const bar = document.createElement('div');
+    bar.className = 'cn-bar';
+    const fill = document.createElement('i');
+    fill.style.width = (dl.total ? Math.round((dl.got / dl.total) * 100) : 0) + '%';
+    bar.appendChild(fill);
+    box.appendChild(bar);
+    const of = { got: canonGB(dl.got), total: canonGB(dl.total) };
+    if (dl.state === 'paused') {
+      say(t('Paused at {got} of {total} GB', of), 'cn-note cn-dl-line');
+      button(t('Resume'), () => get(dl.tier));
+    } else {
+      say(t('Downloading the reader · {got} of {total} GB', of) + (dl.eta != null ? ' · ' + canonAbout(dl.eta) : ''), 'cn-note cn-dl-line');
+      button(t('Pause'), () => window.neo.canonPauseDownload(), 'cn-btn');
+    }
+    say(t('You can keep writing while it downloads.'));
+    return box;
+  }
+  if (dl.state === 'error') {
+    if (dl.error === 'damaged') { say(t('The download arrived damaged. NEO threw it away.'), 'cn-note cn-dl-line'); button(t('Download Again'), () => get(dl.tier)); }
+    else { say(t('NEO can’t reach the download right now. Try again when you’re online — everything else keeps working.'), 'cn-note cn-dl-line'); button(t('Try Again'), () => get(dl.tier)); }
+    return box;
+  }
+  const best = r.recommend === 'short' ? null : r.recommend;
+  if (best) {
+    say(t('Recommended for this computer: {reader} · {size} GB', { reader: tiers[best].name, size: canonGB(r.catalogue[best].size) }), 'cn-note cn-pick');
+    button(t('Download'), () => get(best), 'btn-gold cn-download');
+  } else say(t('This computer is short on memory for the reader. You can still keep a Canon by hand.'));
+  const others = Object.keys(r.catalogue).filter((x) => x !== best && tiers[x]);
+  if (others.length) {
+    const more = document.createElement('details');
+    more.className = 'cn-more';
+    const sum = document.createElement('summary');
+    sum.textContent = t('Other choices');
+    more.appendChild(sum);
+    for (const x of others) {
+      const row = document.createElement('div');
+      row.className = 'cn-choice';
+      const b = document.createElement('button');
+      b.className = 'cn-btn';
+      b.textContent = `${tiers[x].name} · ${canonGB(r.catalogue[x].size)} GB`;
+      b.onclick = () => get(x);
+      const d = document.createElement('div');
+      d.className = 'cn-note';
+      d.textContent = tiers[x].desc;
+      row.append(b, d);
+      more.appendChild(row);
+    }
+    box.appendChild(more);
+  }
+  say(t('You can keep writing while it downloads.'));
+  say(t('Licence: {licence}', { licence: r.catalogue[best || others[0]].licence }), 'cn-note cn-fine');
+  say(t('Until it’s here, keep the Canon by hand: entries and facts you add are yours, and a Continuity Pass checks the book against them.'));
+  return box;
 }
 
 // Needs You: the facts not yet checked, and values that disagree, one by
@@ -16413,21 +16555,21 @@ function canonHome() {
   const say = (text, cls = 'cn-note') => { const p = document.createElement('p'); p.className = cls; p.textContent = text; box.appendChild(p); return p; };
   if (!canon.entries.size) say(t('Nothing in this Canon yet. Add an entry with + New Entry in the list, or let Canon read the shelf.'));
   else say(t('Pick an entry from the list.'));
-  if (canon.reader.installed) {
-    say(t('Read the Shelf'), 'cn-h');
-    say(t('Canon reads every book and notebook on this shelf, and only what changed since it last read. Facts you wrote or confirmed are never changed.'));
-    const go = document.createElement('button');
-    go.className = 'cn-read btn-gold';
-    go.textContent = t('Read the Shelf');
-    go.disabled = canonReading;
-    go.onclick = canonReadShelfNow;
-    box.appendChild(go);
-    say(canonReadLine, 'cn-note cn-read-line');
-  } else {
-    say(t('Canon needs a reader'), 'cn-h');
-    say(t('Canon reads your books and notes to keep track of who and what is in your world. The reader runs on this computer. Nothing you write is sent anywhere.'));
-    say(t('The reader isn’t on this computer yet. Until it is, keep the Canon by hand: entries and facts you add are yours, and a Continuity Pass checks the book against them.'));
-  }
+  if (!canon.reader.installed) { box.appendChild(canonSetup()); return box; }
+  if (canonJustReady) say(t('The reader is ready.'), 'cn-note cn-ready');
+  say(t('Read the Shelf'), 'cn-h');
+  const sh = canon.shelf;
+  if (sh && !Object.keys(canon.meta.read || {}).length) {
+    const what = [sh.books ? t('{n} books', { n: sh.books }) : '', sh.notebooks ? t('{n} notebooks', { n: sh.notebooks }) : ''].filter(Boolean).join(t(' and '));
+    say(t('Canon will read {what} ({words}). You can keep writing; Canon steps aside whenever you type.', { what, words: t('{n} words', { n: sh.words }) }));
+  } else say(t('Canon reads every book and notebook on this shelf, and only what changed since it last read. Facts you wrote or confirmed are never changed.'));
+  if (canonReading) { box.appendChild(canonReadProgress()); return box; }
+  const go = document.createElement('button');
+  go.className = 'cn-read btn-gold';
+  go.textContent = t('Read the Shelf');
+  go.onclick = canonReadShelfNow;
+  box.appendChild(go);
+  say(canonReadLine, 'cn-note cn-read-line');
   return box;
 }
 
@@ -16868,7 +17010,7 @@ function canonSlipFromPoint(x, y) {
 }
 if (CANON_ON) {
   document.addEventListener('mousemove', (e) => {
-    if (!canonPassOn || !canonSlips.length || e.buttons || !e.target.closest || !e.target.closest('.chapter-body')) return;
+    if (!canonSlips.length || e.buttons || !e.target.closest || !e.target.closest('.chapter-body')) return;
     const s = canonSlipFromPoint(e.clientX, e.clientY);
     const open = document.querySelector('.canon-pop');
     if (!s) {
@@ -16885,7 +17027,7 @@ if (CANON_ON) {
     }, 350);
   });
   document.addEventListener('contextmenu', (e) => {
-    if (!canonPassOn || !e.target.closest || !e.target.closest('.chapter-body')) return;
+    if (!canonSlips.length || !e.target.closest || !e.target.closest('.chapter-body')) return;
     const s = canonSlipFromPoint(e.clientX, e.clientY);
     if (!s) return;
     e.preventDefault();
@@ -16894,7 +17036,7 @@ if (CANON_ON) {
   }, true);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && document.querySelector('.canon-pop')) { e.preventDefault(); e.stopPropagation(); canonPopClose(); return; }
-    if (!canonPassOn || e.key !== 'Enter' || !e.altKey || e.metaKey || e.ctrlKey) return;
+    if (!canonSlips.length || e.key !== 'Enter' || !e.altKey || e.metaKey || e.ctrlKey) return;
     const sel = window.getSelection();
     const s = sel.rangeCount && canonSlipAt(sel.focusNode, sel.focusOffset);
     if (!s) return;
@@ -16902,6 +17044,78 @@ if (CANON_ON) {
     e.stopPropagation();
     const rect = s.range.getBoundingClientRect();
     canonPopOpen(s, rect.left, rect.bottom + 6);
+  }, true);
+}
+
+// ---- quiet checking: after a pause in the writing (Edit → Check Continuity When I Pause) ----
+// One timer, reset by every key in the editor and never repeating: after
+// 90 seconds without a key Canon checks the paragraphs of the caret's
+// chapter that changed since it last looked (not the one being written, if
+// its sentence isn't finished). Its marks are painted only if the writer is
+// still paused when they arrive, and the first key clears the ones in the
+// caret's paragraph. Nothing here writes a file.
+let canonQuietT = null;
+let canonLastKey = 0;
+let canonTypingAt = 0;
+const CANON_QUIET_MS = 90000;
+const canonQuietOn = () => !!(library && library.canonQuiet !== false);
+function canonQuietMenu() { if (CANON_ON && window.neo.canonQuietState) window.neo.canonQuietState(canonQuietOn()); }
+async function toggleCanonQuiet() {
+  if (!library) return;
+  library.canonQuiet = !canonQuietOn();
+  canonQuietMenu();
+  if (!library.canonQuiet) canonQuietClear(() => true);
+  await writeLibrary(library);
+}
+function canonQuietClear(which) {
+  const before = canonSlips.length;
+  canonSlips = canonSlips.filter((s) => !s.quiet || !which(s));
+  if (canonSlips.length !== before) { canonPopClose(); canonPaint(); }
+}
+function canonCaretPara() {
+  const sel = window.getSelection();
+  const node = sel && sel.rangeCount ? sel.focusNode : null;
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  const p = el && el.closest('.chapter-body > p');
+  const ch = p && p.closest('.chapter[data-id]');
+  return p && ch ? { p, chId: ch.dataset.id } : null;
+}
+async function canonQuietCheck() {
+  canonQuietT = null;
+  if (!canonQuietOn() || !book || currentTab !== 'manuscript' || document.hidden || canonPassOn) return;
+  const at = canonCaretPara();
+  if (!at || !(await canonLoad()) || !canon.reader.installed) return;
+  const { chId } = at;
+  // the chapter as it is now goes to disk first, so the read sees it
+  if (saveTimers[chId]) { clearTimeout(saveTimers[chId]); saveTimers[chId] = null; await persistChapter(chId); }
+  const text = canonTextOf(at.p).text;
+  const skip = /[.!?…]["'”’»)\]]*\s*$/.test(text) ? null : text;
+  const asked = Date.now();
+  let res;
+  try {
+    res = await window.neo.canonCheck({ canonId: canon.id, bookId: book.id, chId, mode: 'quiet', skip, html: { [chId]: chapterHTML[chId] }, run: 'quiet' });
+  } catch (err) {
+    window.neo.logError('quiet check: ' + (err && err.message || err));
+    return;
+  }
+  // P0 #8: a key since the question means the writer is writing again
+  if (canonLastKey > asked || !book || !canon || currentTab !== 'manuscript' || canonPassOn) return;
+  const fresh = new Set(res.checked);
+  canonSlips = canonSlips.filter((s) => !(s.quiet && s.chId === chId && fresh.has(s.para))).concat(res.slips.map((s) => ({ ...s, quiet: true })));
+  canonPaint();
+}
+if (CANON_ON) {
+  document.addEventListener('keydown', (e) => {
+    if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key) || !book) return;
+    const now = Date.now();
+    canonLastKey = now;
+    // the reader steps aside while the writer types (main resumes it after quiet)
+    if (now - canonTypingAt > 500) { canonTypingAt = now; window.neo.canonTyping(); }
+    if (!e.target.closest || !e.target.closest('.chapter-body')) return;
+    const at = canonCaretPara();
+    if (at && canonSlips.some((s) => s.quiet)) canonQuietClear((s) => s.range && at.p.contains(s.range.startContainer));
+    clearTimeout(canonQuietT);
+    canonQuietT = canonQuietOn() && canonIdFor(book.id) ? setTimeout(canonQuietCheck, (canon && canon.reader.quietMs) || CANON_QUIET_MS) : null;
   }, true);
 }
 

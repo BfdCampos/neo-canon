@@ -2194,6 +2194,20 @@ body.light .canon-pop button { color: #555; border-color: #ccc; }
 #canon-side .cs-where { color: #777; }
 #canon-side q { font-family: var(--body-font); font-style: italic; color: #aaa; }
 .cn-read { margin: 4px 0 12px; }
+/* the reader's setup page and Read the Shelf: a thin bar, a line, one button */
+.cn-bar { height: 3px; background: rgba(138,132,120,0.22); border-radius: 2px; overflow: hidden; margin: 6px 0 10px; max-width: 420px; }
+.cn-bar i { display: block; height: 100%; background: var(--accent); transition: width 0.4s; }
+.cn-setup .btn-gold, .cn-setup > .cn-btn { margin: 2px 0 14px; }
+.cn-progress .cn-paused:empty { display: none; }
+.cn-progress .cn-stop { margin-bottom: 12px; }
+.cn-ready { color: var(--accent); font-style: normal; }
+.cn-more { margin: 4px 0 16px; color: #8a8478; font-size: 0.9em; }
+.cn-more summary { cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; list-style: none; }
+.cn-more summary::-webkit-details-marker { display: none; }
+.cn-more summary:hover { color: var(--accent); }
+.cn-choice { margin: 10px 0 0 2px; }
+.cn-choice .cn-note { margin: 2px 0 0; font-size: 0.9em; }
+.cn-fine { font-size: 0.8em; }
 #canon-side .cs-need { padding: 8px 6px 10px; border-bottom: 1px solid #2c2c2c; line-height: 1.4; }
 #canon-side .cs-need strong { color: #ddd; font-weight: 600; }
 #canon-side .cs-src { margin-top: 4px; color: #999; font-size: 12px; }
