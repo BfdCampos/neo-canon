@@ -2534,6 +2534,7 @@ async function openBook(bookId) {
   $$('.tab[data-tab="notes"]')[0].textContent = tabName('notes');
   $$('.tab[data-tab="outline"]')[0].textContent = tabName('outline');
   spEditorMode(); // a script, or a book
+  canonTabUpdate();
 
   renderChapters();
   renderStickies();
@@ -4751,7 +4752,7 @@ function goToTab(name) {
   if (document.querySelector('.modal-backdrop:not([hidden])')) return;
   switchTab(name);
 }
-const TAB_ORDER = ['manuscript', 'notes', 'outline', 'darlings'];
+const TAB_ORDER = ['manuscript', 'notes', 'outline', 'canon', 'darlings'];
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
   const cmd = IS_POCKET ? (e.metaKey !== e.ctrlKey) : (IS_MAC ? e.metaKey : e.ctrlKey);
@@ -4759,8 +4760,10 @@ window.addEventListener('keydown', (e) => {
   if ($('#editor-view').hidden || document.querySelector('.modal-backdrop:not([hidden])')) return;
   e.preventDefault();
   e.stopPropagation();
-  const step = e.key === 'ArrowRight' ? 1 : TAB_ORDER.length - 1;
-  goToTab(TAB_ORDER[(TAB_ORDER.indexOf(currentTab) + step) % TAB_ORDER.length]);
+  // the Canon tab is in the round only where it shows
+  const order = TAB_ORDER.filter((n) => $(`.tab[data-tab="${n}"]`) && !$(`.tab[data-tab="${n}"]`).hidden);
+  const step = e.key === 'ArrowRight' ? 1 : order.length - 1;
+  goToTab(order[(order.indexOf(currentTab) + step) % order.length]);
 }, true);
 
 // Titles, outline lines, notes and shelf names get the same typography as
@@ -7205,6 +7208,9 @@ function renderNav() {
     return;
   }
   navRefreshPending = false;
+  $('#nav-head > span').textContent = currentTab === 'canon' ? t('Canon') : t('Chapters');
+  $('#nav-add').hidden = currentTab === 'canon';
+  if (currentTab === 'canon') { renderCanonNav(); return; }
   if (isScript()) { renderScriptNav(); return; }
   const list = $('#nav-list');
   // a keyboard user on a chapter row keeps their place through the rebuild
@@ -7843,7 +7849,9 @@ function switchTab(name) {
       ? { caret: captureCaret(), scroll: scroller.scrollTop }
       : { scroll: scroller.scrollTop };
   }
+  const fromCanon = currentTab === 'canon';
   currentTab = name;
+  if (fromCanon && name !== 'canon') renderNav();
   queueSideCards();
   applyBright();
   $$('.tab').forEach((t) => {
@@ -7881,6 +7889,7 @@ function switchTab(name) {
   // the outline's cards, their List/Cards switch and their hint belong to the Outline alone
   for (const id of ['#outline-board', '#outline-views', '#outline-board-hint']) { const el = $(id); if (el) el.hidden = true; }
 
+  if ($('#canon-view')) $('#canon-view').hidden = name !== 'canon';
   snapShown = null;
   if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-snap-gone');
   if ($('#snap-view')) { $('#snap-view').hidden = true; $('#snap-view').innerHTML = ''; }
@@ -7891,6 +7900,10 @@ function switchTab(name) {
     renderSnapList();
     returnTo();
     findHere();
+  } else if (name === 'canon') {
+    $('#aux-title').textContent = t('Canon');
+    renderCanon();
+    returnTo();
   } else if (name === 'outline') {
     $('#aux-title').textContent = tabName('outline');
     oList.hidden = false;
@@ -11937,6 +11950,7 @@ async function refreshFromDisk() {
       return;
     }
     const bookId = book.id;
+    if (canon) canonRefreshNow().catch((err) => window.neo.logError('canon refresh: ' + (err && err.message || err)));
     if (window.neo.refreshBook) await window.neo.refreshBook(bookId);
     const meta = await window.neo.readBookMeta(bookId);
     if (!book || book.id !== bookId || !meta) return;
@@ -16126,6 +16140,365 @@ async function stopCanon(shelf) {
   delete shelf.canonId;
   await writeLibrary(library);
   toast(t('The Canon’s files are kept in your library. Keep a Canon again to bring it back.'));
+}
+
+// ---- the Canon tab: a world bible kept by hand (and, with a reader, by Canon) ----
+let canon = null;      // the open book's Canon: { id, meta, entries: Map(id → { id, data | error, stamp }), setAside, notSlips, reader }
+let canonShown = null; // the entry on the page
+let canonFind = '';    // the list's filter
+
+const CANON_KINDS = () => ({ person: t('People'), creature: t('Creatures'), place: t('Places'), thing: t('Things'), group: t('Groups'), other: t('Other') });
+const CANON_KIND = () => ({ person: t('Person'), creature: t('Creature'), place: t('Place'), thing: t('Thing'), group: t('Group'), other: t('Other') });
+const CANON_LABELS = () => ({ sex: t('Sex'), species: t('Species'), eyes: t('Eyes'), hair: t('Hair'), birthplace: t('Born in'), sibling: t('Sibling'),
+  parent: t('Parent of'), child: t('Child of'), spouse: t('Married to'), owner: t('Owner'), home: t('Lives in'), title: t('Title'), state: t('State'), other: t('Other') });
+const canonLabel = (f) => (f.attr === 'other' && f.label) || CANON_LABELS()[f.attr];
+const canonValue = (f) => ({ female: t('female'), male: t('male') }[f.value] || f.value) + (f.as ? ` (${f.as})` : '');
+
+function canonIdFor(bookId) {
+  if (!CANON_ON || !library) return null;
+  const shelf = library.shelves.find((s) => s.canonId && s.bookIds.includes(bookId));
+  return shelf ? shelf.canonId : null;
+}
+
+async function canonLoad(force) {
+  const id = book && canonIdFor(book.id);
+  if (!id) { canon = null; return null; }
+  if (canon && canon.id === id && !force) return canon;
+  const r = await window.neo.canonOpen(id);
+  if (!book || canonIdFor(book.id) !== id) return null;
+  canon = { id, meta: r.meta, notSlips: r.notSlips, reader: r.reader, setAside: r.setAside, entries: new Map(r.entries.map((x) => [x.id, x])) };
+  return canon;
+}
+
+// the tab shows on the books of a shelf that keeps a Canon, nowhere else
+function canonTabUpdate() {
+  const id = book && canonIdFor(book.id);
+  const tab = $('.tab[data-tab="canon"]');
+  if (tab) tab.hidden = !id;
+  if (!id || (canon && canon.id !== id)) { canon = null; canonShown = null; }
+}
+
+// One change to one entry, saved. When the file changed underneath (a text
+// editor, another device) the change is made again on what's there now.
+async function canonEdit(id, change) {
+  const rec = canon.entries.get(id);
+  let data = rec ? structuredClone(rec.data) : null;
+  if (rec) change(data); else data = change();
+  let res = await window.neo.canonSaveEntry(canon.id, data, rec ? rec.stamp : null);
+  if (res && res.conflict && res.entry) {
+    data = res.entry;
+    change(data);
+    res = await window.neo.canonSaveEntry(canon.id, data, res.stamp);
+  }
+  if (!res || !res.ok) { toast(t('NEO couldn’t save this entry')); return false; }
+  canon.entries.set(data.id, { id: data.id, data, stamp: res.stamp });
+  if (currentTab === 'canon') renderCanon();
+  return true;
+}
+
+async function canonRefreshNow() {
+  if (!canon) return;
+  const stamps = {};
+  for (const [id, x] of canon.entries) stamps[id] = x.stamp;
+  const r = await window.neo.canonRefresh(canon.id, stamps);
+  if (!canon || (!r.changed.length && !r.removed.length)) return;
+  for (const x of r.changed) canon.entries.set(x.id, x);
+  for (const id of r.removed) canon.entries.delete(id);
+  // an entry being typed on waits until the writer leaves it
+  if (currentTab === 'canon' && !(document.activeElement && document.activeElement.closest('#canon-view, #nav-list'))) renderCanon();
+}
+
+const canonSorted = () => [...canon.entries.values()].sort((a, b) =>
+  (a.data ? a.data.name : a.id).localeCompare(b.data ? b.data.name : b.id));
+
+function renderCanonNav() {
+  const list = $('#nav-list');
+  list.innerHTML = '';
+  if (!canon) return;
+  const find = document.createElement('input');
+  find.className = 'cn-find';
+  find.spellcheck = false;
+  find.placeholder = t('Find an entry');
+  find.value = canonFind;
+  const items = document.createElement('div');
+  find.oninput = () => { canonFind = find.value; fillCanonNav(items); };
+  list.append(find, items);
+  fillCanonNav(items);
+  const add = document.createElement('button');
+  add.className = 'cn-new';
+  add.textContent = '+ ' + t('New Entry');
+  add.onclick = () => canonNewEntry(add);
+  list.appendChild(add);
+  if (canon.setAside.length) {
+    const head = document.createElement('div');
+    head.className = 'cn-kind-head';
+    head.textContent = t('Set Aside');
+    list.appendChild(head);
+    for (const x of canon.setAside) {
+      const item = document.createElement('div');
+      item.className = 'nav-item cn-item cn-aside';
+      item.innerHTML = '<div class="n-row"><span class="n-label"></span><button class="cn-restore"></button></div>';
+      item.querySelector('.n-label').textContent = x.data ? x.data.name : x.id;
+      item.querySelector('.cn-restore').textContent = t('Restore');
+      item.querySelector('.cn-restore').onclick = async () => {
+        if (!(await window.neo.canonRestore(canon.id, x.id))) { toast(t('An entry of that name is already in the Canon')); return; }
+        canonShown = x.id;
+        await canonLoad(true);
+        renderCanon();
+      };
+      list.appendChild(item);
+    }
+  }
+}
+
+function fillCanonNav(box) {
+  box.innerHTML = '';
+  const q = Canon.norm(canonFind);
+  const kinds = CANON_KINDS();
+  for (const kind of Canon.KINDS) {
+    const these = canonSorted().filter((x) => (x.data ? x.data.kind : 'other') === kind &&
+      (!q || Canon.norm(x.data ? [x.data.name, ...x.data.aliases].join(' ') : x.id).includes(q)));
+    if (!these.length) continue;
+    const head = document.createElement('div');
+    head.className = 'cn-kind-head';
+    head.textContent = kinds[kind];
+    box.appendChild(head);
+    for (const x of these) {
+      const item = document.createElement('div');
+      item.className = 'nav-item cn-item' + (x.id === canonShown ? ' current' : '') + (x.error ? ' cn-broken' : '');
+      item.innerHTML = '<div class="n-row"><span class="n-label"></span></div>';
+      item.querySelector('.n-label').textContent = x.data ? x.data.name : x.id;
+      item.onclick = () => { canonShown = x.id; renderCanon(); };
+      item.oncontextmenu = async (e) => {
+        e.preventDefault();
+        const pick = await popMenu(e.clientX, e.clientY, [{ label: t('Set Aside Entry'), value: 'aside' }], { title: x.data ? x.data.name : x.id });
+        if (pick === 'aside') canonSetAsideEntry(x);
+      };
+      box.appendChild(item);
+    }
+  }
+}
+
+async function canonNewEntry(from) {
+  const name = await askInput(t('New Entry'), t('Name'));
+  if (!name) return;
+  const r = from.getBoundingClientRect();
+  const kinds = CANON_KIND();
+  const kind = await popMenu(r.left + 12, r.top, Canon.KINDS.map((k) => ({ label: kinds[k], value: k })), { title: t('What is {name}?', { name }) });
+  if (!kind || !canon) return;
+  const taken = new Set([...canon.entries.keys(), ...canon.setAside.map((x) => x.id)]);
+  let id = Canon.slug(name);
+  for (let n = 2; taken.has(id); n++) id = Canon.slug(name) + '-' + n;
+  if (await canonEdit(id, () => Canon.newEntry(name, kind, id))) { canonShown = id; renderCanon(); }
+}
+
+async function canonSetAsideEntry(x) {
+  if (!(await window.neo.canonSetAside(canon.id, x.id))) return;
+  canon.entries.delete(x.id);
+  canon.setAside.push(x);
+  if (canonShown === x.id) canonShown = null;
+  renderCanon();
+  toast(t('{name} is set aside. Restore it from Set Aside at the foot of the list.', { name: x.data ? x.data.name : x.id }));
+}
+
+async function renderCanon() {
+  let view = $('#canon-view');
+  if (!view) {
+    view = document.createElement('div');
+    view.id = 'canon-view';
+    $('#aux-paper').appendChild(view);
+  }
+  if (!(await canonLoad()) || currentTab !== 'canon') return;
+  renderNav();
+  view.innerHTML = '';
+  const rec = canonShown && canon.entries.get(canonShown);
+  if (!rec) { view.appendChild(canonHome()); return; }
+  if (rec.error) {
+    const p = document.createElement('p');
+    p.className = 'cn-note';
+    p.textContent = t('Canon couldn’t read this entry. It’s left as it was.');
+    view.appendChild(p);
+    return;
+  }
+  view.appendChild(canonEntryPage(rec.data));
+}
+
+// the tab with no entry picked: what Canon is, and what it can do here
+function canonHome() {
+  const box = document.createElement('div');
+  box.className = 'cn-home';
+  const say = (text, cls = 'cn-note') => { const p = document.createElement('p'); p.className = cls; p.textContent = text; box.appendChild(p); return p; };
+  if (!canon.entries.size) say(t('Nothing in this Canon yet. Add an entry with + New Entry in the list, or let Canon read the shelf.'));
+  else say(t('Pick an entry from the list.'));
+  if (!canon.reader.installed) {
+    say(t('Canon needs a reader'), 'cn-h');
+    say(t('Canon reads your books and notes to keep track of who and what is in your world. The reader runs on this computer. Nothing you write is sent anywhere.'));
+    say(t('The reader isn’t on this computer yet. Until it is, keep the Canon by hand: entries and facts you add are yours, and a Continuity Pass checks the book against them.'));
+  }
+  return box;
+}
+
+const CANON_DOT = () => ({ verified: t('Checked against its source'), unverified: t('Not checked yet'), yours: t('You wrote this'), disagree: t('Your sources disagree') });
+
+function canonEntryPage(e) {
+  const page = document.createElement('div');
+  page.className = 'cn-entry';
+  const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+  const button = (label, fn) => { const b = el('button', 'cn-btn', label); b.onclick = fn; return b; };
+  const edit = (change) => canonEdit(e.id, change);
+
+  const name = el('h1', 'cn-name', e.name);
+  name.contentEditable = 'plaintext-only';
+  name.spellcheck = false;
+  name.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); name.blur(); } };
+  name.onblur = () => { const v = name.textContent.trim(); if (v && v !== e.name) edit((d) => { d.name = v; }); else name.textContent = e.name; };
+  page.appendChild(name);
+
+  const meta = el('div', 'cn-meta');
+  const kind = el('button', 'cn-kind', CANON_KIND()[e.kind] || e.kind);
+  kind.onclick = async () => {
+    const r = kind.getBoundingClientRect();
+    const kinds = CANON_KIND();
+    const k = await popMenu(r.left, r.bottom, Canon.KINDS.map((x) => ({ label: kinds[x], value: x, checked: x === e.kind })));
+    if (k && k !== e.kind) edit((d) => { d.kind = k; });
+  };
+  const aliases = el('button', 'cn-aliases', e.aliases.length ? t('Also called {names}', { names: e.aliases.join(', ') }) : t('Also called…'));
+  aliases.onclick = async () => {
+    const v = await askInput(t('Also called'), t('Other names, separated by commas'), e.aliases.join(', '));
+    if (v !== null) edit((d) => { d.aliases = v.split(',').map((s) => s.trim()).filter(Boolean); });
+  };
+  meta.append(kind, aliases);
+  page.appendChild(meta);
+
+  const factList = (facts, aside) => {
+    const ul = el('ul', 'cn-facts');
+    facts.forEach((f, i) => {
+      const li = el('li', 'cn-fact st-' + f.state.replace(' ', '-'));
+      const row = el('div', 'cn-row');
+      if (!aside) { const dot = el('span', 'cn-dot'); dot.title = CANON_DOT()[f.state] || ''; row.appendChild(dot); }
+      row.append(el('span', 'cn-fl', canonLabel(f) + ': '), el('span', 'cn-fv', canonValue(f)));
+      const ctl = el('span', 'cn-ctl');
+      if (aside) ctl.appendChild(button(t('Restore'), () => edit((d) => Canon.restoreFact(d, i))));
+      else {
+        ctl.appendChild(button(t('Edit'), async () => {
+          const v = await askInput(t('Edit fact'), t('Label: value'), `${canonLabel(f)}: ${f.value}${f.as ? ` (${f.as})` : ''}`);
+          if (v === null) return;
+          const nf = Canon.handFact(v);
+          if (!nf) { toast(t('Write it as a label and a value, like Eyes: grey')); return; }
+          edit((d) => { d.facts[i] = { ...nf, sources: [...d.facts[i].sources.filter((s) => !s.written), { written: true }] }; });
+        }));
+        if (f.state !== 'yours') ctl.appendChild(button(t('That’s right'), () => edit((d) => Canon.confirmFact(d, i))));
+        ctl.appendChild(button(t('Set Aside'), () => edit((d) => Canon.setAsideFact(d, i, false))));
+      }
+      row.appendChild(ctl);
+      li.appendChild(row);
+      if (f.state === 'disagree') li.appendChild(el('div', 'cn-warn', t('Your sources disagree')));
+      for (const s of f.sources) {
+        const src = el('div', 'cn-src');
+        if (s.written) src.appendChild(el('span', 'cn-where', t('Written in Canon')));
+        else {
+          const where = el('button', 'cn-where', s.label);
+          where.onclick = () => canonOpenSource(s);
+          src.append(where, el('q', 'cn-quote', s.quote));
+          if (s.said) src.appendChild(el('span', 'cn-tag', s.said === true ? t('said in dialogue') : t('said by {who}', { who: s.said })));
+          if (s.plan) src.appendChild(el('span', 'cn-tag', t('a plan, not yet true')));
+          if (s.changed) src.appendChild(el('span', 'cn-tag cn-changed', t('This passage has changed')));
+        }
+        li.appendChild(src);
+      }
+      ul.appendChild(li);
+    });
+    return ul;
+  };
+
+  page.appendChild(el('h3', 'cn-h', t('Facts')));
+  page.appendChild(factList(e.facts, false));
+  const add = el('button', 'cn-add', '+ ' + t('Add a fact'));
+  add.onclick = () => {
+    const input = el('input', 'cn-add-input');
+    input.placeholder = t('Sex: mare');
+    input.spellcheck = false;
+    add.replaceWith(input);
+    input.focus();
+    input.onkeydown = (ev) => {
+      if (ev.key === 'Escape') { ev.stopPropagation(); input.replaceWith(add); }
+      if (ev.key !== 'Enter') return;
+      const f = Canon.handFact(input.value);
+      if (!f) { toast(t('Write it as a label and a value, like Eyes: grey')); return; }
+      edit((d) => { d.facts.push(f); });
+    };
+  };
+  page.appendChild(add);
+  if (e.setAside.length) {
+    page.appendChild(el('h3', 'cn-h', t('Set aside')));
+    page.appendChild(factList(e.setAside, true));
+  }
+  page.appendChild(el('h3', 'cn-h', t('In my words')));
+  const words = el('div', 'cn-words', e.words.replace(/\n$/, ''));
+  words.contentEditable = 'plaintext-only';
+  words.dataset.ph = t('Anything you want to remember about {name}. Canon never writes here.', { name: e.name });
+  words.onblur = () => {
+    const v = words.innerText.replace(/\s+$/, '');
+    const next = v ? v + '\n' : '';
+    if (next !== e.words) edit((d) => { d.words = next; });
+  };
+  page.appendChild(words);
+  return page;
+}
+
+// A source opens its passage, lit the way Find lights a match
+function canonTextOf(root) {
+  const segs = [];
+  let text = '';
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = w.nextNode())) {
+    if (n.parentElement && n.parentElement.closest('.ghost, .ph-mark, .scene-break')) continue;
+    segs.push({ node: n, at: text.length });
+    text += n.data;
+  }
+  return { segs, text };
+}
+function canonRange(segs, a, b) {
+  const at = (i, end) => {
+    for (const g of segs) {
+      const len = g.node.data.length;
+      if (end ? i > g.at && i <= g.at + len : i >= g.at && i < g.at + len) return [g.node, i - g.at];
+    }
+    return null;
+  };
+  const s = at(a, false);
+  const e = at(b, true);
+  if (!s || !e) return null;
+  const r = document.createRange();
+  r.setStart(s[0], s[1]);
+  r.setEnd(e[0], e[1]);
+  return r;
+}
+function canonFindRange(root, quote) {
+  const { segs, text } = canonTextOf(root);
+  const src = Canon.normMap(text);
+  const q = Canon.norm(quote);
+  const i = q ? src.text.indexOf(q) : -1;
+  return i < 0 ? null : canonRange(segs, src.map[i], src.map[i + q.length - 1] + 1);
+}
+
+async function canonOpenSource(s) {
+  if (!book || book.id !== s.book) {
+    await openBook(s.book);
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0))); // the book settles on its tab first
+  }
+  if (!book || book.id !== s.book) return;
+  if (s.ch === 'notes') { switchTab('notes'); return; }
+  const body = book.chapterOrder.includes(s.ch) && document.querySelector(`.chapter[data-id="${s.ch}"] .chapter-body`);
+  const r = body && canonFindRange(body, s.quote);
+  switchTab('manuscript');
+  if (!r) { toast(t('This passage has changed')); return; }
+  CSS.highlights.set('neo-canon-quote', new Highlight(r));
+  r.startContainer.parentElement.scrollIntoView({ block: 'center' });
+  const off = () => CSS.highlights.delete('neo-canon-quote');
+  document.addEventListener('keydown', off, { once: true });
+  document.addEventListener('mousedown', off, { once: true });
 }
 
 /* ================================================================== */

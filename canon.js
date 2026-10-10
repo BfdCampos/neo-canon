@@ -256,10 +256,10 @@
 
   // a fact the writer typed ("Sex: mare"): theirs, written in Canon
   function handFact(text) {
-    const m = /^\s*([^:]+?)\s*:\s*(.+?)\s*$/.exec(String(text || ''));
+    const m = /^\s*([^:]+?)\s*:\s*(.+?)(?:\s*\(([^()]*)\))?\s*$/.exec(String(text || ''));
     if (!m) return null;
     const attr = attrOf(m[1]) || 'other';
-    const n = normaliseFact(attr, m[2], '');
+    const n = normaliseFact(attr, m[2], m[3]);
     if (!n) return null;
     return { attr, label: attr === 'other' ? m[1] : undefined, value: n.value, as: n.as, state: 'yours', sources: [{ written: true }] };
   }

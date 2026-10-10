@@ -2097,3 +2097,57 @@ body.light .side-card { background: #fbf5e3; border-color: #e6dfcc; }
 body.light .side-card-head { color: #5f5a50; }
 body.light .side-card textarea { color: #2b2926; }
 body.light .side-card textarea::placeholder { color: #a39d90; }
+
+/* ============================ CANON ============================ */
+/* The Canon tab: entries listed in the left pane, one on the page.  */
+::highlight(neo-canon-quote) { background: rgba(201, 168, 106, 0.35); }
+.cn-find {
+  display: block; width: calc(100% - 36px); margin: 0 18px 8px; padding: 6px 8px;
+  background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #ddd; font-size: 12px; outline: none;
+}
+.cn-find:focus { border-color: var(--accent); }
+.cn-kind-head { padding: 14px 18px 4px; font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; color: #666; }
+.nav-item.cn-item .n-row { cursor: pointer; }
+.nav-item.cn-broken .n-label { font-style: italic; color: #777; }
+.cn-restore { background: none; border: none; color: #666; font-size: 11px; opacity: 0; }
+.cn-item:hover .cn-restore, .cn-restore:focus-visible { opacity: 1; }
+.cn-restore:hover { color: var(--accent); }
+.cn-new {
+  display: block; width: calc(100% - 36px); margin: 14px 18px 0;
+  background: none; border: 1px dashed #3a3a3a; border-radius: 6px; color: #666; font-size: 12px; padding: 8px;
+}
+.cn-new:hover { color: var(--accent); border-color: var(--accent); }
+
+#canon-view { font-family: var(--body-font); font-size: calc(var(--editor-size, 16px) * var(--page-zoom, 1)); line-height: 1.6; }
+#canon-view button { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+.cn-note { color: #8a8478; font-style: italic; margin-bottom: 14px; }
+.cn-home .cn-h { margin-top: 36px; }
+.cn-name { font-size: 1.9em; font-weight: 400; outline: none; margin-bottom: 4px; }
+.cn-meta { display: flex; gap: 14px; margin-bottom: 28px; }
+.cn-meta button, .cn-btn, .cn-where, .cn-add {
+  background: none; border: none; padding: 0; color: #8a8478; font-size: 12px; letter-spacing: 0.3px;
+}
+.cn-meta button:hover, .cn-btn:hover, .cn-where:hover, .cn-add:hover { color: var(--accent); }
+.cn-h { font-size: 11px; font-weight: 400; letter-spacing: 2.5px; text-transform: uppercase; color: #8a8478; margin: 26px 0 10px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.cn-facts { list-style: none; }
+.cn-fact { margin-bottom: 12px; }
+.cn-row { display: flex; align-items: baseline; gap: 2px; }
+.cn-dot { width: 7px; height: 7px; border-radius: 50%; margin-right: 9px; flex: none; position: relative; top: -1px; border: 1.5px solid #b9b2a2; }
+.st-verified .cn-dot { background: #8a8478; border-color: #8a8478; }
+.st-yours .cn-dot { border-radius: 1px 50% 1px 50%; transform: rotate(45deg); background: var(--accent); border-color: var(--accent); }
+.st-disagree .cn-dot { background: linear-gradient(90deg, #8a8478 50%, transparent 50%); }
+.cn-fl { color: #6f6a60; }
+.cn-ctl { margin-left: auto; display: flex; gap: 12px; opacity: 0; transition: opacity 0.12s; }
+.cn-fact:hover .cn-ctl, .cn-ctl:focus-within { opacity: 1; }
+.cn-src { margin: 2px 0 0 18px; font-size: 0.86em; color: #5f5a50; }
+.cn-src .cn-where { margin-right: 8px; text-decoration: underline dotted #c9c2b2; }
+.cn-quote { font-style: italic; }
+.cn-tag { margin-left: 8px; font-size: 11px; color: #9a9384; font-family: -apple-system, sans-serif; }
+.cn-changed, .cn-warn { color: #b0683c; }
+.cn-warn { margin-left: 18px; font-size: 12px; font-family: -apple-system, sans-serif; }
+.cn-add { margin: 4px 0 0 18px; opacity: 0; }
+.cn-entry:hover .cn-add, .cn-add:focus-visible { opacity: 1; }
+.cn-add-input { margin: 4px 0 0 18px; width: 60%; font: inherit; padding: 2px 6px; border: 1px solid #d6d0c2; border-radius: 4px; background: transparent; color: inherit; outline: none; }
+.cn-words { min-height: 3em; outline: none; white-space: pre-wrap; }
+.cn-words:empty::before { content: attr(data-ph); color: #b9b4a8; font-style: italic; }
+.cn-src span.cn-where { text-decoration: none; }
