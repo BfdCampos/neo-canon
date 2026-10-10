@@ -356,3 +356,21 @@ test('an entry Canon can\'t read keeps its name: Read the Shelf makes no second 
   assert.deepEqual(Object.keys(files), ['bramble']);
   assert.equal(files.bramble, was);
 });
+
+test('Merge Into: names become aliases, the same fact gains sources, a different value waits, words follow', () => {
+  const into = Canon.parseEntry(BRAMBLE);
+  const from = Canon.newEntry('The Grey', 'creature');
+  from.aliases = ['the grey mare', 'Grey'];
+  from.facts.push(
+    { attr: 'species', value: 'horse', as: '', state: 'unverified', sources: [{ label: 'B, Ch 9', quote: 'the Grey, a horse', book: 'b', ch: 'c9' }] },
+    { attr: 'eyes', value: 'brown', as: '', state: 'unverified', sources: [{ label: 'B, Ch 9', quote: 'the Grey’s brown eyes', book: 'b', ch: 'c9' }] },
+    { attr: 'sex', value: 'male', as: '', state: 'verified', sources: [{ label: 'B, Ch 9', quote: 'x', book: 'b', ch: 'c9' }] });
+  from.words = 'Seen at the ford.\n';
+  Canon.mergeEntry(into, from);
+  assert.deepEqual(into.aliases, ['the grey mare', 'the grey', 'Grey']);
+  assert.equal(into.facts.find((f) => f.attr === 'species').sources.length, 2);
+  assert.equal(into.facts.find((f) => f.attr === 'eyes').state, 'unverified');
+  assert.equal(into.facts.find((f) => f.attr === 'sex' && f.value === 'male').state, 'disagree');
+  assert.match(into.words, /^Bad-tempered[\s\S]*verified\n\nSeen at the ford\.\n$/);
+  assert.equal(Canon.parseEntry(Canon.serialiseEntry(into)).error, undefined);
+});

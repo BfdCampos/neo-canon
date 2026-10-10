@@ -412,6 +412,36 @@ test('Leave Out of Canon: a page right-clicked, a hollow ring, canon.json\'s out
   assert.equal(canonJson().read[`${NOTES}/p1`], undefined); // brought back: read again at the next pause
 });
 
+test('Merge Into…, the Dismissed list, and Read Everything Again', async () => {
+  await js(`openBook('${SALT}')`);
+  await until(`book && book.id === '${SALT}'`);
+  await js(`canonShown = null; switchTab('canon')`);
+  await until(`!!document.querySelector('#canon-view .cn-home')`);
+  await js(`canonEdit('the-grey', () => { const e = Canon.newEntry('The Grey', 'creature', 'the-grey'); e.words = 'Seen at the ford.\\n'; return e; })`);
+  await until(`[...document.querySelectorAll('#nav-list .cn-item')].some((x) => x.textContent === 'The Grey')`);
+  await js(`(() => { const i = [...document.querySelectorAll('#nav-list .cn-item')].find((x) => x.textContent === 'The Grey'); i.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 120, clientY: 200 })); })()`);
+  await until(`!!document.querySelector('.pop-menu')`);
+  await menuPick('Merge Into…');
+  await until(`[...document.querySelectorAll('.pop-menu .pm-title')].some((x) => x.textContent === 'Merge The Grey into…')`);
+  await js(`[...document.querySelectorAll('.pop-menu button')].find((b) => b.textContent === 'Bramble').click()`);
+  await until(`canonShown === 'bramble' && !canon.entries.has('the-grey')`);
+  const bramble = fs.readFileSync(path.join(LIB, CANON, 'entries', 'bramble.md'), 'utf8');
+  assert.match(bramble, /^aliases: \[The Grey\]$/m);
+  assert.match(bramble, /## In my words\nSeen at the ford\.\n$/);
+  assert.ok(fs.existsSync(path.join(LIB, CANON, 'set-aside', 'the-grey.md')));
+  assert.ok(!fs.existsSync(path.join(LIB, CANON, 'entries', 'the-grey.md')));
+  // Dismissed (n) at the foot of the pane: each Not a slip, restorable
+  await js(`canonShown = null; renderCanon()`);
+  await until(`/Dismissed \\(2\\)/.test(document.querySelector('#canon-side .cs-dismissed-head')?.textContent)`);
+  await js(`document.querySelector('#canon-side .cs-dismissed-head').click()`);
+  await until(`document.querySelectorAll('#canon-side q.cs-src').length === 2`);
+  assert.match(await js(`document.querySelector('#canon-side').textContent`), /Ilsa Varr · Eyes.*Ilsa’s eyes looked almost brown in the firelight\./);
+  await js(`[...document.querySelectorAll('#canon-side .cs-row button')].filter((b) => b.textContent === 'Restore').at(-1).click()`);
+  await until(`/Dismissed \\(1\\)/.test(document.querySelector('#canon-side .cs-dismissed-head')?.textContent)`);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(LIB, CANON, 'not-slips.json'), 'utf8')).length, 1);
+  assert.equal(await js(`!!document.querySelector('#canon-view .cn-again')`), true);
+});
+
 /* ---------- runner ---------- */
 
 async function main() {

@@ -437,6 +437,27 @@
     if (f.as) had.as = f.as;
     if (!had.sources.some((x) => x.written)) had.sources.push({ written: true });
   }
+  // Merge Into: `from` (the grey, split from Bramble) joins `into`. Its name
+  // and aliases become aliases, its facts join (the same fact gains the
+  // sources; a value that differs from a firm one waits as disagreeing),
+  // its words follow the entry's own. The window then sets `from` aside.
+  function mergeEntry(into, from) {
+    const has = (a) => [into.name, ...into.aliases].some((x) => norm(x) === norm(a));
+    for (const a of [from.name, ...from.aliases]) if (!has(a)) into.aliases.push(a);
+    const same = (x, y) => x.attr === y.attr && norm(x.value) === norm(y.value) && x.label === y.label;
+    for (const f of from.facts) {
+      const had = into.facts.find((x) => same(x, f));
+      if (!had) {
+        const clash = ATTRS[f.attr] && ATTRS[f.attr].single && into.facts.some((x) => x.attr === f.attr && !same(x, f));
+        into.facts.push({ ...f, state: clash && f.state !== 'yours' ? 'disagree' : f.state });
+        continue;
+      }
+      if (f.state === 'yours' || (f.state === 'verified' && had.state !== 'yours')) had.state = f.state;
+      for (const src of f.sources) if (!had.sources.some((x) => x.written ? src.written : x.book === src.book && x.ch === src.ch && x.quote === src.quote)) had.sources.push(src);
+    }
+    into.setAside.push(...from.setAside);
+    if (from.words && from.words.trim()) into.words = (into.words ? into.words.replace(/\n*$/, '\n\n') : '') + from.words;
+  }
   function restoreFact(e, i) {
     const [f] = e.setAside.splice(i, 1);
     f.state = 'yours';
@@ -1140,7 +1161,7 @@
     textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
     inSpans, nameParts, WORD, replaceInHtml,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
-    newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, replaceFact, restoreFact, lexical,
+    newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader
   };
 });

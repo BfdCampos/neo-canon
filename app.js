@@ -16377,8 +16377,13 @@ function fillCanonNav(box) {
       item.onclick = () => { canonShown = x.id; renderCanon(); };
       item.oncontextmenu = async (e) => {
         e.preventDefault();
-        const pick = await popMenu(e.clientX, e.clientY, [{ label: t('Set Aside Entry'), value: 'aside' }], { title: canonName(x) });
+        const others = canonSorted().filter((o) => o.data && o.id !== x.id);
+        const pick = await popMenu(e.clientX, e.clientY, [...(x.data && others.length ? [{ label: t('Merge Into…'), value: 'merge' }] : []),
+          { label: t('Set Aside Entry'), value: 'aside' }], { title: canonName(x) });
         if (pick === 'aside') canonSetAsideEntry(x);
+        if (pick !== 'merge') return;
+        const into = await popMenu(e.clientX, e.clientY, others.map((o) => ({ label: o.data.name, value: o.id })), { title: t('Merge {name} into…', { name: x.data.name }) });
+        if (into) canonMergeInto(x, into);
       };
       box.appendChild(item);
     }
@@ -16405,6 +16410,18 @@ async function canonNewEntry(from) {
   let id = Canon.slug(name);
   for (let n = 2; taken.has(id); n++) id = Canon.slug(name) + '-' + n;
   if (await canonEdit(id, () => Canon.newEntry(name, kind, id))) { canonShown = id; renderCanon(); }
+}
+
+// Merge Into…: the entry joins another (its names as aliases, its facts and
+// sources, its words), then its own file goes to Set Aside, kept whole
+async function canonMergeInto(x, intoId) {
+  const from = structuredClone(x.data);
+  if (!(await canonEdit(intoId, (d) => Canon.mergeEntry(d, from)))) return;
+  const id = await window.neo.canonSetAside(canon.id, x.id);
+  if (id) { canon.entries.delete(x.id); canon.setAside.push({ ...x, id }); }
+  canonShown = intoId;
+  renderCanon();
+  toast(t('{name} is merged into {into}. Its own file is in Set Aside.', { name: from.name, into: canonName(canon.entries.get(intoId)) }));
 }
 
 async function canonSetAsideEntry(x) {
@@ -16448,7 +16465,7 @@ let canonReading = false;
 let canonReadLine = '';
 let canonReadAt = null;   // the last progress: { phase, book, label, n, of, calls, left, ms }
 let canonPaused = false;
-async function canonReadShelfNow() {
+async function canonReadShelfNow(again = false) {
   if (!canon || canonReading) return;
   const id = canon.id;
   canonReading = true;
@@ -16458,7 +16475,7 @@ async function canonReadShelfNow() {
   renderCanon();
   let res;
   try {
-    res = await window.neo.canonReadShelf(id, {});
+    res = await window.neo.canonReadShelf(id, { again: again === true });
   } catch (err) {
     window.neo.logError('canon read: ' + (err && err.message || err));
     res = { error: 'failed' };
@@ -16653,6 +16670,37 @@ function canonNeedsList(box, el) {
   }
 }
 
+// Dismissed (n), at the foot of the Canon tab's pane: every Not a slip, with
+// its line; Restore lets that slip be found again
+let canonDismissedOpen = false;
+function canonDismissedList(box, el) {
+  const list = canon.notSlips;
+  if (!list.length) return;
+  const head = el('button', 'cs-dismissed-head', t('Dismissed ({n})', { n: list.length }));
+  head.setAttribute('aria-expanded', String(canonDismissedOpen));
+  head.onclick = () => { canonDismissedOpen = !canonDismissedOpen; canonSideUpdate(); };
+  box.appendChild(head);
+  if (!canonDismissedOpen) return;
+  for (const n of list) {
+    const item = el('div', 'cs-need');
+    const [entry, attr] = n.fact.split('/');
+    const rec = canon.entries.get(entry);
+    item.appendChild(el('strong', '', `${rec ? canonName(rec) : entry} · ${CANON_LABELS()[attr] || t('Spelling')}`));
+    item.appendChild(el('q', 'cs-src', n.text));
+    const row = el('div', 'cs-row');
+    const b = el('button', '', t('Restore'));
+    b.onclick = async () => {
+      try { await window.neo.canonUnNotSlip(canon.id, n); } catch { toast(t('NEO couldn’t save that')); return; }
+      canon.notSlips = canon.notSlips.filter((x) => x !== n);
+      canonSideUpdate();
+      toast(t('Canon will flag this line again on the next pass.'));
+    };
+    row.appendChild(b);
+    item.appendChild(row);
+    box.appendChild(item);
+  }
+}
+
 // the tab with no entry picked: what Canon is, and what it can do here
 function canonHome() {
   const box = document.createElement('div');
@@ -16672,8 +16720,16 @@ function canonHome() {
   const go = document.createElement('button');
   go.className = 'cn-read btn-gold';
   go.textContent = t('Read the Shelf');
-  go.onclick = canonReadShelfNow;
+  go.onclick = () => canonReadShelfNow();
   box.appendChild(go);
+  // after a reader upgrade: everything read again (the writer's facts stay)
+  if (Object.keys(canon.meta.read || {}).length) {
+    const again = document.createElement('button');
+    again.className = 'cn-btn cn-again';
+    again.textContent = t('Read Everything Again');
+    again.onclick = () => canonReadShelfNow(true);
+    box.appendChild(again);
+  }
   say(canonReadLine, 'cn-note cn-read-line');
   return box;
 }
@@ -17013,7 +17069,7 @@ function canonSideBox() {
 }
 function canonSideUpdate(tab = currentTab) {
   const mode = !CANON_ON || !book ? null : canonReview && (tab === 'manuscript' || tab === 'canon') ? 'review'
-    : canonPassOn && tab === 'manuscript' ? 'pass' : tab === 'canon' && canon && canon.reader.installed ? 'needs' : null;
+    : canonPassOn && tab === 'manuscript' ? 'pass' : tab === 'canon' && canon && (canon.reader.installed || canon.notSlips.length) ? 'needs' : null;
   const on = !!mode;
   const was = $('#editor-view').classList.contains('canon-side');
   $('#editor-view').classList.toggle('canon-side', on);
@@ -17023,7 +17079,7 @@ function canonSideUpdate(tab = currentTab) {
   const box = canonSideBox();
   box.innerHTML = '';
   const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
-  if (mode === 'needs') { canonNeedsList(box, el); return; }
+  if (mode === 'needs') { if (canon.reader.installed) canonNeedsList(box, el); canonDismissedList(box, el); return; }
   if (mode === 'review') { canonReviewList(box, el); return; }
   box.appendChild(el('div', 'cs-title', t('Continuity Pass')));
   const shown = canonShownSlips();
