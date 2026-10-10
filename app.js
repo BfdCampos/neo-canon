@@ -10575,7 +10575,7 @@ function sidePaneForTab(name) {
   $('#editor-view').classList.toggle('darlings-tab', dar);
   if (dar) { snapList(); $('#side-pane').classList.add('open'); }
   else if (was && $('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
-  if (CANON_ON) canonSideUpdate(name);
+  if (CANON_ON) { canonSideUpdate(name); canonHereUpdate(true); }
 }
 
 // ---- the note walks ahead ----
@@ -10657,7 +10657,7 @@ function sectionOf(body, p) {
 function queueSideCards() {
   if (sideCardsQueued) return;
   sideCardsQueued = true;
-  requestAnimationFrame(() => { sideCardsQueued = false; sideCardsUpdate(); });
+  requestAnimationFrame(() => { sideCardsQueued = false; sideCardsUpdate(); if (CANON_ON) canonHereUpdate(); });
 }
 function sideCardsUpdate(force) {
   const box = sideCardsBox();
@@ -16299,6 +16299,7 @@ async function canonEdit(id, change) {
   if (!res || !res.ok) { toast(t('NEO couldn’t save this entry')); return false; }
   canon.entries.set(data.id, { id: data.id, data, stamp: res.stamp });
   if (currentTab === 'canon') renderCanon();
+  else if (canonAside) canonHereUpdate(true);
   return true;
 }
 
@@ -17064,6 +17065,103 @@ function canonLight(root, quote, name) {
   const off = () => CSS.highlights.delete(hl);
   document.addEventListener('keydown', off, { once: true });
   document.addEventListener('mousedown', off, { once: true });
+}
+
+// ---- In this chapter (IDE.md §3): who and what the page names ----
+// Below the side cards in the right-hand pane: the chapter's entries by
+// kind, in order of first appearance, those in the caret's paragraph in the
+// accent colour. Made in the window from the chapter's own HTML (no IPC, no
+// reader), and only while the pane can be seen: it is hidden while typing.
+// ⌥-click opens an entry here beside the page; Esc goes back.
+let canonHereMemo = null; // { key, html, order: [ids] }
+let canonAside = null;    // the entry open beside the page
+function canonHereBox() {
+  let box = $('#canon-here');
+  if (box) return box;
+  box = document.createElement('div');
+  box.id = 'canon-here';
+  sideCardsBox().after(box);
+  return box;
+}
+function canonHereUpdate(force) {
+  const box = canonHereBox();
+  const clear = () => { if (box.firstChild) box.textContent = ''; canonHereMemo = null; $('#editor-view').classList.remove('canon-aside'); };
+  const id = book && canonIdFor(book.id);
+  if (!id || !['manuscript', 'notes'].includes(currentTab) || $('#editor-view').hidden) { canonAside = null; clear(); return; }
+  if (!force && !$('#side-pane').classList.contains('open')) return;
+  if (!canon || canon.id !== id) { canonLoad().then((c) => { if (c) canonHereUpdate(true); }); return; }
+  if (box.contains(document.activeElement)) return; // being typed on (an entry beside the page)
+  $('#editor-view').classList.toggle('canon-aside', !!canonAside);
+  if (canonAside) {
+    const rec = canon.entries.get(canonAside);
+    if (!rec || !rec.data) { canonAside = null; canonHereUpdate(true); return; }
+    if (canonHereMemo && canonHereMemo.key === 'aside:' + canonAside + rec.stamp && !force) return;
+    canonHereMemo = { key: 'aside:' + canonAside + rec.stamp };
+    box.textContent = '';
+    const back = document.createElement('button');
+    back.className = 'ch-back';
+    back.textContent = '← ' + (currentTab === 'notes' || isNotebook() ? t('On this page') : t('In this chapter'));
+    back.onclick = () => { canonAside = null; canonHereUpdate(true); };
+    box.append(back, canonEntryPage(rec.data));
+    return;
+  }
+  // the page and the caret's paragraph
+  let html = '';
+  let caret = null;
+  let chId = 'notes';
+  if (currentTab === 'notes') html = $('#aux-editor').innerHTML;
+  else {
+    const at = canonCaretPara();
+    chId = at ? at.chId : currentChapterId;
+    html = chId ? chapterHTML[chId] || '' : '';
+    caret = at && at.p;
+  }
+  const w = canonWorld();
+  const key = w.sig + chId;
+  if (!canonHereMemo || canonHereMemo.key !== key || canonHereMemo.html !== html) {
+    canonHereMemo = { key, html, order: [...new Set(Canon.paraEntries(Canon.sourceParas(html), w.index).flat())] };
+  }
+  const here = new Set(caret ? Canon.mentions(canonTextOf(caret).text, w.index).map((m) => m.id) : []);
+  const sig = key + canonHereMemo.order.join() + '|' + [...here].join();
+  if (box.dataset.sig === sig && !force) return;
+  box.dataset.sig = sig;
+  box.textContent = '';
+  if (!canonHereMemo.order.length) return;
+  const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+  box.appendChild(el('div', 'ch-title', currentTab === 'notes' || isNotebook() ? t('On this page') : t('In this chapter')));
+  const kinds = CANON_KINDS();
+  const facts = el('div', 'ch-facts');
+  for (const kind of Canon.KINDS) {
+    const ids = canonHereMemo.order.filter((x) => (canon.entries.get(x).data || {}).kind === kind);
+    if (!ids.length) continue;
+    const row = el('div', 'ch-row');
+    const k = el('div', 'ch-kind', kinds[kind]);
+    k.style.setProperty('--kind', `var(--canon-${kind})`);
+    row.appendChild(k);
+    const names = el('div', 'ch-names');
+    ids.forEach((x, i) => {
+      const d = canon.entries.get(x).data;
+      if (i) names.append(el('span', 'ch-sep', ' · '));
+      const b = el('button', 'ch-name' + (here.has(x) ? ' here' : ''), d.name);
+      b.onmouseenter = () => { facts.textContent = d.facts.filter((f) => f.state === 'yours' || f.state === 'verified').map((f) => f.as || f.value).join(' · '); };
+      b.onmouseleave = () => { facts.textContent = ''; };
+      b.onclick = (ev) => { if (ev.altKey) { canonAside = x; canonHereUpdate(true); } else canonGo(x); };
+      names.appendChild(b);
+    });
+    row.appendChild(names);
+    box.appendChild(row);
+  }
+  box.appendChild(facts);
+}
+if (CANON_ON) {
+  $('#side-hotzone').addEventListener('mouseenter', () => canonHereUpdate(true));
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !canonAside || document.querySelector('.pop-menu, .modal-backdrop:not([hidden])')) return;
+    e.preventDefault();
+    e.stopPropagation(); // (Esc on the page would otherwise go back to the shelf)
+    canonAside = null;
+    canonHereUpdate(true);
+  }, true);
 }
 
 // ---- the Continuity Pass: Edit → Continuity Pass (⌘'), a toggle like Spellcheck Pass ----

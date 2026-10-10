@@ -2294,3 +2294,33 @@ body.light .canon-pop button { color: #555; border-color: #ccc; }
 .cn-show-all { margin: 2px 0 0; }
 #canon-view .cn-link, #canon-view .cn-pass, #canon-here .cn-link { font-family: var(--body-font); }
 body.night .cn-pass q { color: #8f897d; }
+/* In this chapter / On this page: below the side cards */
+#canon-here { padding: 0 16px; font-size: 13px; }
+#canon-here:not(:empty) { margin-bottom: 22px; }
+#editor-view.outline-tab #canon-here, #editor-view.darlings-tab #canon-here, #editor-view.canon-side #canon-here { display: none; }
+#canon-here .ch-title { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
+#canon-here .ch-row { margin-bottom: 9px; }
+#canon-here .ch-kind { font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: #77736b; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+#canon-here .ch-kind::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--kind); box-shadow: 0 0 6px var(--kind); }
+#canon-here .ch-names { line-height: 1.55; color: #cfcac0; }
+#canon-here .ch-sep { color: #5d5a54; }
+#canon-here .ch-name { background: none; border: none; padding: 0; color: inherit; font: inherit; text-align: left; text-decoration: underline transparent; text-underline-offset: 3px; transition: color 0.12s, text-decoration-color 0.12s; }
+#canon-here .ch-name:hover, #canon-here .ch-name:focus-visible { text-decoration-color: currentColor; outline: none; }
+#canon-here .ch-name.here { color: var(--accent); }
+#canon-here .ch-facts { min-height: 1.4em; font-size: 12px; font-style: italic; color: #8f8a80; font-family: var(--body-font); }
+#canon-here .ch-back { background: none; border: none; padding: 0; margin-bottom: 10px; color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+#canon-here .ch-back:hover { color: var(--accent); }
+/* an entry beside the page: the entry page, set small for the pane */
+#editor-view.canon-aside #side-cards, #editor-view.canon-aside #sticky-list, #editor-view.canon-aside #side-head { display: none; }
+#canon-here .cn-entry { font-family: var(--body-font); font-size: 13.5px; line-height: 1.5; color: #d6d2c6; }
+#canon-here .cn-entry button { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+#canon-here .cn-name { font-size: 1.5em; }
+#canon-here .cn-meta { margin-bottom: 14px; flex-wrap: wrap; gap: 4px 12px; }
+#canon-here .cn-h { margin: 16px 0 6px; }
+#canon-here .cn-row { flex-wrap: wrap; }
+#canon-here .cn-ctl { margin-left: 0; width: 100%; }
+#canon-here .cn-src { margin-left: 12px; }
+body.light #canon-here .ch-names { color: #3a362f; }
+body.light #canon-here .ch-sep { color: #c3bdb1; }
+body.light #canon-here .ch-kind { color: #8f897d; }
+body.light #canon-here .cn-entry { color: #2b2926; }

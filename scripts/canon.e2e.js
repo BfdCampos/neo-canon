@@ -504,6 +504,53 @@ test('Mentioned in: reading order, folded after eight, a passage opens its chapt
   assert.equal(await js(`[...CSS.highlights.get('neo-search')][0].startContainer.parentElement.closest('.chapter').dataset.id`), 'c2');
 });
 
+const SIDE_X = 1395;
+test('In this chapter: the right-hand pane lists who and what the chapter names, the caret\'s in the accent', async () => {
+  await js(`openBook('${SALT}')`);
+  await until(`book && book.id === '${SALT}'`);
+  await js(`switchTab('manuscript')`);
+  // the caret in Bramble's paragraph of Ch 1
+  await js(`(() => { const p = [...document.querySelectorAll('.chapter[data-id="c1"] .chapter-body p')].find((x) => x.textContent.includes('did not like the convoy')); p.scrollIntoView({ block: 'center' }); const r = document.createRange(); r.setStart(p.firstChild, 3); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()`);
+  wc.sendInputEvent({ type: 'mouseMove', x: 700, y: 400 });
+  wc.sendInputEvent({ type: 'mouseMove', x: SIDE_X, y: 400 });
+  await until(`$('#side-pane').classList.contains('open') && !!document.querySelector('#canon-here .ch-name')`);
+  const names = await js(`[...document.querySelectorAll('#canon-here .ch-name')].map((b) => b.textContent + (b.classList.contains('here') ? '*' : ''))`);
+  assert.equal(await js(`document.querySelector('#canon-here .ch-title').textContent`), 'In this chapter');
+  assert.ok(names.includes('Bramble*') && names.includes('Ilsa Varr'), names.join());
+  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-here .ch-kind')].map((k) => k.textContent)`), ['People', 'Creatures', 'Places']);
+  const bramble = `[...document.querySelectorAll('#canon-here .ch-name')].find((b) => b.textContent === 'Bramble')`;
+  await js(`${bramble}.dispatchEvent(new MouseEvent('mouseenter'))`);
+  assert.equal(await js(`document.querySelector('#canon-here .ch-facts').textContent`), 'horse · Tamsin Hale · stallion');
+  await tick(300);
+  await shot('canon-in-this-chapter.png');
+  // with the pane open, keeping it current costs next to nothing per key
+  const ms = await js(`(() => { const t0 = performance.now(); for (let i = 0; i < 50; i++) { chapterHTML.c1 += ''; canonHereUpdate(); } return (performance.now() - t0) / 50; })()`);
+  assert.ok(ms < 4, ms + ' ms');
+  // ⌥-click: the entry beside the page; Esc goes back
+  await js(`${bramble}.dispatchEvent(new MouseEvent('click', { altKey: true, bubbles: true }))`);
+  await until(`!!document.querySelector('#canon-here .cn-entry')`);
+  assert.equal(await js(`document.querySelector('#canon-here .cn-name').textContent`), 'Bramble');
+  await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+  await until(`!document.querySelector('#canon-here .cn-entry') && !!document.querySelector('#canon-here .ch-name')`);
+  // a click opens the entry in the Canon tab
+  await js(`${bramble}.click()`);
+  await until(`currentTab === 'canon' && canonShown === 'bramble' && !!document.querySelector('#canon-view .cn-entry')`);
+});
+
+test('In this chapter: absent on a shelf without a Canon; On this page in Notes', async () => {
+  await js(`switchTab('notes')`);
+  await until(`$('#aux-editor').dataset.kind === 'notes'`);
+  await js(`canonHereUpdate(true)`);
+  await until(`document.querySelector('#canon-here .ch-title')?.textContent === 'On this page'`);
+  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-here .ch-name')].map((b) => b.textContent)`), ['Bramble']);
+  await js(`switchTab('manuscript')`);
+  await js(`stopCanon(library.shelves[0])`);
+  await js(`canonTabUpdate(); canonHereUpdate(true)`);
+  assert.equal(await js(`document.querySelector('#canon-here').children.length`), 0);
+  await js(`library.shelves[0].canonId = '${CANON}'; writeLibrary(library)`);
+  await js(`canonTabUpdate()`);
+});
+
 /* ---------- runner ---------- */
 
 async function main() {
