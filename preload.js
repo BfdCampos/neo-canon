@@ -79,7 +79,7 @@ contextBridge.exposeInMainWorld('neo', {
   canonDownload: (tier) => ipcRenderer.invoke('canon:download', tier),
   canonPauseDownload: () => ipcRenderer.invoke('canon:pauseDownload'),
   canonTyping: () => ipcRenderer.send('canon:typing'),
-  canonQuietState: (on) => ipcRenderer.send('canon:quietState', on),
+  canonQuietState: (on, kept) => ipcRenderer.send('canon:quietState', on, kept),
   onCanon: (cb) => ipcRenderer.on('canon', (_e, msg) => cb(msg)),
 
   poetryState: (on) => ipcRenderer.send('poetry:state', on),

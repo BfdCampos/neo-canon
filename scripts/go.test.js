@@ -57,6 +57,16 @@ test('an exact match beats a prefix, which beats a word\'s start, anywhere, word
   assert.equal(keys(r), 'cmd,ch');
 });
 
+test('letters in order stay inside one word, and a better answer hides them', () => {
+  assert.equal(goScore('canon', 'Spellcheck Language › Română'), 0);
+  assert.equal(goScore('mare', 'Smaller Text'), 0);
+  assert.equal(goScore('snap', 'Polski'), 0);
+  assert.ok(goScore('spllchk', 'Spellcheck Pass') > 0);
+  assert.equal(goScore('a', 'Paperback'), 0); // one letter: only a word's start
+  const r = goRank('spel', [{ key: 'a', group: 'command', texts: ['Spellcheck Pass'] }, { key: 'b', group: 'command', texts: ['Sample Pellet'] }]);
+  assert.equal(keys(r), 'a');
+});
+
 test('recent picks get a bonus, the most recent the most', () => {
   const two = [{ key: 'a', group: 'chapter', texts: ['Saltmere'] }, { key: 'b', group: 'chapter', texts: ['Saltmere'] }];
   assert.equal(keys(goRank('salt', two, ['b'])), 'b,a');

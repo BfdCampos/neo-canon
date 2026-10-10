@@ -101,5 +101,17 @@
   "{n} need you": {
     "one": "{n} needs you",
     "other": "{n} need you"
+  },
+  "{n} passages": {
+    "one": "{n} passage",
+    "other": "{n} passages"
+  },
+  "{n} passages changed": {
+    "one": "{n} passage changed",
+    "other": "{n} passages changed"
+  },
+  "{n} need your words": {
+    "one": "{n} needs your words",
+    "other": "{n} need your words"
   }
 }

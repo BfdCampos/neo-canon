@@ -68,7 +68,7 @@ const js = (code) => wc.executeJavaScript(code, true);
 const tick = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
 const until = async (code, ms = 8000) => {
   for (const end = Date.now() + ms; Date.now() < end; await tick(50)) if (await js(code)) return true;
-  throw new Error('timed out waiting for ' + code);
+  throw new Error("timed out waiting for " + code + (process.env.CANON_DEBUG ? " :: " + await js(`JSON.stringify([canonReading, canonReadLine, canonPaused, canonPassOn, canonProgress, canonPassFacts, document.activeElement.className, currentTab, !!document.querySelector(".modal-backdrop:not([hidden]), .pop-menu")])`).catch(() => "") : ""));
 };
 const shot = async (name) => {
   const want = process.env.CANON_SHOTS; // 1 for all, or a part of the names wanted
@@ -165,7 +165,16 @@ test('no reader on this computer: the Canon tab offers one button to get it', as
   // picked from this computer's memory: 16 GB and up the careful reader
   tier = await js(`canon.reader.recommend`);
   const [best, other] = tier === 'careful' ? ['Careful', 'Quick'] : ['Quick', 'Careful'];
-  assert.equal(await js(`document.querySelector('.cn-setup .cn-pick').textContent`), `Recommended for this computer: ${best} reader · 0.1 GB`);
+  assert.equal(await js(`document.querySelector('.cn-setup .cn-pick').textContent`), `${best} reader · 0.1 GB — recommended for this computer`);
+  // one calm stack: one button that downloads and reads, the hand-kept way below it
+  assert.equal(await js(`document.querySelector('.cn-setup .cn-download').textContent`), 'Download and Read the Shelf');
+  assert.match(await js(`document.querySelector('.cn-setup').textContent`), /When it’s here, Canon starts reading — you can keep writing\./);
+  assert.doesNotMatch(await js(`document.querySelector('#canon-view').textContent`), /Nothing in this Canon yet/);
+  assert.equal(await js(`!!document.querySelector('.cn-setup .cn-hand .cn-hand-new')`), true);
+  assert.match(await js(`document.querySelector('.cn-setup .cn-more').textContent`), /Licence: Apache-2\.0/);
+  await js(`$('#nav-pane').classList.remove('open')`);
+  await tick(300);
+  await shot('canon-setup.png');
   assert.match(await js(`document.querySelector('.cn-setup .cn-more').textContent`), new RegExp(other + ' reader · 0\\.1 GB'));
   assert.equal(fs.existsSync(path.join(tmp, 'app', 'models')), false); // nothing fetched before Download (P0 #2)
   assert.deepEqual(ranges, []);
@@ -183,20 +192,19 @@ test('the download: progress in the tab, Pause, Resume from where it stopped, th
   assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'app', 'settings.json'), 'utf8')).readerWanted, undefined);
   const part = fs.statSync(path.join(tmp, 'app', 'models', tier + '.gguf.part')).size;
   assert.ok(part > 0 && part < MODEL.length);
+  process.env.NEO_CANON_FAKE_MS = '120';
   await js(`[...document.querySelectorAll('.cn-setup button')].find((b) => b.textContent === 'Resume').click()`);
-  await until(`!!document.querySelector('#canon-view .cn-ready')`, 20000);
-  assert.equal(await js(`document.querySelector('#canon-view .cn-ready').textContent`), 'The reader is ready.');
+  // once it checks out, Canon starts reading: no second button, no stop
+  await until(`canonReading`, 20000);
+  assert.equal(await js(`!!document.querySelector('#canon-view .cn-ready')`), false);
+  assert.match(await js(`document.querySelector('#canon-view .cn-home').textContent`), /Canon will read 2 books and 1 notebook \([\d,]+ words\)/);
   assert.equal(ranges.length, 2);
   assert.ok(ranges[1] >= part); // picked up from the .part
   assert.equal(fs.statSync(path.join(tmp, 'app', 'models', tier + '.gguf')).size, MODEL.length);
   assert.equal(await js(`canon.reader.installed`), tier);
 });
 
-test('Read the Shelf (the fake reader): progress, a pause while typing, then entries, facts and Needs You', async () => {
-  process.env.NEO_CANON_FAKE_MS = '120';
-  await until(`!!document.querySelector('#canon-view .cn-read')`);
-  assert.match(await js(`document.querySelector('#canon-view .cn-home').textContent`), /Canon will read 2 books and 1 notebook \([\d,]+ words\)/);
-  await js(`document.querySelector('#canon-view .cn-read').click()`);
+test('Read the Shelf (the fake reader), started by the download: progress, a pause while typing, then entries, facts and Needs You', async () => {
   await until(`/Reading .* \\(\\d of \\d+\\)/.test(document.querySelector('#canon-view .cn-read-line')?.textContent)`);
   await until(`canonReadAt && canonReadAt.calls >= 3`);
   await tick(200);
@@ -209,15 +217,24 @@ test('Read the Shelf (the fake reader): progress, a pause while typing, then ent
   assert.ok(await js(`canonReadAt.calls`) <= calls + 1); // still paused
   await until(`!canonReading && /found/.test(canonReadLine)`, 40000); // resumes after ten seconds of quiet
   process.env.NEO_CANON_FAKE_MS = '';
-  assert.equal(await js(`canonReadLine`), 'Canon found 7 entries and 17 facts. 15 checked out; 2 need you.');
+  // (how many check out is the reader's business: canon-fixture.test.js)
+  assert.match(await js(`canonReadLine`), /^Canon found 7 entries and 17 facts\. \d+ checked out; \d+ needs? you\.$/);
   assert.equal(fs.readdirSync(path.join(LIB, CANON, 'entries')).filter((f) => f.endsWith('.md')).length, 7);
   assert.deepEqual(await js(`[...document.querySelectorAll('#nav-list .cn-kind-head')].map((x) => x.textContent)`), ['People', 'Creatures', 'Places']);
   // the writer's own fact stayed theirs, and gained the passages that agree
   const bramble = fs.readFileSync(path.join(LIB, CANON, 'entries', 'bramble.md'), 'utf8');
   assert.match(bramble, /- Sex: female \(mare\) · yours\n {2}- Written in Canon\n {2}- Ember and Thorn, Ch 2: "Bramble, the grey mare, would not cross the ford\." \{book:book-ember-and-thorn-ember1, ch:c2\}/);
   await js(`canonShown = 'bramble'; renderCanon()`);
-  await until(`document.querySelectorAll('#canon-side .cs-need').length === 2`);
+  await until(`document.querySelectorAll('#canon-side .cs-need').length === canonNeeds().length && canonNeeds().length > 0`);
   assert.equal(await js(`$('#side-pane').classList.contains('open')`), true);
+  // a speaker's word and a plan are asked as that, never "is it right?"
+  const needs = await js(`[...document.querySelectorAll('#canon-side .cs-need')].map((n) => n.querySelector('strong').textContent + ' ' + [...n.querySelectorAll('.cs-row button')].map((b) => '[' + b.textContent + ']').join(''))`);
+  if (process.env.CANON_DEBUG) console.log(needs);
+  // and on the entry they sit below the facts, never among them
+  await until(`/What others say · Plans/.test(document.querySelector('#canon-view .cn-sub')?.textContent)`);
+  assert.match(await js(`[...document.querySelector('#canon-view .cn-sub').nextElementSibling.querySelectorAll('.cn-fv')].map((x) => x.textContent).join()`), /gelding/);
+  assert.ok(needs.includes('The horse-trader says Bramble is a gelding. [It’s true][Only what’s said][Skip]'), needs.join('\n'));
+  assert.ok(needs.some((n) => /^A plan: Bramble is in foal\. \[It’s happened\]\[Still a plan\]\[Skip\]$/.test(n)), needs.join('\n'));
   await js(`$('#nav-pane').classList.add('open')`);
   await tick(400);
   await shot('canon-tab.png');
@@ -247,17 +264,29 @@ test('Continuity Pass: five marks, listed in the right-hand pane, none of it in 
 test('hovering a mark opens its popover', async () => {
   const at = await js(`(() => { const r = canonSlips[0].range.getBoundingClientRect(); r.startContainer; canonSlips[0].range.startContainer.parentElement.scrollIntoView({ block: 'center' }); const q = canonSlips[0].range.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; })()`);
   const zoom = await js(`parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-zoom')) || 1`);
-  wc.sendInputEvent({ type: 'mouseMove', x: Math.round(at[0] * zoom), y: Math.round(at[1] * zoom) });
-  await until(`!!document.querySelector('.canon-pop')`);
+  await until2(() => wc.sendInputEvent({ type: 'mouseMove', x: Math.round(at[0] * zoom), y: Math.round(at[1] * zoom) }), `!!document.querySelector('.canon-pop')`);
   assert.equal(await js(`document.querySelector('.canon-pop .cp-claim').textContent`), 'Bramble is a mare.');
-  assert.match(await js(`document.querySelector('.canon-pop').textContent`), /Keep: mare.*Not a slip/);
+  // the first button is the exact change; a pronoun says male, not which word
+  assert.match(await js(`document.querySelector('.canon-pop').textContent`), /his → her.*Bramble is now male….*Not a slip/);
+  // the three buttons sit on one row
+  assert.equal(await js(`new Set([...document.querySelectorAll('.canon-pop .cp-row button')].map((b) => b.getBoundingClientRect().top)).size`), 1);
   await shot('canon-slip-popover.png');
+  // the pointer leaving for elsewhere closes it, after a moment's grace
+  wc.sendInputEvent({ type: 'mouseMove', x: 4, y: 4 });
+  await tick(200);
+  assert.equal(await js(`!!document.querySelector('.canon-pop')`), true);
+  await until(`!document.querySelector('.canon-pop')`, 2000);
+  // and so does a key (nothing stays over the words while writing)
+  await js(`canonPopOpen(canonSlips[0], 300, 300); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }))`);
+  assert.equal(await js(`!!document.querySelector('.canon-pop')`), false);
 });
 
-test('Keep: mare shows the change, Apply makes it as one undoable edit', async () => {
+test('his → her makes the change as one undoable edit', async () => {
+  await js(`canonPopOpen(canonSlips.find((s) => s.span === 'his'), 300, 300)`);
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-main').textContent`), 'his → her');
   await js(`document.querySelector('.canon-pop .cp-main').click()`);
-  assert.equal(await js(`document.querySelector('.canon-pop .cp-change').textContent`), 'his her');
-  await js(`document.querySelector('.canon-pop .cp-main').click()`);
+  assert.equal(await js(`!!document.querySelector('.canon-pop')`), false);
+  assert.match(await js(`$('#hint').textContent`), /^Changed\. (⌘Z|Ctrl\+Z) brings it back\.$/);
   const para = `[...document.querySelectorAll('.chapter[data-id="c1"] .chapter-body p')].find((p) => p.textContent.includes('tossed')).textContent`;
   assert.match(await js(para), /Bramble tossed her head/);
   assert.equal(await js(`CSS.highlights.get('neo-slip').size`), 4);
@@ -316,11 +345,12 @@ test('Bramble is now a stallion: the review list, snapshots first, each change a
   await js(`switchTab('manuscript'); toggleContinuity()`);
   await until(`canonProgress === '' && canonSlips.some((s) => s.span === 'his')`);
   await js(`canonPopOpen(canonSlips.find((s) => s.span === 'his'), 300, 300)`);
-  const now = `[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Bramble is now a stallion…')`;
+  const now = `[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Bramble is now male…')`;
   assert.equal(await js(`!!${now}`), true);
   await js(`${now}.click()`);
-  assert.match(await js(`document.querySelector('.canon-pop .cp-ask').textContent`), /^Bramble is a stallion\. Canon will find every passage that says otherwise/);
-  await js(`[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Find Passages').click()`);
+  // "his" says male: the writer says which word
+  assert.match(await js(`document.querySelector('.canon-pop .cp-ask').textContent`), /^Bramble is male\. Canon will find every passage that says otherwise.* Stallion, gelding, colt, or just male\?$/);
+  await js(`[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Stallion').click()`);
   await until(`canonReview && !canonReview.loading`);
   assert.equal(await js(`document.querySelector('#canon-side .cs-title').textContent`), 'Review Changes · 5 passages in 3 books');
   assert.deepEqual(await js(`canonReview.items.map((x) => [x.book + ', ' + x.label, x.span, x.to, x.state])`), [
@@ -360,7 +390,7 @@ test('Bramble is now a stallion: the review list, snapshots first, each change a
   assert.equal(await js(`(() => { const [a, b] = document.querySelectorAll('#canon-side .cs-review-top button'); return a.getBoundingClientRect().top === b.getBoundingClientRect().top && a.getBoundingClientRect().height < 30; })()`), true);
   await js(`[...document.querySelectorAll('#canon-side button')].find((b) => b.textContent === 'Apply All Shown').click()`);
   await until(`!canonReview.items.some((x) => x.state === 'todo')`);
-  assert.equal(await js(`document.querySelector('#canon-side .cs-done').textContent`), '4 passages changed, 0 skipped. Bramble is a stallion.');
+  assert.equal(await js(`document.querySelector('#canon-side .cs-done').textContent`), '4 passages changed, 0 skipped, 1 needs your words. Bramble is a stallion.');
   assert.equal(fs.readFileSync(path.join(LIB, NOTES, 'chapters', 'p1.html'), 'utf8'), notesP1.replace('Bramble — mare,', 'Bramble — stallion,'));
   assert.match(fs.readFileSync(path.join(LIB, EMBER, 'chapters', 'c2.html'), 'utf8'), /Bramble flattened his ears/);
   assert.equal(fs.readdirSync(path.join(LIB, EMBER, 'snapshots')).length, 1); // one snapshot per book, before its first change
@@ -376,6 +406,8 @@ test('notebooks: New Notebook on the shelf, a cloth tile, Pages and nothing else
   await until(`[...document.querySelectorAll('.pop-menu button')].some((b) => b.textContent === 'New Notebook')`);
   await menuPick('New Notebook');
   await until(`book && book.format === 'notebook' && !$('#editor-view').hidden`);
+  // ready to type: the name first, as a new book's title is
+  await until(`document.activeElement && document.activeElement.id === 'tp-title'`);
   const nb = await js(`book.id`);
   const meta = JSON.parse(fs.readFileSync(path.join(LIB, nb, 'book.json'), 'utf8'));
   assert.equal(meta.format, 'notebook');
@@ -438,12 +470,12 @@ test('Merge Into…, the Dismissed list, and Read Everything Again', async () =>
   assert.ok(!fs.existsSync(path.join(LIB, CANON, 'entries', 'the-grey.md')));
   // Dismissed (n) at the foot of the pane: each Not a slip, restorable
   await js(`canonShown = null; renderCanon()`);
-  await until(`/Dismissed \\(2\\)/.test(document.querySelector('#canon-side .cs-dismissed-head')?.textContent)`);
+  await until(`/Not Slips \\(2\\)/.test(document.querySelector('#canon-side .cs-dismissed-head')?.textContent)`);
   await js(`document.querySelector('#canon-side .cs-dismissed-head').click()`);
   await until(`document.querySelectorAll('#canon-side q.cs-src').length === 2`);
   assert.match(await js(`document.querySelector('#canon-side').textContent`), /Ilsa Varr · Eyes.*Ilsa’s eyes looked almost brown in the firelight\./);
   await js(`[...document.querySelectorAll('#canon-side .cs-row button')].filter((b) => b.textContent === 'Restore').at(-1).click()`);
-  await until(`/Dismissed \\(1\\)/.test(document.querySelector('#canon-side .cs-dismissed-head')?.textContent)`);
+  await until(`/Not Slips \\(1\\)/.test(document.querySelector('#canon-side .cs-dismissed-head')?.textContent)`);
   assert.equal(JSON.parse(fs.readFileSync(path.join(LIB, CANON, 'not-slips.json'), 'utf8')).length, 1);
   assert.equal(await js(`!!document.querySelector('#canon-view .cn-again')`), true);
 });
@@ -540,7 +572,8 @@ test('In this chapter: the right-hand pane lists who and what the chapter names,
   assert.deepEqual(await js(`[...document.querySelectorAll('#canon-here .ch-kind')].map((k) => k.textContent)`), ['People', 'Creatures', 'Places']);
   const bramble = `[...document.querySelectorAll('#canon-here .ch-name')].find((b) => b.textContent === 'Bramble')`;
   await js(`${bramble}.dispatchEvent(new MouseEvent('mouseenter'))`);
-  assert.equal(await js(`document.querySelector('#canon-here .ch-facts').textContent`), 'horse · Tamsin Hale · stallion');
+  // (Owner shows once checked: the reader's checking decides, canon-fixture.test.js)
+  assert.match(await js(`document.querySelector('#canon-here .ch-facts').textContent`), /^horse · (Tamsin Hale · )?stallion$/);
   await tick(300);
   await shot('canon-in-this-chapter.png');
   // with the pane open, keeping it current costs next to nothing per key
@@ -698,6 +731,10 @@ test('World Map: 2D and 3D, a drag that turns it, Find, the legend; in night and
   const p = await js(`NeoMap.screenPos('the-salt-laws')`);
   const box = await js(`(() => { const r = document.querySelector('#map-view').getBoundingClientRect(); return [r.width, r.height]; })()`);
   assert.ok(Math.abs(p.x - box[0] / 2) < 30 && Math.abs(p.y - box[1] / 2) < 30, JSON.stringify([p, box]));
+  // Esc in Find with words in it clears them; the map stays
+  key('Escape');
+  await tick(100);
+  assert.deepEqual(await js(`[!!document.querySelector('#map-view'), document.querySelector('#map-view .map-find').value]`), [true, '']);
   // the legend hides a kind (and keeps it hidden on this device)
   const n = await js(`NeoMap.nodes().length`);
   await js(`[...document.querySelectorAll('#map-view .map-kind')].find((b) => b.textContent === 'Creatures').click()`);
@@ -740,6 +777,83 @@ test('World Map: 2D and 3D, a drag that turns it, Find, the legend; in night and
   await theme('night');
 });
 
+test('the UX review: offers name the shelf, ⌘K finds Canon and no junk, the shortcuts sheet, the menu, Enter in New Entry', async () => {
+  // a status shelf: named, warned about, and the book offered a shelf of its own
+  const offer = await js(`canonOffer({ name: 'Works in Progress', bookIds: ['a', 'b'] }, { id: 'a', title: 'Ember' }).map((o) => o.label + ' — ' + o.desc)`);
+  assert.deepEqual(offer, ['Keep a Canon for “Works in Progress” — Canon treats every book on this shelf as one world. If this book is its own story, give it a shelf first.',
+    'Move “Ember” to a New Shelf and Keep a Canon There — The other books stay where they are.']);
+  assert.equal((await js(`canonOffer({ name: 'The Ashfall Road', bookIds: ['a', 'b'] }, { id: 'a', title: 'Ember' })`)).length, 1);
+  // ⌘K: Canon's own commands; letters scattered across a menu's path are not an answer
+  await js(`openBook('${SALT}')`);
+  await until(`book && book.id === '${SALT}'`);
+  await js(`switchTab('manuscript')`);
+  await until2(() => key('K', [CMD]), `!!go`);
+  wc.insertText('canon');
+  await until(`${goRows}.length > 0`);
+  const rows = await js(goRows);
+  assert.equal(rows[0], 'Canon | Command');
+  assert.ok(rows.includes('Read the Shelf | Command') && !rows.some((r) => /Română|Spellcheck Language/.test(r)), rows.join('\n'));
+  key('Escape');
+  await until(`!go`);
+  await until2(() => key('K', [CMD]), `!!go`);
+  wc.insertText('mare');
+  await until(`${goRows}.length > 0`);
+  assert.ok(!(await js(goRows)).some((r) => /Smaller Text|Markdown Emphasis|Email Draft/.test(r)));
+  key('Escape');
+  await until(`!go`);
+  // the shortcuts sheet has Canon's keys
+  const sheet = await js(`bookShortcutSections().flatMap((s) => s.rows.map((r) => r[1])).join('|')`);
+  for (const w of ['Go to anything', 'Toggle continuity pass', 'World Map', 'Open the slip under the caret']) assert.ok(sheet.includes(w), w);
+  assert.match(await js(`bookShortcutSections().flatMap((s) => s.rows.map((r) => r[2] || '')).join('|')`), /Darlings, Canon, then round again/);
+  // the pause checkbox shows only while some shelf keeps a Canon
+  const pause = () => js(`window.neo.menuItems().then((m) => m.some((x) => x.label === 'Check Continuity When I Pause'))`);
+  assert.equal(await pause(), true, 'the pause checkbox with a Canon');
+  await js(`stopCanon(library.shelves[0])`);
+  await tick(200);
+  assert.equal(await pause(), false);
+  await js(`library.shelves[0].canonId = '${CANON}'; writeLibrary(library).then(() => { canonQuietMenu(); canonTabUpdate(); })`);
+  await tick(200);
+  assert.equal(await pause(), true);
+  // Enter in New Entry names it; the kind is still asked
+  win.focus();
+  await js(`switchTab('canon')`);
+  await until(`!!document.querySelector('#nav-list .cn-new')`);
+  await js(`document.querySelector('#nav-list .cn-new').click()`);
+  await until(`document.activeElement && document.activeElement.matches('.modal-backdrop:not(#firstrun) input')`);
+  wc.insertText('Biscuit');
+  await until(`document.querySelector('.modal-backdrop:not(#firstrun) input').value === 'Biscuit'`);
+  await until2(() => key('Return'), `!document.querySelector('.modal-backdrop:not(#firstrun) input')`);
+  await tick(400);
+  // (the Enter's own keyup used to pick the menu's first kind, Person)
+  assert.equal(await js(`canon.entries.has('biscuit')`), false, 'the kind menu waits');
+  if (await js(`!!document.querySelector('.pop-menu')`)) key('Escape');
+  await until(`!document.querySelector('.pop-menu')`);
+  assert.equal(await js(`canon.entries.has('biscuit')`), false);
+  // a folder named like an entry (a sync tool's) doesn't take the tab down
+  fs.mkdirSync(path.join(LIB, CANON, 'entries', 'conflict.md'));
+  await js(`canonLoad(true).then(() => renderCanon())`);
+  await until(`canon.entries.has('bramble') && !canon.entries.has('conflict')`);
+  fs.rmdirSync(path.join(LIB, CANON, 'entries', 'conflict.md'));
+});
+
+test('the QA pass: ⌘\' starts at once with a reader, and the World Map from the page leaves no pane over it', async () => {
+  win.focus();
+  // (the keys typed above pause the reader for ten seconds: ⌘' itself must not)
+  await tick(10500);
+  await js(`switchTab('manuscript'); canonPassOn && canonPassOff()`);
+  await js(`(() => { const b = document.querySelector('.chapter[data-id="c1"] .chapter-body'); b.focus(); })()`);
+  const t0 = Date.now();
+  key("'", [CMD]);
+  await until(`canonPassOn && canonProgress === '' && canonPassFacts > 0`, 9000);
+  assert.ok(Date.now() - t0 < 5000, (Date.now() - t0) + ' ms');
+  key("'", [CMD]);
+  await until(`!canonPassOn`);
+  await until2(() => key('M', [CMD, 'shift']), `!!document.querySelector('#map-view')`);
+  await tick(600);
+  assert.equal(await js(`$('#side-pane').classList.contains('open') || $('#editor-view').classList.contains('canon-side')`), false);
+  await js(`mapClose()`);
+});
+
 /* ---------- runner ---------- */
 
 async function main() {
@@ -760,7 +874,8 @@ async function main() {
     while (!(await js(`typeof library !== 'undefined' && !!library`).catch(() => false))) await tick(50);
     await tick(300);
     win.focus();
-    for (const t of tests) {
+    if (process.env.CANON_LIGHT) await theme('light'); // screenshots in the light theme
+    for (const t of tests.slice(0, +process.env.CANON_UPTO || tests.length)) {
       try {
         await t.fn();
         console.log('ok   ' + t.name);

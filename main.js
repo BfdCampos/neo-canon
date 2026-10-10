@@ -2214,8 +2214,11 @@ const fileStamp = (file) => { try { const st = fs.statSync(file); return st.mtim
 function canonEntryFiles(canonId, folder = 'entries') {
   const dir = canonFile(canonId, folder);
   let names = [];
-  try { names = fs.readdirSync(dir).filter((f) => f.endsWith('.md')); } catch { return []; }
-  return names.map((f) => ({ id: f.slice(0, -3), file: path.join(dir, f), text: fs.readFileSync(path.join(dir, f), 'utf8') }));
+  // (files only: a sync tool's conflict folder named like an entry is passed by)
+  try { names = fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile() && d.name.endsWith('.md')).map((d) => d.name); } catch { return []; }
+  return names.flatMap((f) => {
+    try { return [{ id: f.slice(0, -3), file: path.join(dir, f), text: fs.readFileSync(path.join(dir, f), 'utf8') }]; } catch (err) { logError('canon entry ' + f, err); return []; }
+  });
 }
 function canonEntries(canonId, folder = 'entries') {
   return canonEntryFiles(canonId, folder).map(({ id, file, text }) => {
@@ -2753,11 +2756,15 @@ ipcMain.on('typewriter:state', (_e, on) => {
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
 // Edit → Check Continuity When I Pause shows this device's choice
+// (hidden until some shelf keeps a Canon)
 let canonQuietState = true;
-ipcMain.on('canon:quietState', (_e, on) => {
+let canonKept = false;
+ipcMain.on('canon:quietState', (_e, on, kept) => {
   on = !!on;
-  if (on === canonQuietState) return;
+  kept = !!kept;
+  if (on === canonQuietState && kept === canonKept) return;
   canonQuietState = on;
+  canonKept = kept;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
 // View → Vim Keys shows whether they're on
@@ -2940,6 +2947,7 @@ function buildMenu() {
         {
           label: t('Check Continuity When I Pause'),
           type: 'checkbox',
+          visible: canonKept,
           checked: canonQuietState,
           click: () => sendToWindow({ type: 'canonQuiet' })
         },

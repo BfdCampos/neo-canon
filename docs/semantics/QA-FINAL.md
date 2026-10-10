@@ -126,3 +126,30 @@ Expected: wrong flag worse than a missed one (pillar 3). Actual: the Checking pa
 ## 4. Not covered
 
 Careful reader (Qwen3-4B) quality; Pocket (no Canon by design, `CANON_ON` gating checked by reading only); real quit/relaunch mid-download; Snapshots → Restore UI after a change-across; two devices.
+
+## 5. Status of the findings (UI engineer, branch `semantics`)
+
+F1, F4, F7 belong to the accuracy work on canon.js and are tracked there. The rest:
+
+| # | Status | What changed |
+|---|---|---|
+| F2 | Fixed | `askInput` spends its Enter (`preventDefault`), so the kind menu opened next waits for a pick. e2e: real Enter in New Entry makes no entry. |
+| F3 | Fixed (window side) | A keystroke with ⌘/Ctrl, Esc or an F-key no longer counts as typing, so ⌘' doesn't pause its own pass. e2e: ⌘' finishes in under 5 s with the reader installed. **TODO (main.js engine owner):** a pass the writer started should not wait out a pause from keys typed just before it; `canon:check` (mode ≠ quiet) could use an unpausable reader. |
+| F5 | Fixed | Light-theme overrides for the pass list (names, where, notes, scope pills, tags), the popover's grey lines and quote, and `.cn-note`. |
+| F6 | Fixed | A hover-opened popover closes 0.5 s after the pointer leaves for anywhere but the popover; any popover closes on a scroll or a key. e2e covers both. |
+| F8 | Fixed | Edited passages count as changed. |
+| F9 | Fixed | The summary adds "1 needs your words" when there is one. |
+| F10 | Fixed | `{n} passages`, `{n} passages changed`, `{n} need your words` have `one` forms in en.json. |
+| F11 | Fixed | The first Esc in the map's Find with words in it clears them; the map stays. |
+| F12 | Fixed | `canonSideUpdate` keeps the pane shut while the full map is up. e2e. |
+| F13 | Fixed | `canonEntryFiles` reads files only, and an unreadable one is logged and passed by. e2e: a folder `conflict.md` in entries/. |
+| F14 | Fixed for hand entries | New Entry adds `-entry` to `con`, `prn`, `aux`, `nul`, `com1-9`, `lpt1-9`. **TODO (canon.js owner):** `slug` in canon.js (reader-made entries) should do the same. |
+| F15 | Fixed | Letters-in-order matches only inside one word, from its start, three letters at least, and only when nothing better answers; a one-letter query matches only a word's start. go.test.js + e2e ("canon", "mare"). |
+| F16 | Fixed | New Notebook puts the caret in its title, selected. e2e. |
+| F17 | Open | Copy for CPU-only speed waits on measured figures (UX-REVIEW 7, 12). |
+| F18 | Open (engine) | Part of the reader's resume delay; see the F3 TODO. |
+| F19 | Fixed | See UX-REVIEW 5. |
+| F20 | Partly | Setup copy rewritten (no "let Canon read the shelf" without a reader); Licence moved under Other choices, still plain text (no external-link API in the window). Sizes and "line 1" are engine/catalogue. |
+| F21 | Partly | Check Continuity When I Pause is hidden until a shelf keeps a Canon. The empty `#canon-here` and the View items stay (IDE.md accepts them). |
+| F22 | Fixed | Popover 360 px wide, its three buttons on one row (e2e); "5 passages in 3 books" never breaks inside. |
+| F23, F24 | Open | Not cheap; no change. |

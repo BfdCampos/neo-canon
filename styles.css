@@ -2146,6 +2146,7 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
   background: none; border: none; padding: 0; color: #8a8478; font-size: 12px; letter-spacing: 0.3px;
 }
 .cn-meta button:hover, .cn-btn:hover, .cn-where:hover, .cn-add:hover { color: var(--accent); }
+.cn-h.cn-sub { margin-top: 18px; opacity: 0.85; }
 .cn-h { font-size: 11px; font-weight: 400; letter-spacing: 2.5px; text-transform: uppercase; color: #8a8478; margin: 26px 0 10px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 .cn-facts { list-style: none; }
 .cn-fact { margin-bottom: 12px; }
@@ -2176,7 +2177,7 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
   text-decoration-skip-ink: none;
 }
 .canon-pop {
-  position: fixed; z-index: 320; width: 330px; padding: 14px 16px 12px;
+  position: fixed; z-index: 320; width: 360px; padding: 14px 16px 12px;
   background: #262626; border: 1px solid #3a3a3a; border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,0.5);
   color: #ddd; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
 }
@@ -2188,12 +2189,16 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 .canon-pop .cp-change b { color: var(--accent); font-weight: 600; }
 .canon-pop .cp-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .canon-pop button {
-  background: none; border: 1px solid #444; border-radius: 5px; color: #ccc; padding: 4px 10px; font-size: 12px;
+  background: none; border: 1px solid #444; border-radius: 5px; color: #ccc; padding: 4px 9px; font-size: 12px;
 }
 .canon-pop button:hover { border-color: var(--accent); color: #fff; }
 .canon-pop button.cp-main { border-color: var(--accent); color: var(--accent); }
+.canon-pop button.cp-swap { font-family: var(--body-font); font-size: 13.5px; }
 body.light .canon-pop { background: #fff; border-color: #d9d4ca; color: #222; box-shadow: 0 8px 28px rgba(0,0,0,0.16); }
 body.light .canon-pop button { color: #555; border-color: #ccc; }
+body.light .canon-pop .cp-where, body.light .canon-pop .cp-why, body.light .canon-pop .cp-change s { color: #6e695f; }
+body.light .canon-pop .cp-quote { color: #4a463f; }
+body.light .canon-pop button.cp-main { color: #8a6a1c; border-color: #b39250; }
 
 /* the pass's slips in the right-hand pane, which stays open meanwhile */
 #editor-view.canon-side #sticky-list, #editor-view.canon-side #side-cards, #editor-view.canon-side .side-title-notes { display: none; }
@@ -2209,6 +2214,7 @@ body.light .canon-pop button { color: #555; border-color: #ccc; }
   color: #ccc; padding: 7px 8px; font-size: 12.5px; line-height: 1.4;
 }
 #canon-side .cs-slip:hover { background: #282828; border-left-color: #b39250; }
+#canon-side .cs-count { white-space: nowrap; }
 #canon-side .cs-where { color: #777; }
 #canon-side q { font-family: var(--body-font); font-style: italic; color: #aaa; }
 .cn-read { margin: 4px 0 12px; }
@@ -2225,7 +2231,12 @@ body.light .canon-pop button { color: #555; border-color: #ccc; }
 .cn-more summary:hover { color: var(--accent); }
 .cn-choice { margin: 10px 0 0 2px; }
 .cn-choice .cn-note { margin: 2px 0 0; font-size: 0.9em; }
-.cn-fine { font-size: 0.8em; }
+.cn-fine { font-size: 0.8em; margin-top: 10px; }
+.cn-setup .cn-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.cn-setup .cn-foot > .cn-note { margin: 0; }
+.cn-setup .cn-hand { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(138,132,120,0.25); display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.cn-setup .cn-hand .cn-note { margin: 0; font-style: italic; }
+.cn-home .cn-inline { margin-left: 4px; }
 #canon-side .cs-need { padding: 8px 6px 10px; border-bottom: 1px solid #2c2c2c; line-height: 1.4; }
 #canon-side .cs-need strong { color: #ddd; font-weight: 600; }
 #canon-side .cs-src { margin-top: 4px; color: #999; font-size: 12px; }
@@ -2413,6 +2424,13 @@ body.light .map-small .map-open { background: rgba(255, 255, 255, 0.85); border-
 body.light #canon-side { color: #4a463f; }
 body.light #canon-side .cs-need, body.light #canon-side .cs-review { border-bottom-color: #e6e2da; }
 body.light #canon-side .cs-need strong { color: #2b2926; }
+body.light #canon-side .cs-slip { color: #2b2926; }
+body.light .cn-note, body.light .cn-more { color: #6e695f; }
+body.light #canon-side .cs-slip:hover { background: #e8e5de; }
+body.light #canon-side .cs-where, body.light #canon-side .cs-note { color: #6e695f; }
+body.light #canon-side .cs-scope button { border-color: #d9d4ca; color: #6e695f; }
+body.light #canon-side .cs-scope button.on { border-color: var(--accent); color: #8a6a1c; }
+body.light #canon-side .cs-tag { color: #9a4f22; }
 body.light #canon-side .cs-src, body.light #canon-side .cs-where-btn { color: #7a756b; }
 body.light #canon-side q { color: #5f5a50; }
 body.light #canon-side .cs-row button { border-color: #d9d4ca; color: #5f5a50; }

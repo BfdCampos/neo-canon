@@ -121,3 +121,34 @@ Effort: S = under half a day, M = 1–2 days, L = more.
 - **In this chapter** (who and what is here, with the caret's paragraph in the accent colour). **Mentioned in**, in reading order. **Linked from** with renames that keep links working.
 - **The 2D map in light theme** (`canon-map-2d-light.png`): a calm, legible, real map of the world. It needs no three.js, works offline and isn't animated when idle.
 - **British, warm, unbranded language**: "the reader", never "AI" or "model"; "spelt"; "Licence"; "Set aside", never "delete".
+
+---
+
+## 4. Status (UI engineer)
+
+| # | Status | Notes |
+|---|---|---|
+| 1 | Done | Every offer reads **Keep a Canon for “{shelf}”**. On a status shelf (the first shelf, or a name like Drafts, Finished, Ideas) it carries the one-world warning, and from a book (⌘', ⌘K) offers **Move “{book}” to a New Shelf and Keep a Canon There**. The "titles share no words" test was left out: the Ashfall Road series itself shares none. |
+| 2 | Done | **Download and Read the Shelf**; reading starts once the checksum passes if the shelf has words. "The reader is ready." only for an empty shelf. |
+| 3 | Done | ⌘K: Canon, Read the Shelf, Keep a Canon for This Shelf…, New Notebook. Shortcuts sheet: ⌘K, ⌘', ⌥Enter, ⌘⇧M; the tab line names Canon when it shows. |
+| 4 | Done | One stack as proposed; Licence inside Other choices; "+ New Entry" in the by-hand line. |
+| 5 | Done (UI) | "The horse-trader says Bramble is a gelding." [It’s true] [Only what’s said]; "A plan: Bramble is in foal." [It’s happened] [Still a plan]. The second button keeps the fact under Set aside with its passage (no engine state yet). "Only what he says" became "Only what’s said": NEO shouldn't guess the speaker's sex. |
+| 6 | UI done | The entry page folds such facts under **What others say · Plans**. `replaceFact` carrying only firm sources is canon.js (QA F7). |
+| 7 | Open | Accuracy work. |
+| 8 | Done | The first button is **his → her**, applied as one ⌘Z-able edit, toast "Changed. ⌘Z brings it back." |
+| 9 | Done | Pronoun slips offer **Bramble is now male…**, then "Stallion, gelding, colt, or just male?". |
+| 10 | Done | "NEO snapshots each book before its first change. Undo with ⌘Z (Ctrl+Z), or restore from Darlings → Snapshots." |
+| 11 | Done | See QA F15. |
+| 12 | Open | Needs item 7's figures. |
+| 13 | Open | Wording waits on the accuracy owner confirming what the rule checker covers. |
+| 14 | Partly | "Sex: female (sister)" now shows "Sex: female" for people. Sibling wording and the hover line are open. |
+| 15 | Done | "You, in Canon" as the source label; popover "· and in your Canon" / "Established in your Canon." |
+| 16 | Done | **Not Slips (n)**. |
+| 17 | Done | Placed above the line when marks sit below; 360 px, one row. |
+| 18 | Done | A pass with no caret on the page scrolls to the first slip. |
+| 19 | Done | Inline + New Entry in the empty state. |
+| 20 | Done | `tA()` turns "a" into "an" before a vowel in English only. |
+| 21 | Done | Pause checkbox hidden until a shelf keeps a Canon. |
+| 22, 23 | No change | Decisions; 3D stays a toggle and isn't in ⌘K. |
+| 24 | Done | ⌘K New Notebook; the empty Canon tab mentions it. |
+| 25 | Done | The tab's heading shows the shelf's name. |
