@@ -48,7 +48,10 @@ A shelf can keep a Canon: its people, places, creatures and rules, each fact cit
 | `app.js` | CANON and GO TO ANYTHING sections (⌘K). Search for the banner. Pocket has neither `canon.js` nor the `canon*` bridge, so Canon stays asleep there |
 | `main.js` | `canon:*` IPC (create, open, refresh, saveEntry, check, readShelf, download, readerStatus, search, notSlip…), reader download, files |
 
-- On disk, beside the books: `canon-<slug>-<shelfId>/` holding `canon.json`, `not-slips.json` and `entries/*.md`, one plain Markdown file per entry. NEO ignores these folders. The folder name still passes through `libName()`. Writes are durable, like every library write.
+- On disk, beside the books: `canon-<slug>-<shelfId>/` holding `canon.json`, `not-slips.json`, `entries/*.md` (one plain Markdown file per entry) and `set-aside/*.md` (entries set aside, restorable). NEO ignores these folders. The folder name still passes through `libName()`. Writes are durable, like every library write.
+- Outside the library, in Electron `userData`: `models/` (the downloaded reader) and `canon-cache/<canonId>/index.json`, this device's cache of the reader's proposals and answers per paragraph, so an unchanged paragraph isn't asked again. It is never in the library; deleting it costs only a slower next reading.
+- Reading pauses while the writer types and resumes after 10 s without a key (`CANON_RESUME_MS`); the quiet check runs after a 90 s pause in typing, or on ⌘' (Ctrl+').
+- Test and demo hooks, ignored when packaged: `NEO_CANON_FAKE` (a JSON of fake reader answers) and `NEO_CANON_FAKE_MS` (its delay), `NEO_CANON_READERS` (another reader catalogue; a missing file falls back to the real one), `NEO_CANON_QUIET_MS` (the 90 s quiet check) and `NEO_CANON_RESUME_MS` (the 10 s resume).
 - Deleting or setting aside an entry must stay recoverable (`canon:setAside`, `canon:restore`). A change to a fact across the series takes a snapshot first and shows a review list.
 - Checks run on a pause, never mid-sentence, and write nothing into chapter HTML: marks use the CSS Highlight API.
 - The reader's model is downloaded on request, one button, then offline. Nothing about a manuscript leaves the machine.

@@ -10,7 +10,7 @@
 
 Have you ever forgotten where a character was from? The dialect a town speaks? The colour of the shoes a side character wore two chapters ago?
 
-You are in good company. George R.R. Martin famously flipped the sex of a horse between books, and a fan-historian had to set him straight. Tolkien kept notes on everything; J.K. Rowling kept fact sheets. Every long story needs a ledger of what is true in its world, and keeping one by hand is a second job on top of writing.
+You are in good company. As the story goes among fans, George R.R. Martin once let a horse change its sex between books, and it took a reader with a better memory to set him straight. Tolkien kept notes on everything; J.K. Rowling kept fact sheets. Every long story needs a ledger of what is true in its world, and keeping one by hand is a second job on top of writing.
 
 NEO Canon keeps the fact sheet for you, fluidly, as you write. It never interrupts a sentence. When you pause, it checks what you wrote against what you have already established, and if something slips, it shows you the line it contradicts, quoted from your own pages, with the fix one click away.
 
