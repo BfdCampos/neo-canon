@@ -71,3 +71,103 @@ test('the quote gate keeps only quotes found in the source', () => {
   assert.equal(Canon.gateQuote(long.split(' ').slice(0, 30).join(' '), long), long.split(' ').slice(0, 30).join(' '));
   assert.equal(Canon.gateQuote('Bramble - mare', 'Bramble — mare, eleven'), 'Bramble — mare');
 });
+
+const BRAMBLE = `---
+id: bramble
+name: Bramble
+kind: creature
+aliases: [the grey mare, the grey]
+colour: dun
+---
+# Bramble
+
+## Facts
+- Species: horse · verified
+  - Ember and Thorn, Ch 2: "Bramble, the grey mare, would not cross the ford." {book:book-ember-and-thorn-k3, ch:c7}
+- Sex: female (mare) · yours
+  - Field Notes, Horses: "Bramble — mare, eleven, bad-tempered with strangers." {book:book-field-notes-n9, ch:p1}
+  - Written in Canon
+- Sibling: Oren Hale (younger) · verified
+  - Ember and Thorn, Ch 1: "Oren's younger sister" {book:book-ember-and-thorn-k3, ch:c1}
+- Owner: Tamsin Hale · unverified
+  - Ember and Thorn, Ch 4: "Tamsin led her own horse, Bramble, up the bank." {book:book-ember-and-thorn-k3, ch:c9, changed}
+- Smell: hay and rain · yours
+  - Written in Canon
+
+## Set aside
+- Sex: male (gelding) · not right
+  - The Salt Crown, Ch 2: "That's no mare, that's a gelding, I'd swear it" {book:book-the-salt-crown-s2, ch:c2, said:the horse-trader}
+- State: in foal · set aside
+  - The Salt Crown, Notes: "Bramble is in foal by the end of book 2?" {book:book-the-salt-crown-s2, ch:notes, said, plan}
+
+## In my words
+Bad-tempered with strangers. Bites.
+
+## Not a heading Canon reads
+- Sex: whatever · verified
+`;
+
+test('an entry file round-trips byte for byte', () => {
+  const e = Canon.parseEntry(BRAMBLE);
+  assert.equal(e.error, undefined);
+  assert.equal(Canon.serialiseEntry(e), BRAMBLE);
+  assert.deepEqual(Canon.parseEntry(Canon.serialiseEntry(e)), e);
+  assert.deepEqual(e.aliases, ['the grey mare', 'the grey']);
+  assert.deepEqual(e.extra, [['colour', 'dun']]);
+  assert.deepEqual(e.facts.map((f) => [f.attr, f.value, f.as, f.state]), [
+    ['species', 'horse', '', 'verified'], ['sex', 'female', 'mare', 'yours'], ['sibling', 'Oren Hale', 'younger', 'verified'],
+    ['owner', 'Tamsin Hale', '', 'unverified'], ['other', 'hay and rain', '', 'yours']
+  ]);
+  assert.equal(e.facts[4].label, 'Smell');
+  assert.deepEqual(e.facts[1].sources[1], { written: true });
+  assert.equal(e.facts[3].sources[0].changed, true);
+  assert.equal(e.setAside[0].sources[0].said, 'the horse-trader');
+  assert.equal(e.setAside[1].sources[0].said, true);
+  assert.equal(e.setAside[1].sources[0].plan, true);
+  assert.ok(e.words.startsWith('Bad-tempered') && e.words.endsWith('- Sex: whatever · verified\n'));
+  // a new entry is written whole too
+  const fresh = Canon.newEntry('Ilsa Varr', 'person');
+  assert.equal(fresh.id, 'ilsa-varr');
+  assert.deepEqual(Canon.parseEntry(Canon.serialiseEntry(fresh)), fresh);
+});
+
+test('an entry Canon can\'t read is reported, never guessed at', () => {
+  for (const bad of ['', 'no front matter', '---\nname: X\n---\n', BRAMBLE.replace('- Species: horse · verified', '- Species horse'),
+    BRAMBLE.replace('  - Written in Canon\n- Sibling', '  - written somewhere\n- Sibling'), '---\nid: x\nname: X\n---\n- Sex: female · yours\n']) {
+    assert.equal(Canon.parseEntry(bad).error, 'unreadable', JSON.stringify(bad.slice(0, 40)));
+  }
+});
+
+test('values come into the vocabulary', () => {
+  const n = (attr, value, as) => Canon.normaliseFact(attr, value, as);
+  assert.deepEqual(n('sex', 'mare'), { value: 'female', as: 'mare' });
+  assert.deepEqual(n('sex', 'female', 'mare'), { value: 'female', as: 'mare' });
+  assert.deepEqual(n('sex', 'Male'), { value: 'male', as: '' });
+  assert.equal(n('sex', 'grumpy'), null);
+  assert.deepEqual(n('eyes', 'the grey of wet slate'), { value: 'grey', as: '' });
+  assert.deepEqual(n('hair', 'Gray'), { value: 'grey', as: 'gray' });
+  assert.deepEqual(n('species', 'grey mare'), { value: 'horse', as: '' });
+  assert.deepEqual(n('species', 'a black stallion'), { value: 'horse', as: '' });
+  assert.deepEqual(n('sibling', 'Oren Hale', 'older'), { value: 'Oren Hale', as: 'elder' });
+  const hand = Canon.handFact('Sex: mare');
+  assert.deepEqual(hand, { attr: 'sex', label: undefined, value: 'female', as: 'mare', state: 'yours', sources: [{ written: true }] });
+  assert.equal(Canon.handFact('Eye colour: hazel').attr, 'eyes');
+  assert.equal(Canon.handFact('Favourite food: plums').label, 'Favourite food');
+  assert.equal(Canon.handFact('no colon'), null);
+  assert.equal(Canon.factKey({ id: 'bramble' }, hand), 'bramble/sex');
+  assert.equal(Canon.factKey({ id: 'tamsin-hale' }, { attr: 'sibling', value: 'Oren Hale' }), 'tamsin-hale/sibling/oren-hale');
+});
+
+test('the writer\'s moves: that\'s right, set aside, restore', () => {
+  const e = Canon.parseEntry(BRAMBLE);
+  e.facts.push({ attr: 'species', value: 'mule', as: '', state: 'disagree', sources: [] });
+  e.facts[0].state = 'disagree';
+  Canon.confirmFact(e, 0);
+  assert.equal(e.facts[0].state, 'yours');
+  assert.deepEqual(e.setAside.map((f) => [f.value, f.state]).at(-1), ['mule', 'set aside']);
+  Canon.setAsideFact(e, 3, true);
+  assert.deepEqual(e.setAside.at(-1).state, 'not right');
+  Canon.restoreFact(e, e.setAside.length - 1);
+  assert.equal(e.facts.at(-1).state, 'yours');
+  assert.equal(e.facts.at(-1).attr, 'owner');
+});

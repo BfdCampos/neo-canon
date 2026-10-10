@@ -1907,7 +1907,7 @@ async function dailyBackup() {
         if (rel === '' && skip.has(name)) continue;
         // only NEO's own things: a library kept in a busy folder (Dropbox,
         // Documents) doesn't zip everything else in there every day
-        if (rel === '' && !(name.startsWith('book-') || name.startsWith('library.json') || name === '_catalog.txt')) continue;
+        if (rel === '' && !(name.startsWith('book-') || name.startsWith('canon-') || name.startsWith('library.json') || name === '_catalog.txt')) continue;
         // a book's snapshots stay out: the zip stays the size of the books,
         // and the snapshots are already a history of their own
         if (name === 'snapshots' && rel.startsWith('book-') && !rel.includes('/')) continue;
@@ -2192,6 +2192,108 @@ ipcMain.handle('spell:learn', async (_e, word) => {
   if (typeof word === 'string') await spellRequest({ type: 'add', word });
   return true;
 });
+
+// ---------------------------------------------------------------------------
+// Canon (docs/semantics/ARCHITECTURE.md). A shelf that keeps a Canon has a
+// folder of its own, canon-<slug>-<shelfId>/: canon.json, not-slips.json,
+// entries/<id>.md and set-aside/<id>.md. canon.js decides everything; this
+// reads and writes the files, always through libName and writeFileDurable,
+// and only when what would be written differs from what's there.
+// ---------------------------------------------------------------------------
+const Canon = require('./canon.js');
+
+function canonDir(canonId) {
+  if (!/^canon-/.test(libName(canonId))) throw new Error('Invalid canon name');
+  return path.join(LIBRARY_DIR, canonId);
+}
+const canonFile = (canonId, ...parts) => path.join(canonDir(canonId), ...parts.map(libName));
+const fileStamp = (file) => { try { const st = fs.statSync(file); return st.mtimeMs + ':' + st.size; } catch { return null; } };
+
+function canonEntries(canonId, folder = 'entries') {
+  const dir = canonFile(canonId, folder);
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((f) => f.endsWith('.md')); } catch { return []; }
+  return names.map((f) => {
+    const file = path.join(dir, f);
+    const text = fs.readFileSync(file, 'utf8');
+    const data = Canon.parseEntry(text);
+    return { id: f.slice(0, -3), stamp: fileStamp(file), ...(data.error ? { error: data.error } : { data }) };
+  });
+}
+
+// Keep a Canon for This Shelf: a folder kept from an earlier time is taken
+// up again, with everything in it
+ipcMain.handle('canon:create', (_e, shelfId, shelfName) => {
+  ensureLibrary();
+  libName(shelfId);
+  let id = fs.readdirSync(LIBRARY_DIR).find((d) => d.startsWith('canon-') && d.endsWith('-' + shelfId));
+  if (!id) id = 'canon-' + (Canon.slug(shelfName) === 'entry' ? '' : Canon.slug(shelfName).slice(0, 30) + '-') + shelfId;
+  for (const sub of ['entries', 'set-aside']) fs.mkdirSync(canonFile(id, sub), { recursive: true });
+  if (!fs.existsSync(canonFile(id, 'canon.json'))) writeJSON(canonFile(id, 'canon.json'), { v: 1, shelfId, read: {}, out: {}, settings: {} });
+  if (!fs.existsSync(canonFile(id, 'not-slips.json'))) writeJSON(canonFile(id, 'not-slips.json'), []);
+  return id;
+});
+
+ipcMain.handle('canon:open', (_e, canonId) => ({
+  meta: readJSON(canonFile(canonId, 'canon.json'), { v: 1, read: {}, out: {} }),
+  entries: canonEntries(canonId),
+  setAside: canonEntries(canonId, 'set-aside'),
+  notSlips: readJSON(canonFile(canonId, 'not-slips.json'), []),
+  reader: canonReaderStatus()
+}));
+
+// hand edits from a text editor or another device, found by their stamps
+ipcMain.handle('canon:refresh', (_e, canonId, stamps) => {
+  const now = canonEntries(canonId);
+  return {
+    changed: now.filter((x) => (stamps || {})[x.id] !== x.stamp),
+    removed: Object.keys(stamps || {}).filter((id) => !now.some((x) => x.id === id))
+  };
+});
+
+// `stamp` is the file as the window last had it: another write since then
+// hands back what's there for the window to apply its change to again
+ipcMain.handle('canon:saveEntry', (_e, canonId, entry, stamp) => {
+  const file = canonFile(canonId, 'entries', libName(entry.id) + '.md');
+  const now = fileStamp(file);
+  if (now !== (stamp || null)) {
+    const data = now ? Canon.parseEntry(fs.readFileSync(file, 'utf8')) : { error: 'gone' };
+    return { conflict: true, entry: data.error ? null : data, stamp: now };
+  }
+  const text = Canon.serialiseEntry(entry);
+  let old = null;
+  try { old = fs.readFileSync(file, 'utf8'); } catch { /* new */ }
+  if (old !== text) writeFileDurable(file, text);
+  return { ok: true, stamp: fileStamp(file) };
+});
+
+// Set Aside an entry, or bring it back: the file moves, nothing is deleted
+function canonMove(canonId, entryId, from, to) {
+  const src = canonFile(canonId, from, libName(entryId) + '.md');
+  const dest = canonFile(canonId, to, entryId + '.md');
+  if (!fs.existsSync(src) || fs.existsSync(dest)) return false;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  renameIntoPlace(src, dest);
+  return true;
+}
+ipcMain.handle('canon:setAside', (_e, canonId, entryId) => canonMove(canonId, entryId, 'entries', 'set-aside'));
+ipcMain.handle('canon:restore', (_e, canonId, entryId) => canonMove(canonId, entryId, 'set-aside', 'entries'));
+
+ipcMain.handle('canon:saveMeta', (_e, canonId, patch) => {
+  const file = canonFile(canonId, 'canon.json');
+  const meta = readJSON(file, { v: 1 });
+  const next = { ...meta };
+  for (const k of ['out', 'settings']) if (patch && patch[k] !== undefined) next[k] = patch[k];
+  if (JSON.stringify(next) !== JSON.stringify(meta)) writeJSON(file, next);
+  return true;
+});
+
+// No reader yet (M5 brings the local one). For tests and development a fake
+// one answers from a file; a packaged NEO never looks.
+function canonReaderStatus() {
+  return { installed: !app.isPackaged && process.env.NEO_CANON_FAKE ? 'fake' : null };
+}
+ipcMain.handle('canon:readerStatus', () => canonReaderStatus());
 
 // ---------------------------------------------------------------------------
 // Application menu — Help and Format live here, out of the writing room

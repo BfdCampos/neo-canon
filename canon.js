@@ -179,8 +179,186 @@
     return String(text).slice(src.map[at], src.map[at + q.length - 1] + 1);
   }
 
+  /* ---------- the fact vocabulary ---------- */
+
+  // An entry's facts use these attributes only. `label` is how the entry file
+  // writes it (English in the file, whatever the interface language), `single`
+  // means one value at a time, `slips` that the MVP checks it, `ref` that its
+  // value names another entry.
+  const ATTRS = {
+    sex: { label: 'Sex', single: true, slips: true },
+    species: { label: 'Species', single: true, slips: true },
+    eyes: { label: 'Eyes', single: true, slips: true },
+    hair: { label: 'Hair', single: true, slips: true },
+    birthplace: { label: 'Born in', single: true, slips: true, ref: true },
+    sibling: { label: 'Sibling', slips: true, ref: true },
+    parent: { label: 'Parent of', slips: true, ref: true },
+    child: { label: 'Child of', slips: true, ref: true },
+    spouse: { label: 'Married to', slips: true, ref: true },
+    owner: { label: 'Owner', single: true, ref: true },
+    home: { label: 'Lives in', single: true, ref: true },
+    title: { label: 'Title', single: true },
+    state: { label: 'State' },
+    other: { label: 'Other' }
+  };
+  const LABEL_ATTR = { gender: 'sex', eye: 'eyes', 'eye colour': 'eyes', 'eye color': 'eyes', 'hair colour': 'hair', 'hair color': 'hair', born: 'birthplace', birthplace: 'birthplace', 'born at': 'birthplace' };
+  for (const [attr, a] of Object.entries(ATTRS)) { LABEL_ATTR[attr] = attr; LABEL_ATTR[a.label.toLowerCase()] = attr; }
+  const KINDS = ['person', 'creature', 'place', 'thing', 'group', 'other'];
+  const STATES = ['verified', 'unverified', 'yours', 'disagree', 'set aside', 'not right'];
+
+  // word → [sex, the word for the other sex, the species it implies]
+  const SEX_WORDS = {
+    mare: ['female', 'stallion', 'horse'], stallion: ['male', 'mare', 'horse'], gelding: ['male', 'mare', 'horse'],
+    filly: ['female', 'colt', 'horse'], colt: ['male', 'filly', 'horse'],
+    cow: ['female', 'bull', 'cattle'], bull: ['male', 'cow', 'cattle'], ewe: ['female', 'ram', 'sheep'], ram: ['male', 'ewe', 'sheep'],
+    vixen: ['female', 'fox', 'fox'], hen: ['female', 'cock', 'chicken'], cock: ['male', 'hen', 'chicken'],
+    woman: ['female', 'man'], man: ['male', 'woman'], girl: ['female', 'boy'], boy: ['male', 'girl'], lady: ['female', 'lord'], lord: ['male', 'lady'],
+    sister: ['female', 'brother'], brother: ['male', 'sister'], daughter: ['female', 'son'], son: ['male', 'daughter'],
+    mother: ['female', 'father'], father: ['male', 'mother'], wife: ['female', 'husband'], husband: ['male', 'wife'],
+    queen: ['female', 'king'], king: ['male', 'queen'], aunt: ['female', 'uncle'], uncle: ['male', 'aunt'], niece: ['female', 'nephew'], nephew: ['male', 'niece']
+  };
+  const PRONOUNS = { she: 'female', her: 'female', hers: 'female', herself: 'female', he: 'male', him: 'male', his: 'male', himself: 'male' };
+  const PRONOUN_SWAP = { he: 'she', she: 'he', him: 'her', hers: 'his', himself: 'herself', herself: 'himself', his: 'her' };
+  const COLOURS = { grey: 'grey', gray: 'grey', brown: 'brown', green: 'green', blue: 'blue', black: 'black', red: 'red', fair: 'fair', blond: 'fair', blonde: 'fair', golden: 'fair', white: 'white', hazel: 'hazel', amber: 'amber' };
+  const SPECIES = { horse: 'horse', pony: 'horse', mule: 'mule', donkey: 'donkey', wolf: 'wolf', dog: 'dog', hound: 'dog', cat: 'cat', hawk: 'hawk', falcon: 'falcon', raven: 'raven', crow: 'crow', ox: 'cattle', cattle: 'cattle', sheep: 'sheep', goat: 'goat', fox: 'fox', bear: 'bear', dragon: 'dragon' };
+  for (const [w, [, , sp]] of Object.entries(SEX_WORDS)) if (sp) SPECIES[w] = sp;
+  const KIN = { younger: 'younger', youngest: 'younger', elder: 'elder', eldest: 'elder', older: 'elder', oldest: 'elder', twin: 'twin' };
+  const KIN_SWAP = { younger: 'elder', elder: 'younger' };
+
+  const wordsOf = (s) => norm(s).split(/[^\p{L}\p{M}'-]+/u).filter(Boolean);
+  const slug = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'entry';
+  const attrOf = (label) => LABEL_ATTR[norm(label)] || null;
+  const labelOf = (f) => (f.attr === 'other' && f.label) || ATTRS[f.attr].label;
+
+  // A proposed or typed value in the vocabulary's terms: "mare" is
+  // female (mare), "gray" is grey, "a black stallion" is a horse.
+  // Null when the value isn't one the attribute can hold.
+  function normaliseFact(attr, value, as) {
+    const v = String(value || '').trim();
+    const w = [...wordsOf(as), ...wordsOf(v)];
+    if (attr === 'sex') {
+      const word = w.find((x) => SEX_WORDS[x]);
+      if (word) return { value: SEX_WORDS[word][0], as: word };
+      return ['female', 'male'].includes(norm(v)) ? { value: norm(v), as: '' } : null;
+    }
+    if (attr === 'eyes' || attr === 'hair') {
+      const word = w.find((x) => COLOURS[x]);
+      return word ? { value: COLOURS[word], as: word === COLOURS[word] ? '' : word } : null;
+    }
+    if (attr === 'species') {
+      const word = wordsOf(v).find((x) => SPECIES[x]) || wordsOf(as).find((x) => SPECIES[x]);
+      return word ? { value: SPECIES[word], as: '' } : (v && !/\s/.test(v) ? { value: norm(v), as: '' } : null);
+    }
+    if (attr === 'sibling') return v ? { value: v, as: KIN[norm(as)] || w.map((x) => KIN[x]).find(Boolean) || '' } : null;
+    return v ? { value: v, as: String(as || '').trim() } : null;
+  }
+
+  // a fact the writer typed ("Sex: mare"): theirs, written in Canon
+  function handFact(text) {
+    const m = /^\s*([^:]+?)\s*:\s*(.+?)\s*$/.exec(String(text || ''));
+    if (!m) return null;
+    const attr = attrOf(m[1]) || 'other';
+    const n = normaliseFact(attr, m[2], '');
+    if (!n) return null;
+    return { attr, label: attr === 'other' ? m[1] : undefined, value: n.value, as: n.as, state: 'yours', sources: [{ written: true }] };
+  }
+
+  const factKey = (entry, f) => ATTRS[f.attr] && ATTRS[f.attr].single ? `${entry.id}/${f.attr}` : `${entry.id}/${f.attr}/${slug(f.value)}`;
+
+  /* ---------- entry files ---------- */
+
+  // One Markdown file per entry (ARCHITECTURE §2.2). One line is one thing;
+  // "## In my words" and all after it is the writer's and kept byte for byte.
+  function newEntry(name, kind, id) {
+    return { id: id || slug(name), name: String(name).trim(), kind: KINDS.includes(kind) ? kind : 'other', aliases: [], extra: [], facts: [], setAside: [], words: '' };
+  }
+
+  const FACT_LINE = /^- (.+?): (.*?)(?: \(([^()]*)\))? · (verified|unverified|yours|disagree|set aside|not right)$/;
+  const SOURCE_LINE = /^ {2}- (.*?): "(.*)" \{([^{}]*)\}$/;
+  function parseEntry(text) {
+    text = String(text || '').replace(/\r\n/g, '\n');
+    const fm = /^---\n([\s\S]*?)\n---\n/.exec(text);
+    if (!fm) return { error: 'unreadable' };
+    const e = { ...newEntry('x', 'other'), id: '', name: '' };
+    for (const line of fm[1].split('\n')) {
+      const m = /^([\w-]+): ?(.*)$/.exec(line);
+      if (!m) return { error: 'unreadable' };
+      if (m[1] === 'id') e.id = m[2].trim();
+      else if (m[1] === 'name') e.name = m[2].trim();
+      else if (m[1] === 'kind') e.kind = m[2].trim();
+      else if (m[1] === 'aliases') e.aliases = m[2].replace(/^\[|\]$/g, '').split(',').map((s) => s.trim()).filter(Boolean);
+      else e.extra.push([m[1], m[2]]);
+    }
+    if (!e.id || !e.name) return { error: 'unreadable' };
+    let rest = text.slice(fm[0].length);
+    const words = /(?:^|\n)## In my words\n/.exec(rest);
+    if (words) { e.words = rest.slice(words.index + words[0].length); rest = rest.slice(0, words.index); }
+    let list = null;
+    for (const line of rest.split('\n')) {
+      if (!line.trim() || /^# /.test(line)) continue;
+      if (line === '## Facts') { list = e.facts; continue; }
+      if (line === '## Set aside') { list = e.setAside; continue; }
+      const f = FACT_LINE.exec(line);
+      if (f && list) {
+        const attr = attrOf(f[1]) || 'other';
+        list.push({ attr, label: attr === 'other' ? f[1] : undefined, value: f[2], as: f[3] || '', state: f[4], sources: [] });
+        continue;
+      }
+      const last = list && list[list.length - 1];
+      if (last && line === '  - Written in Canon') { last.sources.push({ written: true }); continue; }
+      const s = SOURCE_LINE.exec(line);
+      if (!s || !last) return { error: 'unreadable' };
+      const src = { label: s[1], quote: s[2] };
+      for (const part of s[3].split(',').map((x) => x.trim())) {
+        const [k, ...v] = part.split(':');
+        if (k === 'book' || k === 'ch') src[k] = v.join(':');
+        else if (k === 'said') src.said = v.length ? v.join(':') : true;
+        else if (k === 'plan' || k === 'changed') src[k] = true;
+      }
+      last.sources.push(src);
+    }
+    return e;
+  }
+
+  function serialiseEntry(e) {
+    const factLines = (facts) => facts.flatMap((f) => [
+      `- ${labelOf(f)}: ${f.value}${f.as ? ` (${f.as})` : ''} · ${f.state}`,
+      ...f.sources.map((s) => s.written ? '  - Written in Canon'
+        : `  - ${s.label}: "${s.quote}" {book:${s.book}, ch:${s.ch}${s.said ? (s.said === true ? ', said' : `, said:${s.said}`) : ''}${s.plan ? ', plan' : ''}${s.changed ? ', changed' : ''}}`)
+    ]);
+    const lines = ['---', `id: ${e.id}`, `name: ${e.name}`, `kind: ${e.kind}`, `aliases: [${e.aliases.join(', ')}]`,
+      ...e.extra.map(([k, v]) => `${k}: ${v}`), '---', `# ${e.name}`, '', '## Facts', ...factLines(e.facts)];
+    if (e.setAside.length) lines.push('', '## Set aside', ...factLines(e.setAside));
+    lines.push('', '## In my words');
+    return lines.join('\n') + '\n' + (e.words || '');
+  }
+
+  // The writer's own moves on an entry, shared by the tab and the tests.
+  // "That's right" makes a fact theirs; Set Aside and Not right move it to
+  // the entry's Set aside (nothing is deleted); Restore brings it back theirs.
+  function confirmFact(e, i) {
+    const f = e.facts[i];
+    f.state = 'yours';
+    for (const s of f.sources) delete s.changed;
+    // the other values it disagreed with step aside
+    for (const o of e.facts.filter((x) => x !== f && x.attr === f.attr && x.state === 'disagree' && ATTRS[f.attr].single)) setAsideFact(e, e.facts.indexOf(o), false);
+  }
+  function setAsideFact(e, i, notRight) {
+    const [f] = e.facts.splice(i, 1);
+    f.state = notRight ? 'not right' : 'set aside';
+    e.setAside.push(f);
+  }
+  function restoreFact(e, i) {
+    const [f] = e.setAside.splice(i, 1);
+    f.state = 'yours';
+    e.facts.push(f);
+  }
+
   return {
     textHash, norm, normMap, decode, sourceParas, speechSpans, sentences, mentionIndex, mentions, gateQuote,
-    inSpans, nameParts, WORD
+    inSpans, nameParts, WORD,
+    ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
+    newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, restoreFact
   };
 });

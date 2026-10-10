@@ -1006,9 +1006,14 @@ async function renderShelves() {
             : t('Collect the works, in shelf order, into a single book with a table of contents.'),
           value: 'anthology'
         },
+        ...(!CANON_ON ? [] : shelf.canonId
+          ? [{ label: t('Stop Keeping a Canon'), desc: t('The Canon’s files are kept in your library. Keep a Canon again to bring it back.'), value: 'canonOff' }]
+          : [{ label: t('Keep a Canon for This Shelf'), desc: t('Canon keeps track of who and what is in this world, from every book on the shelf.'), value: 'canonOn' }]),
         { label: t('Delete shelf'), desc: t('Books move to another shelf. Nothing is deleted from disk.'), danger: true, value: 'del' }
       ]);
-      if (choice === 'bind') {
+      if (choice === 'canonOn') await keepCanon(shelf);
+      else if (choice === 'canonOff') await stopCanon(shelf);
+      else if (choice === 'bind') {
         await bindShelf(shelf);
       } else if (choice === 'anthology') {
         await exportShelfAnthology(shelf);
@@ -16091,6 +16096,37 @@ window.neo.onMenu(async (msg) => {
     applyFonts();
   }
 });
+
+/* ================================================================== */
+/*  CANON                                                              */
+/*  A shelf can keep a Canon: who and what is in its world, each fact  */
+/*  tied to the passage that says so (docs/semantics/PRODUCT.md).      */
+/*  canon.js decides; main.js keeps the files; this is the tab, the    */
+/*  marks of a Continuity Pass and their popover. Pocket has neither   */
+/*  canon.js nor the canon* bridge, so none of this wakes up there.    */
+/* ================================================================== */
+
+const CANON_ON = !!(window.neo.canonOpen && window.Canon);
+
+// Right-click a shelf's name → Keep a Canon for This Shelf. A folder kept
+// from before is taken up again with everything in it.
+async function keepCanon(shelf) {
+  try {
+    shelf.canonId = await window.neo.canonCreate(shelf.id, shelf.name);
+  } catch (err) {
+    window.neo.logError('canon create: ' + (err && err.message || err));
+    toast(t('NEO couldn’t make the Canon’s folder'));
+    return;
+  }
+  await writeLibrary(library);
+  toast(t('This shelf keeps a Canon. Its books have a Canon tab.'));
+}
+
+async function stopCanon(shelf) {
+  delete shelf.canonId;
+  await writeLibrary(library);
+  toast(t('The Canon’s files are kept in your library. Keep a Canon again to bring it back.'));
+}
 
 /* ================================================================== */
 /*  SAFETY NET — errors get logged, never eaten silently               */

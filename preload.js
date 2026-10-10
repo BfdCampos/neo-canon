@@ -55,6 +55,17 @@ contextBridge.exposeInMainWorld('neo', {
   appVersion: () => ipcRenderer.invoke('app:version'),
   openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
+  // Canon (canon.js; the CANON block in main.js)
+  canonCreate: (shelfId, shelfName) => ipcRenderer.invoke('canon:create', shelfId, shelfName),
+  canonOpen: (canonId) => ipcRenderer.invoke('canon:open', canonId),
+  canonRefresh: (canonId, stamps) => ipcRenderer.invoke('canon:refresh', canonId, stamps),
+  canonSaveEntry: (canonId, entry, stamp) => ipcRenderer.invoke('canon:saveEntry', canonId, entry, stamp),
+  canonSetAside: (canonId, entryId) => ipcRenderer.invoke('canon:setAside', canonId, entryId),
+  canonRestore: (canonId, entryId) => ipcRenderer.invoke('canon:restore', canonId, entryId),
+  canonSaveMeta: (canonId, patch) => ipcRenderer.invoke('canon:saveMeta', canonId, patch),
+  canonReaderStatus: () => ipcRenderer.invoke('canon:readerStatus'),
+  onCanon: (cb) => ipcRenderer.on('canon', (_e, msg) => cb(msg)),
+
   poetryState: (on) => ipcRenderer.send('poetry:state', on),
   flushState: (on) => ipcRenderer.send('flush:state', on),
   scriptState: (st) => ipcRenderer.send('script:state', st),
