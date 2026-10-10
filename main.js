@@ -2446,7 +2446,8 @@ const READERS = {
 // serves a small file from its own server); a packaged NEO never looks
 function canonReaders() {
   if (app.isPackaged || !process.env.NEO_CANON_READERS) return READERS;
-  return JSON.parse(fs.readFileSync(process.env.NEO_CANON_READERS, 'utf8'));
+  // a test file that isn't there (or doesn't read) is no reason for Canon to break
+  try { return JSON.parse(fs.readFileSync(process.env.NEO_CANON_READERS, 'utf8')); } catch (err) { logError('NEO_CANON_READERS', err); return READERS; }
 }
 const modelsDir = () => path.join(app.getPath('userData'), 'models');
 // the reader on this computer: the careful one if both are
@@ -2624,11 +2625,14 @@ async function canonAsk(msg, urgent = false) {
 
 // Typing pauses the reader: the prompt being answered stops within a token
 // and is asked again after ten seconds without a key (canon:typing).
+// NEO_CANON_RESUME_MS shortens the wait for tests and the demo; a packaged
+// NEO never looks.
 let canonPausedUntil = 0;
 let canonPausedTold = false;
 const CANON_RESUME_MS = 10000;
+const canonResumeMs = () => (!app.isPackaged && process.env.NEO_CANON_RESUME_MS && +process.env.NEO_CANON_RESUME_MS >= 0 ? +process.env.NEO_CANON_RESUME_MS : CANON_RESUME_MS);
 ipcMain.on('canon:typing', () => {
-  canonPausedUntil = Date.now() + CANON_RESUME_MS;
+  canonPausedUntil = Date.now() + canonResumeMs();
   if (canonRunning) { canonRunning(); canonRunning = null; }
   if (!canonPausedTold && canonReading) { canonPausedTold = true; canonBroadcast({ type: 'paused' }); }
 });
@@ -2853,7 +2857,7 @@ function buildMenu() {
     ...(isMac ? [{
       role: 'appMenu',
       submenu: [
-        { role: 'about', label: t('About NEO') },
+        { role: 'about', label: t('About NEO Canon') },
         { type: 'separator' },
         { role: 'services', label: t('Services') },
         { type: 'separator' },
@@ -3189,7 +3193,7 @@ function buildMenu() {
         },
         { type: 'separator' },
         {
-          label: t('About NEO'),
+          label: t('About NEO Canon'),
           click: () => sendToWindow({ type: 'about' })
         },
         {

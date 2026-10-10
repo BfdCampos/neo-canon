@@ -374,3 +374,21 @@ test('Merge Into: names become aliases, the same fact gains sources, a different
   assert.match(into.words, /^Bad-tempered[\s\S]*verified\n\nSeen at the ford\.\n$/);
   assert.equal(Canon.parseEntry(Canon.serialiseEntry(into)).error, undefined);
 });
+
+// QA-VERIFY 7: the article goes by the value's sound, and only the article
+test('a or an: a unicorn, an hour, and a name ending in "a" is left alone', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const at = app.indexOf('function anOrA(');
+  const end = app.indexOf('\n', app.indexOf('const tA = ', at));
+  const context = vm.createContext({ t: (k, v) => (v ? k.replace(/\{(\w+)\}/g, (_m, n) => v[n]) : k) });
+  vm.runInContext(app.slice(at, end) + '\nthis.tA = tA;', context);
+  const said = (word) => context.tA('{name} is a {word}.', { name: 'Ida', word });
+  assert.equal(said('unicorn'), 'Ida is a unicorn.');
+  assert.equal(said('European'), 'Ida is a European.');
+  assert.equal(said('one-eyed mare'), 'Ida is a one-eyed mare.');
+  assert.equal(said('hour'), 'Ida is an hour.');
+  assert.equal(said('honest man'), 'Ida is an honest man.');
+  assert.equal(said('owl'), 'Ida is an owl.');
+  assert.equal(said('mare'), 'Ida is a mare.');
+  assert.equal(context.tA('{name} is a {value}.', { name: 'Ada', value: 'elf' }), 'Ada is an elf.');
+});

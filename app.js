@@ -534,7 +534,7 @@ document.addEventListener('mousedown', (e) => {
 if (IS_MAC && !IS_POCKET) document.body.classList.add('mac-bar');
 function showWindowTitle() {
   const title = book ? (book.title || t('Untitled')) : '';
-  document.title = title ? title + ' — NEO' : 'NEO';
+  document.title = title ? title + ' — NEO Canon' : 'NEO Canon';
   const strip = IS_MAC && !IS_POCKET && document.querySelector('#dragstrip'); // the desktop's page only
   if (strip) strip.textContent = title;
 }
@@ -14180,7 +14180,7 @@ function bookShortcutSections() {
       [K('⌘⇧O', 'Ctrl+Shift+O'), tk('Cycle focus mode'), tk('Off → paragraph → sentence → off.')],
       [IS_MAC ? '⌥⌘↓' : ['Ctrl+Alt+↓', 'Ctrl+Page Down'], tk('Go to the next chapter')],
       [IS_MAC ? '⌥⌘↑' : ['Ctrl+Alt+↑', 'Ctrl+Page Up'], tk('Go to the previous chapter')],
-      [K('⌥⌘→', 'Ctrl+Alt+→'), tk('Go to the next tab'), book && CANON_ON && canonIdFor(book.id) ? tk('Manuscript, Notes, Outline, Darlings, Canon, then round again.') : tk('Manuscript, Notes, Outline, Darlings, then round again.')],
+      [K('⌥⌘→', 'Ctrl+Alt+→'), tk('Go to the next tab'), book && CANON_ON && canonIdFor(book.id) ? tk('Manuscript, Notes, Outline, Canon, Darlings, then round again.') : tk('Manuscript, Notes, Outline, Darlings, then round again.')],
       [K('⌥⌘←', 'Ctrl+Alt+←'), tk('Go to the previous tab')],
       [['F6', K('⌃Tab', 'Ctrl+Tab')], tk('Move between the page, the chapters, the notes and the bottom bar'), tk('Add Shift to go back. Esc returns to the page. On the shelf: the books, then the header.')],
       ...(IS_MAC ? [
@@ -16051,16 +16051,17 @@ function updateMessage(msg) {
   updateDialogShow(msg.state, msg);
 }
 
-// Help → About NEO: the version, plainly
+// Help → About NEO Canon: the version, plainly
 async function showAbout() {
   const v = await window.neo.appVersion();
   const bd = document.createElement('div');
   bd.className = 'modal-backdrop';
   bd.innerHTML = `
     <div class="modal" style="width:340px;text-align:center">
-      <h2 style="font-size:22px;letter-spacing:6px">NEO</h2>
+      <h2 style="font-size:22px;letter-spacing:6px">NEO CANON</h2>
       <p class="about-version">${t('Version {version}', { version: v })}</p>
-      <p class="about-line">${t('A word processor for authors.')}</p>
+      <p class="about-line">${t('A word processor for authors, with a Canon that remembers your world.')}</p>
+      <p class="about-line">${t('Built on NEO by Hugh Howey.')}</p>
       <div style="margin-top:16px">
         <button class="m-ok btn-gold">${t('Back to writing')}</button>
       </div>
@@ -16613,12 +16614,16 @@ const CANON_STATUS = /\b(works? in progress|wip|in progress|drafts?|finished|don
 const canonStatusShelf = (shelf) => shelf.name === t('Works in Progress') || CANON_STATUS.test(shelf.name);
 function canonOffer(shelf, b) {
   const status = canonStatusShelf(shelf);
+  // on a shelf named for where books stand (Works in Progress), a book with
+  // its own story can move to a shelf of its own first, even the only one
+  const move = status && b && shelf.bookIds.includes(b.id);
   const choices = [{ label: escHtml(t('Keep a Canon for “{shelf}”', { shelf: shelf.name })), value: 'keep',
-    desc: escHtml(status ? t('Canon treats every book on this shelf as one world. If this book is its own story, give it a shelf first.')
-      : t('Canon keeps track of who and what is in this world, from every book on the shelf.')) }];
-  if (status && b && shelf.bookIds.length > 1) {
+    desc: escHtml(move ? t('Canon treats every book on this shelf as one world. If this book is its own story, move it to a shelf of its own first.')
+      : status ? t('Canon treats every book on this shelf as one world, and books added here later join it. A story of its own can have a shelf of its own.')
+        : t('Canon keeps track of who and what is in this world, from every book on the shelf.')) }];
+  if (move) {
     choices.push({ label: escHtml(t('Move “{book}” to a New Shelf and Keep a Canon There', { book: isUntitled(b.title) ? t('this book') : b.title })),
-      desc: escHtml(t('The other books stay where they are.')), value: 'move' });
+      desc: escHtml(shelf.bookIds.length > 1 ? t('The other books stay where they are.') : t('The new shelf takes the book’s name.')), value: 'move' });
   }
   return choices;
 }
@@ -16937,6 +16942,8 @@ async function canonReadShelfNow(again = false) {
   canonReadAt = null;
   canonReadLine = t('Reading…');
   renderCanon();
+  // a first reading of the whole shelf times this computer, for the next guess
+  const whole = (again === true || !Object.keys(canon.meta.read || {}).length) && canonHasWords() ? { words: canon.shelf.words, at: Date.now() } : null;
   let res;
   try {
     res = await window.neo.canonReadShelf(id, { again: again === true });
@@ -16944,6 +16951,7 @@ async function canonReadShelfNow(again = false) {
     window.neo.logError('canon read: ' + (err && err.message || err));
     res = { error: 'failed' };
   }
+  if (whole && !res.error && !res.stopped) canonPaceKeep(whole.words, (Date.now() - whole.at) / 1000);
   canonReading = false;
   canonPaused = false;
   canonReadAt = null;
@@ -16953,6 +16961,31 @@ async function canonReadShelfNow(again = false) {
   if (canon && canon.id === id && (await canonLoad(true)) && currentTab === 'canon') renderCanon();
 }
 
+// How long reading takes, said before it starts (QA-VERIFY 3). Measured
+// with no graphics card (ACCURACY.md): about 2.5–4 minutes per 1,000 words
+// for either reader. Once a shelf has been read here, this computer's own
+// pace (seconds per 1,000 words, kept on this device) replaces the range.
+const CANON_PACE_KEY = 'neo.canonPace';
+function canonPace() {
+  try { const v = Number(localStorage.getItem(CANON_PACE_KEY)); return v > 0 ? v : null; } catch { return null; }
+}
+function canonPaceKeep(words, secs) {
+  if (!(words >= 500) || !(secs >= 5)) return; // too little to time
+  try { localStorage.setItem(CANON_PACE_KEY, String(Math.round((secs / words) * 1000))); } catch { /* storage can be off */ }
+}
+function canonReadGuess(words) {
+  if (!(words > 0)) return '';
+  const pace = canonPace();
+  const n = fmtNum(words);
+  if (pace) return t('On this computer, reading the shelf’s {words} words should take {time}.', { words: n, time: canonAbout((words / 1000) * pace) });
+  const lo = (words / 1000) * 150;
+  const hi = (words / 1000) * 240;
+  const time = hi < 90 ? t('a minute or two')
+    : lo >= 5400 ? t('{a} to {b} hours', { a: Math.round(lo / 3600), b: Math.max(Math.round(lo / 3600) + 1, Math.round(hi / 3600)) })
+      : hi >= 5400 ? t('{a} minutes to {b} hours', { a: Math.round(lo / 60), b: Math.round(hi / 3600) })
+        : t('{a} to {b} minutes', { a: Math.max(1, Math.round(lo / 60)), b: Math.max(2, Math.round(hi / 60)) });
+  return t('Reading the shelf’s {words} words takes about {time} on an everyday computer, less on a fast one.', { words: n, time });
+}
 const canonAbout = (secs) => secs >= 5400 ? t('about {n} hours', { n: Math.round(secs / 3600) }) : t('about {n} minutes', { n: Math.max(1, Math.round(secs / 60)) });
 function canonReadText() {
   const p = canonReadAt;
@@ -17058,6 +17091,7 @@ function canonSetup() {
       button(t('Pause'), () => window.neo.canonPauseDownload(), 'cn-btn');
     }
     say(after);
+    if (canonHasWords()) say(canonReadGuess(canon.shelf.words), 'cn-note cn-guess');
     return box;
   }
   if (dl.state === 'error') {
@@ -17074,6 +17108,7 @@ function canonSetup() {
   const foot = document.createElement('div');
   foot.className = 'cn-foot';
   if (best) say(after, 'cn-note', foot);
+  if (best && canonHasWords()) say(canonReadGuess(canon.shelf.words), 'cn-note cn-guess', foot);
   if (others.length) {
     const more = document.createElement('details');
     more.className = 'cn-more';
@@ -17101,6 +17136,7 @@ function canonSetup() {
   hand.className = 'cn-hand';
   say(t('No reader yet? Keep it by hand:'), 'cn-note', hand);
   button('+ ' + t('New Entry'), () => canonNewEntry(hand.querySelector('button')), 'cn-btn cn-hand-new', hand);
+  if (!canon.entries.size) say(t('World-building notes? Right-click + on the shelf → New Notebook.'), 'cn-note cn-fine', hand);
   box.appendChild(hand);
   return box;
 }
@@ -17851,7 +17887,17 @@ function canonClaim(s) {
 }
 const SEXED_KINDS = new Set(['creature']);
 // "a" before a vowel is "an" in English ("an ewe"); a translation words it its own way
-const tA = (key, v) => (t(key) === key ? t(key, v).replace(/\ba (?=[aeiou])/gi, 'an ') : t(key, v));
+// "a" or "an" by the word's sound, not its letter: a unicorn, a European
+// horse, a one-eyed mare, an hour, an honest man, an owl
+function anOrA(word) {
+  const w = String(word || '').trim().toLowerCase();
+  if (/^(?:hour|honest|honou?r|heir)/.test(w)) return 'an';
+  if (/^(?:uni(?!n)|us[aeiu]|ut[eio]|ur[aeio]|eu|ewe|one(?![a-z])|once|uk)/.test(w)) return 'a';
+  return /^[aeiou]/.test(w) ? 'an' : 'a';
+}
+// English only, and only the article before a value ("a {word}"): a name
+// that ends in "a", or a translation's own words, are never touched
+const tA = (key, v) => (t(key) === key ? t(key.replace(/\ba (?=\{(\w+)\})/g, (_m, name) => anOrA(v[name]) + ' '), v) : t(key, v));
 // a fact as a sentence where there's one to say, else "Bramble · State: in foal"
 const canonFactLine = (e, f) => ['sex', 'eyes', 'hair', 'species', 'birthplace'].includes(f.attr)
   ? canonClaim({ name: e.name, attr: f.attr, value: f.value, as: f.as, entryKind: e.kind })
@@ -18274,7 +18320,7 @@ const MAP_ON = CANON_ON && !!window.NeoMap;
 let mapFull = null;  // { view, map }
 let mapSmall = null; // { wrap, map, sig }
 function mapLook() {
-  const look = { mode: '3d', hidden: [], together: false };
+  const look = { mode: '2d', hidden: [], together: false };
   try { Object.assign(look, JSON.parse(localStorage.getItem('neo.mapLook') || '{}')); } catch { /* a convenience only */ }
   return look;
 }

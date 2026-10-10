@@ -780,7 +780,7 @@ test('World Map: 2D and 3D, a drag that turns it, Find, the legend; in night and
 test('the UX review: offers name the shelf, ⌘K finds Canon and no junk, the shortcuts sheet, the menu, Enter in New Entry', async () => {
   // a status shelf: named, warned about, and the book offered a shelf of its own
   const offer = await js(`canonOffer({ name: 'Works in Progress', bookIds: ['a', 'b'] }, { id: 'a', title: 'Ember' }).map((o) => o.label + ' — ' + o.desc)`);
-  assert.deepEqual(offer, ['Keep a Canon for “Works in Progress” — Canon treats every book on this shelf as one world. If this book is its own story, give it a shelf first.',
+  assert.deepEqual(offer, ['Keep a Canon for “Works in Progress” — Canon treats every book on this shelf as one world. If this book is its own story, move it to a shelf of its own first.',
     'Move “Ember” to a New Shelf and Keep a Canon There — The other books stay where they are.']);
   assert.equal((await js(`canonOffer({ name: 'The Ashfall Road', bookIds: ['a', 'b'] }, { id: 'a', title: 'Ember' })`)).length, 1);
   // ⌘K: Canon's own commands; letters scattered across a menu's path are not an answer
@@ -804,7 +804,7 @@ test('the UX review: offers name the shelf, ⌘K finds Canon and no junk, the sh
   // the shortcuts sheet has Canon's keys
   const sheet = await js(`bookShortcutSections().flatMap((s) => s.rows.map((r) => r[1])).join('|')`);
   for (const w of ['Go to anything', 'Toggle continuity pass', 'World Map', 'Open the slip under the caret']) assert.ok(sheet.includes(w), w);
-  assert.match(await js(`bookShortcutSections().flatMap((s) => s.rows.map((r) => r[2] || '')).join('|')`), /Darlings, Canon, then round again/);
+  assert.match(await js(`bookShortcutSections().flatMap((s) => s.rows.map((r) => r[2] || '')).join('|')`), /Outline, Canon, Darlings, then round again/);
   // the pause checkbox shows only while some shelf keeps a Canon
   const pause = () => js(`window.neo.menuItems().then((m) => m.some((x) => x.label === 'Check Continuity When I Pause'))`);
   assert.equal(await pause(), true, 'the pause checkbox with a Canon');
