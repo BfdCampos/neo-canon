@@ -2237,6 +2237,27 @@ body.light .canon-pop button.cp-main { color: #8a6a1c; border-color: #b39250; }
 .cn-setup .cn-hand { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(138,132,120,0.25); display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .cn-setup .cn-hand .cn-note { margin: 0; font-style: italic; }
 .cn-home .cn-inline { margin-left: 4px; }
+/* the tab on a shelf that keeps no Canon: what it is, one offer, the Tutorial */
+.cn-invite { max-width: 34em; }
+.cn-invite > .cn-note:not(.cn-fine) { font-style: normal; color: inherit; opacity: 0.85; }
+.cn-invite .cn-offer { display: block; }
+.cn-invite > .cn-btn.cn-offer { margin: 8px 0 0; font-size: 13px; }
+.cn-invite .cn-offer + .cn-fine { margin: -8px 0 18px; }
+.cn-invite > .cn-btn.cn-offer + .cn-fine { margin: 2px 0 18px; }
+.cn-invite .cn-tutorial { margin-top: 26px; padding-top: 14px; border-top: 1px solid rgba(138,132,120,0.25); }
+.cn-invite .cn-inline { margin-left: 4px; font-size: 13px; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* Welcome to NEO Canon: once on each computer, on the shelf */
+.modal.wl { width: 470px; }
+.wl h2 { font-size: 20px; letter-spacing: 0.5px; }
+.modal .wl-lead { font-family: var(--body-font); font-size: 15.5px; line-height: 1.6; margin-bottom: 10px; }
+.modal .wl-fine { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.wl .fr-choice { display: block; width: 100%; margin-bottom: 10px; }
+.wl .fr-choice:disabled { opacity: 0.6; cursor: default; border-color: #3a3a3a; }
+.wl .wl-tutorial { border-color: color-mix(in srgb, var(--accent) 60%, #3a3a3a); }
+.wl .wl-dl { margin: 2px 2px 6px; }
+.modal .wl-dl-line { font-size: 12px; color: var(--muted); margin: 0; }
+.wl .wl-foot { text-align: right; margin-top: 6px; }
 #canon-side .cs-need { padding: 8px 6px 10px; border-bottom: 1px solid #2c2c2c; line-height: 1.4; }
 #canon-side .cs-need strong { color: #ddd; font-weight: 600; }
 #canon-side .cs-src { margin-top: 4px; color: #999; font-size: 12px; }
