@@ -2708,6 +2708,62 @@ function canonReaderStatus() {
 ipcMain.handle('canon:readerStatus', () => canonReaderStatus());
 
 // ---------------------------------------------------------------------------
+// The Tutorial (Help → Open the Tutorial): a shelf that keeps a Canon, with
+// the Start Here notebook and a short story, copied from tutorial/ beside
+// this file. Its ids are new each time, so a copy never lands on another
+// book; once made it is the writer's, found again by the shelf's
+// `tutorial` (the ids of its two books). This writes the books and the
+// Canon's folder; the window puts the shelf in library.json, as it does
+// every shelf. Afresh, the old one is left whole for the window to set aside.
+// ---------------------------------------------------------------------------
+const TUTORIAL_DIR = path.join(__dirname, 'tutorial');
+// the lessons' keys as this computer writes them (⌘' is Ctrl+' elsewhere)
+const keysHere = (s, platform = process.platform) => platform === 'darwin' ? s
+  : s.replace(/⌥⌘/g, 'Ctrl+Alt+').replace(/⌘⇧/g, 'Ctrl+Shift+').replace(/⌘/g, 'Ctrl+').replace(/⌥/g, 'Alt+').replace(/⇧/g, 'Shift+');
+ipcMain.handle('tutorial:open', (_e, afresh) => {
+  ensureLibrary();
+  const lib = readJSON(LIBRARY_FILE, { shelves: [] });
+  const old = (lib.shelves || []).find((s) => Array.isArray(s.tutorial) && s.tutorial.some((id) => fs.existsSync(path.join(bookDir(id), 'book.json'))));
+  if (old && !afresh) return { shelfId: old.id, made: false };
+  const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const ids = { '@LESSONS@': 'book-start-here-' + stamp, '@STORY@': 'book-across-the-saltings-' + stamp, '@SHELF@': 'shelf-tutorial-' + stamp };
+  const canonId = 'canon-tutorial-' + ids['@SHELF@'];
+  const fill = (text) => keysHere(text.replace(/@(?:LESSONS|STORY|SHELF)@/g, (m) => ids[m]));
+  const made = [];
+  const copyDir = (from, to) => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const ent of fs.readdirSync(from, { withFileTypes: true })) {
+      if (ent.name.startsWith('.')) continue; // (a Finder file in a checkout)
+      const a = path.join(from, ent.name);
+      const b = path.join(to, libName(ent.name));
+      if (ent.isDirectory()) copyDir(a, b);
+      else if (ent.isFile()) writeFileDurable(b, fill(fs.readFileSync(a, 'utf8')));
+    }
+  };
+  try {
+    for (const [from, to] of [['start-here', ids['@LESSONS@']], ['story', ids['@STORY@']], ['canon', canonId]]) {
+      const dest = path.join(LIBRARY_DIR, libName(to));
+      made.push(dest);
+      copyDir(path.join(TUTORIAL_DIR, from), dest);
+    }
+    fs.mkdirSync(canonFile(canonId, 'set-aside'), { recursive: true });
+  } catch (err) {
+    logError('tutorial', err);
+    for (const dir of made) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* left for the writer */ } }
+    throw err;
+  }
+  writeCatalog();
+  return { made: true, shelfId: ids['@SHELF@'], bookIds: [ids['@LESSONS@'], ids['@STORY@']], canonId, old: old ? old.id : null };
+});
+
+// the welcome to NEO Canon is shown once on each computer, until it's answered
+ipcMain.handle('welcome:seen', (_e, set) => {
+  const s = readSettings();
+  if (set && !s.canonWelcome) { s.canonWelcome = true; writeSettings(s); }
+  return !!s.canonWelcome;
+});
+
+// ---------------------------------------------------------------------------
 // Application menu — Help and Format live here, out of the writing room
 // ---------------------------------------------------------------------------
 function sendToWindow(msg) {
@@ -3191,6 +3247,10 @@ function buildMenu() {
           label: t('NEO Shortcuts'),
           click: () => sendToWindow({ type: 'help' })
         },
+        { type: 'separator' },
+        { label: t('Welcome to NEO Canon…'), click: () => sendToWindow({ type: 'welcome' }) },
+        { label: t('Open the Tutorial'), click: () => sendToWindow({ type: 'tutorial' }) },
+        { label: t('Start the Tutorial Afresh…'), click: () => sendToWindow({ type: 'tutorial', afresh: true }) },
         { type: 'separator' },
         {
           label: t('About NEO Canon'),

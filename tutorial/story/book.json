@@ -1,0 +1,14 @@
+{
+  "id": "@STORY@",
+  "title": "Across the Saltings",
+  "subtitle": "A short story for the tutorial",
+  "series": "",
+  "author": "NEO Canon",
+  "wordGoal": 0,
+  "created": "2026-10-10T09:00:00.000Z",
+  "modified": "2026-10-10T09:00:00.000Z",
+  "chapterOrder": ["c1", "c2", "c3"],
+  "chapterTitles": { "c1": "The Tide-Board", "c2": "The Withy Post", "c3": "Marrowby" },
+  "lastPosition": { "chapterId": "c1", "pIdx": 0, "off": 0, "scroll": 0 },
+  "tabNames": { "notes": "Notes", "outline": "Outline" }
+}

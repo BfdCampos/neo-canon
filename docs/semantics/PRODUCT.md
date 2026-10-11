@@ -58,12 +58,13 @@ The only text the model may propose for the manuscript is a **minimal substituti
 
 ### New surfaces, and why each earns its place
 
-1. **Canon tab** (Manuscript / Notes / Outline / **Canon** / Darlings). Shown only on books and notebooks whose shelf keeps a Canon, so writers who never opt in see no change. Without a tab, hand-editing — a core entry point — has nowhere to live. It reuses the existing layout: left nav pane lists entries, the page shows one entry, the right-hand pane holds the review queue.
+1. **Canon tab** (Manuscript / Notes / Outline / **Canon** / Darlings). Shown on every book (a user test showed that a tab hidden until opt-in was never found). On a shelf without a Canon it says what Canon is in two sentences and offers one button, **Keep a Canon for “{shelf}”** (with the status-shelf warning and **Move…**), and a link to **Open the Tutorial**. Without a tab, hand-editing — a core entry point — has nowhere to live. It reuses the existing layout: left nav pane lists entries, the page shows one entry, the right-hand pane holds the review queue.
 2. **Slip marks + popover** on the page. The whole point; built on the CSS Highlight API like spellcheck, never saved into chapter HTML.
 3. **Continuity results in the right-hand pane** during a pass, the same pane Find already uses.
-4. **The reader's setup page**, shown inside the Canon tab, never as a modal at launch.
+4. **The reader's setup page**, shown inside the Canon tab. The only thing shown at launch is the **welcome** (once per computer, on the shelf, never over a page): what Canon is, **Open the Tutorial**, **Set Up the Reader** (the recommended reader and its size; the download shows in the sheet and the Canon tab) and **Later**. Any answer, Esc included, is for good; Help → Welcome to NEO Canon… shows it again.
+5. **The Tutorial shelf** (Help → Open the Tutorial): a shelf that keeps a Canon, holding *Across the Saltings* (three seeded slips: Juniper the mare called “his”, Wren’s grey eyes turned brown, Marrowby spelt Marowby; and decoys) and the *Start Here* notebook (eleven lessons, left out of Canon). Its entries ship pre-built, every checked fact verified by rule from a quote in the story, so every lesson works without the reader; one unchecked fact waits in Needs You. Opened again, it is the same shelf with the writer's changes; **Start the Tutorial Afresh…** takes the old one's books off the shelves whole (File → Reshelve a Book… brings them back). The files are `tutorial/` in the app, copied by `tutorial:open`.
 
-No new window, toolbar, sidebar, status-bar widget or notification.
+No new window, toolbar, sidebar, status-bar widget or notification beyond the one-time welcome.
 
 ---
 
@@ -111,8 +112,8 @@ All strings go through `t()`. Menu items are new entries in existing menus.
 
 ### 4.1 Opting in and first run (reader download)
 
-1. Right-click a shelf's name → **Keep a Canon for This Shelf**.
-2. Each book on the shelf gains the **Canon** tab. NEO opens the current book on it.
+1. The **Canon** tab of any book → **Keep a Canon for “{shelf}”** (or right-click a shelf's name → **Keep a Canon for This Shelf**).
+2. The shelf's books keep the Canon. NEO opens the current book on its Canon tab.
 3. If the reader is not on this computer, the tab shows the setup page:
 
    > **Canon needs a reader**
@@ -206,8 +207,8 @@ All strings go through `t()`. Menu items are new entries in existing menus.
 
 - Offline with the reader installed: everything works. Canon makes no network calls.
 - No reader: NEO is fully NEO. The Canon tab still opens and is a **hand-kept world bible**: entries, facts (all *yours*), aliases, merges. Read the Shelf, Continuity Pass and quiet checking show "Needs Canon's reader · Download (5.2 GB)".
-- Shelf without a Canon: no Canon tab, no menu change except the two Edit items (which explain and offer **Keep a Canon for This Shelf…**).
-- **Stop Keeping a Canon** (shelf right-click) hides the tab; files stay on disk; "The Canon's files are kept in your library. Keep a Canon again to bring it back."
+- Shelf without a Canon: the Canon tab explains and offers **Keep a Canon for “{shelf}”**; Edit → Continuity Pass explains and offers the same.
+- **Stop Keeping a Canon** (shelf right-click) returns the tab to its offer; files stay on disk; "The Canon's files are kept in your library. Keep a Canon again to bring it back."
 - Pocket (MVP): shows no Canon tab, preserves `canon-*` folders untouched.
 
 ---
