@@ -13,11 +13,13 @@ const FIXTURE = path.join(__dirname, 'fixtures', 'canon');
 const EXPECTED = JSON.parse(fs.readFileSync(path.join(FIXTURE, 'expected.json'), 'utf8'));
 const SALT_LAWS = Canon.parseEntry(fs.readFileSync(path.join(FIXTURE, 'ide', 'the-salt-laws.md'), 'utf8'));
 
-// expected.json's entries with their facts, and the Salt Laws
+// expected.json's entries with their facts (and Bramble's owner, which the
+// writer keeps by hand: no sentence says it), and the Salt Laws
 function world(without = []) {
   return [...EXPECTED.entries.filter((x) => !without.includes(x.id)).map((x) => {
     const e = Canon.newEntry(x.name, x.kind, x.id);
     for (const f of x.facts) e.facts.push({ attr: f.attr, value: f.value, as: f.as || '', state: f.state, sources: [] });
+    if (x.id === 'bramble') e.facts.push(Canon.handFact('Owner: Tamsin Hale'));
     return e;
   }), SALT_LAWS];
 }

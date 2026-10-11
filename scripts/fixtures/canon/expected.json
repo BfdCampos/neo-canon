@@ -13,14 +13,12 @@
       { "attr": "sibling", "value": "Oren Hale", "as": "younger", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c1"] }
     ] },
     { "id": "oren-hale", "name": "Oren Hale", "kind": "person", "facts": [
-      { "attr": "sex", "value": "male", "state": "unverified", "chapters": ["book-ember-and-thorn-ember1/c1"] },
       { "attr": "state", "value": "lost his left hand", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c3"] },
       { "attr": "state", "value": "fights with his right hand alone", "state": "verified", "chapters": ["book-the-salt-crown-salt2/c2"] }
     ] },
     { "id": "bramble", "name": "Bramble", "kind": "creature", "facts": [
       { "attr": "species", "value": "horse", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2"] },
       { "attr": "sex", "value": "female", "as": "mare", "state": "verified", "chapters": ["book-ember-and-thorn-ember1/c2", "book-field-notes-notes3/p1"] },
-      { "attr": "owner", "value": "Tamsin Hale", "state": "unverified", "chapters": ["book-ember-and-thorn-ember1/c2"] },
       { "attr": "sex", "value": "male", "as": "gelding", "state": "unverified", "said": true, "chapters": ["book-ember-and-thorn-ember1/c2"] },
       { "attr": "state", "value": "in foal", "state": "unverified", "plan": true, "chapters": ["book-the-salt-crown-salt2/notes"] }
     ] },
@@ -36,6 +34,7 @@
     { "chapter": "c1", "sentence": "Ilsa’s brown eyes narrowed.", "span": "brown", "to": "grey", "entry": "ilsa-varr", "attr": "eyes", "strength": "strong" },
     { "chapter": "c2", "sentence": "Tamsin, the elder of the two Hales, had always been the one who could read.", "span": "elder", "to": "younger", "entry": "tamsin-hale", "attr": "sibling", "strength": "weak" },
     { "chapter": "c2", "sentence": "Then she took the road back to Corwyck, alone, as she had come.", "span": "Corwyck", "to": "Corwick", "entry": "corwick", "attr": "name", "strength": "strong" },
+    { "chapter": "c2", "sentence": "He still wore the belt that Ilsa had bound round the stump at the ford.", "span": "Ilsa", "to": "Tamsin", "entry": "tamsin-hale", "attr": "event", "strength": "weak" },
     { "chapter": "c3", "sentence": "Tamsin swung down from the stallion and walked the last mile into town on foot, leading the horse, with the ledgers on her own back.", "span": "stallion", "to": "mare", "entry": "bramble", "attr": "sex", "strength": "weak" }
   ],
   "decoys": [
@@ -44,6 +43,13 @@
     "He had learned to fight with his right hand alone, and he fought well enough that nobody at the crossroads remarked on it twice.",
     "Above the far bank the sky went the grey of a mare’s flank, and then darker, and the first of the rain came down on the road home.",
     "What if Ilsa had green eyes and was born in Corwick?",
-    "Ilsa’s eyes looked almost brown in the firelight."
-  ]
+    "Ilsa’s eyes looked almost brown in the firelight.",
+    "Oren cut the old belt into a strap for his shield once the wrist had healed.",
+    "Oren remembered Tamsin binding the stump with her belt, and how her hands had not shaken until afterwards.",
+    "“Ilsa bound it, not my sister,” he told the riders, and nobody believed him."
+  ],
+  "story": {
+    "tamsin-hale": ["Tamsin bound the stump with her own belt", "Tamsin turned west with a satchel of ledgers"],
+    "oren-hale": ["Oren's left hand was gone at the wrist in the shallows", "Oren turned north with the convoy"]
+  }
 }

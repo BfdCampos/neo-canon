@@ -24,7 +24,7 @@ function shelfSources(lib) {
     const meta = JSON.parse(fs.readFileSync(path.join(lib, bookId, 'book.json'), 'utf8'));
     const notebook = meta.format === 'notebook';
     meta.chapterOrder.forEach((chId, i) => out.push({ bookId, chId, book: meta.title,
-      label: notebook ? meta.chapterTitles[chId] : 'Ch ' + (i + 1), html: fs.readFileSync(path.join(lib, bookId, 'chapters', chId + '.html'), 'utf8') }));
+      label: notebook ? meta.chapterTitles[chId] : 'Ch ' + (i + 1), notebook, html: fs.readFileSync(path.join(lib, bookId, 'chapters', chId + '.html'), 'utf8') }));
     if (!notebook) out.push({ bookId, chId: 'notes', book: meta.title, label: 'Notes', notes: true, html: fs.readFileSync(path.join(lib, bookId, 'notes.html'), 'utf8') });
   }
   return out;
@@ -85,7 +85,7 @@ const SIX = [
   ['By midwinter Oren could saddle Rook', [F('Oren Hale', 'person', 'owner', 'Rook', 'By midwinter Oren could saddle Rook one-handed')]]
 ];
 
-test('QA F1: the six wrong facts the quick reader checked stay unchecked, even when the reader says yes to everything', async () => {
+test('QA F1: the six wrong facts the quick reader checked are left out, even when the reader says yes to everything', async () => {
   const L = library();
   try {
     await Canon.createEngine({ io: L.io, reader: yesReader(SIX) }).readShelf();
@@ -97,15 +97,15 @@ test('QA F1: the six wrong facts the quick reader checked stay unchecked, even w
     // 2. "Tamsin, the elder of the two Hales" says nothing of a parent
     assert.ok(!lines.some((l) => /parent: Tamsin.* · verified/.test(l)), lines.join('\n'));
     // 3. "Rook — stallion, Oren's" is Oren's horse, not his father
-    assert.deepEqual(state('Rook', 'parent', 'Oren Hale'), ['unverified']);
+    assert.deepEqual(state('Rook', 'parent', 'Oren Hale'), []);
     assert.deepEqual(state('Rook', 'owner', 'Oren Hale'), ['verified']);
     // 4. "Captain Varr knelt beside him" makes no one Ilsa's sister
     assert.ok(!lines.some((l) => /sibling: Ilsa Varr · verified/.test(l)), lines.join('\n'));
     // 5. Corwyck is Corwick misspelt: no place to live in, and no second town
-    assert.deepEqual(state('Ilsa Varr', 'home', 'Corwyck'), ['unverified']);
+    assert.deepEqual(state('Ilsa Varr', 'home', 'Corwyck'), []);
     assert.ok(!got.some((e) => e.name === 'Corwyck'));
-    // 6. the seeded slip doesn't become her eye colour: Book 1 and the notes say grey
-    assert.deepEqual(state('Ilsa Varr', 'eyes', 'brown'), ['disagree']);
+    // 6. the seeded slip doesn't become her eye colour: the notes and Book 1 said grey first
+    assert.deepEqual(state('Ilsa Varr', 'eyes', 'brown'), []);
     assert.deepEqual(state('Ilsa Varr', 'eyes', 'grey'), ['verified']);
     // and the rest of the junk: no "Ponies", no owner from "saddle Rook"
     assert.ok(!got.some((e) => e.name === 'Ponies'));
@@ -119,8 +119,8 @@ test('QA F1: the six wrong facts the quick reader checked stay unchecked, even w
   } finally { L.done(); }
 });
 
-test('two values the shelf can\'t settle: both wait as disagreeing, nothing checked, no slip', async () => {
-  // Book 1's "grey" sentence goes, so the shelf has grey once (the notes) and brown once
+test('the writer\'s notes against the prose: both wait as "Which is right?", nothing checked, no slip', async () => {
+  // Book 1's "grey" sentence goes, so the notes say grey and the prose first says brown
   const L = library();
   try {
     const c1 = path.join(L.lib, 'book-ember-and-thorn-ember1', 'chapters', 'c1.html');
@@ -133,13 +133,19 @@ test('two values the shelf can\'t settle: both wait as disagreeing, nothing chec
   } finally { L.done(); }
 });
 
-test('the shelf\'s own evidence: one value said twice before a value said once establishes it, and a slip sentence that comes first does not', () => {
-  const where = (chapter, order) => ({ chapter, order });
+test('the shelf\'s own evidence: first said, first kept; the writer\'s notes first, and notes against the prose are asked', () => {
+  const where = (chapter, order, note = false) => ({ chapter, order, src: note ? { notebook: true } : {} });
   assert.equal(Canon.established(new Map([['grey', [where('a', 0), where('c', 2)]], ['brown', [where('b', 1)]]])), 'grey');
-  assert.equal(Canon.established(new Map([['grey', [where('a', 0)]], ['brown', [where('b', 1)]]])), null);
-  // the slip first: grey at 0, brown twice after: brown is established only because grey was said once, before it
-  assert.equal(Canon.established(new Map([['grey', [where('a', 0)]], ['brown', [where('b', 1), where('c', 2)]]])), null);
-  assert.equal(Canon.established(new Map([['grey', [where('a', 0), where('a', 0)]], ['brown', [where('b', 1)]]])), null); // twice in one chapter is once
+  assert.equal(Canon.established(new Map([['grey', [where('a', 0)]], ['brown', [where('b', 1)]]])), 'grey');
+  // said once first, twice after: still the first (the later ones are slips)
+  assert.equal(Canon.established(new Map([['grey', [where('a', 0)]], ['brown', [where('b', 1), where('c', 2)]]])), 'grey');
+  assert.equal(Canon.established(new Map([['brown', [where('b', 1)]], ['grey', [where('a', 0)]]])), 'grey'); // by reading order, not the map's
+  // the writer's notes come first, wherever they sit on the shelf; agreeing prose changes nothing
+  assert.equal(Canon.established(new Map([['grey', [where('a', 0), where('n', 9, true)]], ['brown', [where('b', 1)]]])), 'grey');
+  assert.equal(Canon.established(new Map([['grey', [where('n', 9, true)]]])), 'grey');
+  // notes against the prose's first word, or two notes: the writer is asked
+  assert.equal(Canon.established(new Map([['grey', [where('n', 9, true)]], ['brown', [where('b', 1)]]])), null);
+  assert.equal(Canon.established(new Map([['grey', [where('n', 8, true)]], ['brown', [where('m', 9, true)]]])), null);
   assert.equal(Canon.established(new Map([['grey', [where('a', 0)]]])), 'grey');
   assert.equal(Canon.established(undefined), undefined);
   // note lines count: "Ilsa: grey eyes", "Bramble — mare"
@@ -240,8 +246,8 @@ test('a read never joins the trader\'s line to the story\'s own fact of the same
     for (const f of b.facts.filter((x) => x.attr === 'sex' && x.value === 'male')) {
       assert.ok(f.sources.every((s) => s.said) || f.sources.every((s) => !s.said), JSON.stringify(f.sources));
     }
-    // the shelf now says mare twice before a stallion once: the mare stands, the stallion waits
-    assert.deepEqual(b.facts.filter((x) => x.attr === 'sex' && !x.sources.every((s) => s.said)).map((f) => `${f.value} ${f.state}`).sort(), ['female verified', 'male disagree']);
+    // the shelf said mare first: the mare stands; the stallion, later, is the pass's slip, not a fact
+    assert.deepEqual(b.facts.filter((x) => x.attr === 'sex' && !x.sources.every((s) => s.said)).map((f) => `${f.value} ${f.state}`).sort(), ['female verified']);
   } finally { L.done(); }
 });
 
@@ -313,7 +319,7 @@ test('names: one person under one name, no entry for a pronoun or a common word,
     const got = L.entries();
     assert.deepEqual(got.map((e) => e.name).sort(), ['Corwick', 'Ilsa Varr']); // no Varr, Ilsa, She, Hale
     const ilsa = got.find((e) => e.name === 'Ilsa Varr');
-    assert.deepEqual(ilsa.facts.map((f) => `${f.attr} ${f.value} ${f.state}`).sort(), ['eyes grey verified', 'home Corwick unverified']);
+    assert.deepEqual(ilsa.facts.map((f) => `${f.attr} ${f.value} ${f.state}`).sort(), ['eyes grey verified']); // "Rain had come to Corwick" says nothing of her home: left out
     // and with Corwick an entry, the pass sees Corwyck for the slip it is
     const { slips } = await Canon.createEngine({ io: L.io, reader }).check({ scope: 'shelf' });
     assert.deepEqual(slips.map((s) => s.span).sort(), ['Corwyck', 'brown']);

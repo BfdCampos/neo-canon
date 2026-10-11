@@ -1,5 +1,5 @@
 {
-  "about": "The fake reader for Canon's tests: what a model would propose for each paragraph (matched by the start of its text), and its answers when asked to judge a fact or say who a word means. It makes the mistakes the probe saw (PROBE.md) on purpose, so the gates are tested against them.",
+  "about": "The fake reader for Canon's tests: what a model would propose for each paragraph (matched by the start of its text), and its answers when asked to judge a fact or say who a word means. It makes the mistakes the probe saw (PROBE.md) on purpose, so the gates are tested against them. `events` are the story's key points it proposes, and `contradicts` its answers when asked whether a sentence gives an earlier deed to someone else (STORY.md).",
   "propose": [
     { "para": "Rain had come to Corwick", "facts": [
       { "entity": "Corwick", "kind": "place", "quote": "Rain had come to Corwick three days early" },
@@ -55,6 +55,12 @@
       { "entity": "Ilsa Varr", "kind": "person", "attr": "eyes", "value": "grey", "quote": "Ilsa: grey eyes" },
       { "entity": "Ilsa Varr", "kind": "person", "attr": "birthplace", "value": "Saltmere", "quote": "born in Saltmere" }
     ] },
+    { "para": "John has green eyes", "facts": [
+      { "note": "the owner's own Notes (the e2e test)", "entity": "John", "kind": "person", "attr": "eyes", "value": "green", "quote": "John has green eyes" }
+    ] },
+    { "para": "“Hello” John said", "facts": [
+      { "note": "a pronoun's colour: no gate takes it", "entity": "John", "kind": "person", "attr": "eyes", "value": "blue", "quote": "his blue eyes" }
+    ] },
     { "para": "What if Ilsa had green eyes", "facts": [
       { "note": "the Maybe page is left out of Canon: never asked", "entity": "Ilsa Varr", "kind": "person", "attr": "eyes", "value": "green", "quote": "What if Ilsa had green eyes" },
       { "entity": "Ilsa Varr", "kind": "person", "attr": "birthplace", "value": "Corwick", "quote": "was born in Corwick" }
@@ -72,6 +78,35 @@
   },
   "refers": [
     { "sentence": "Tamsin, the elder of the two Hales", "span": "elder", "entity": "Tamsin Hale", "answer": "yes" },
-    { "sentence": "Tamsin swung down from the stallion", "span": "stallion", "entity": "Bramble", "answer": "yes" }
+    { "sentence": "Tamsin swung down from the stallion", "span": "stallion", "entity": "Bramble", "answer": "yes" },
+    { "sentence": "Just as he fixed", "span": "his", "entity": "John", "answer": "yes" }
+  ],
+  "events": [
+    { "para": "Tamsin bound the stump", "events": [
+      { "who": ["Tamsin Hale"], "did": "Tamsin bound the stump with her own belt", "where": "", "quote": "Tamsin bound the stump with her own belt" }
+    ] },
+    { "para": "Ilsa Varr held the bank", "events": [
+      { "who": ["Oren Hale"], "did": "Oren's left hand was gone at the wrist", "where": "in the shallows", "quote": "Oren was sitting in the shallows with his sword arm across his knees, and his left hand was gone at the wrist" },
+      { "note": "a who the quote doesn't name: left out", "who": ["Tamsin Hale"], "did": "Tamsin held the bank", "where": "", "quote": "Ilsa Varr held the bank with four of the wall guard" }
+    ] },
+    { "para": "In the morning the convoy turned north", "events": [
+      { "who": ["Oren Hale"], "did": "Oren turned north with the convoy", "where": "", "quote": "the convoy turned north, with Oren at its head" },
+      { "who": ["Tamsin Hale"], "did": "Tamsin turned west with a satchel of ledgers", "where": "", "quote": "Tamsin turned west with two of the wall guard and a satchel of ledgers" }
+    ] },
+    { "para": "Oren met the convoy at Saltmere", "events": [
+      { "note": "a word the writer didn't write: left out", "who": ["Oren Hale"], "did": "Oren rode into Saltmere with an army", "where": "", "quote": "Oren met the convoy at Saltmere with twenty riders" }
+    ] },
+    { "para": "“Hello” John said", "events": [
+      { "who": ["John"], "did": "John reached through a red vortex", "where": "in his room", "quote": "He reached his hand through the swirling red vortex in front of him, as pages and random items flew around his room" }
+    ] },
+    { "para": "It was Dave who touched", "events": [
+      { "who": ["Dave"], "did": "Dave touched the vortex", "where": "", "quote": "It was Dave who touched the vortex" }
+    ] }
+  ],
+  "contradicts": [
+    { "sentence": "He still wore the belt", "who": "Tamsin Hale", "answer": "yes" },
+    { "sentence": "Oren cut the old belt", "answer": "no" },
+    { "sentence": "Oren remembered Tamsin", "answer": "no" },
+    { "sentence": "It was Dave who touched", "who": "John", "answer": "yes" }
   ]
 }

@@ -46,7 +46,7 @@ function shelfSources(lib) {
     const meta = JSON.parse(fs.readFileSync(path.join(lib, bookId, 'book.json'), 'utf8'));
     const notebook = meta.format === 'notebook';
     meta.chapterOrder.forEach((chId, i) => out.push({ bookId, chId, book: meta.title,
-      label: notebook ? meta.chapterTitles[chId] : 'Ch ' + (i + 1), html: fs.readFileSync(path.join(lib, bookId, 'chapters', chId + '.html'), 'utf8') }));
+      label: notebook ? meta.chapterTitles[chId] : 'Ch ' + (i + 1), notebook, html: fs.readFileSync(path.join(lib, bookId, 'chapters', chId + '.html'), 'utf8') }));
     const notes = path.join(lib, bookId, 'notes.html');
     if (!notebook && fs.existsSync(notes)) out.push({ bookId, chId: 'notes', book: meta.title, label: 'Notes', notes: true, html: fs.readFileSync(notes, 'utf8') });
   }
@@ -206,7 +206,10 @@ async function evalFixture(name, reader, tier) {
     // P0 #6: every quote verbatim
     const texts = new Map(shelfSources(lib).map((s) => [s.bookId + '/' + s.chId, Canon.sourceParas(s.html).map((p) => p.text).join('\n')]));
     const misquoted = entries.flatMap((e) => e.facts.flatMap((f) => f.sources.filter((s) => !s.written && !(texts.get(s.book + '/' + s.ch) || '').includes(s.quote)).map((s) => `${e.name}: "${s.quote}"`)));
-    return { fixture: name, model: tier, summary, readModelS: Math.round(readMs / 1000), checkModelS: Math.round(checkMs / 1000), wallS: Math.round((Date.now() - t0) / 1000), misquoted, worthALook: asks.map((x) => `${x.name}: ${x.sentence}`), ...score(expected, entries, slips) };
+    // the story so far it kept (STORY.md), each line's quote verbatim too
+    const story = entries.flatMap((e) => e.story.map((x) => `${e.name}: ${x.did}  ← "${(x.sources[0] || {}).quote || ''}"`));
+    misquoted.push(...entries.flatMap((e) => e.story.flatMap((x) => x.sources.filter((s) => !(texts.get(s.book + '/' + s.ch) || '').includes(s.quote)).map((s) => `${e.name} (story): "${s.quote}"`))));
+    return { fixture: name, model: tier, summary, readModelS: Math.round(readMs / 1000), checkModelS: Math.round(checkMs / 1000), wallS: Math.round((Date.now() - t0) / 1000), misquoted, worthALook: asks.map((x) => `${x.name}: ${x.sentence}`), story, ...score(expected, entries, slips) };
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
