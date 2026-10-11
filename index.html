@@ -71,6 +71,9 @@
   <!-- ======================= EDITOR ======================= -->
   <div id="editor-view" hidden>
 
+    <!-- Back to Shelf: top left, always in sight (beside the window's buttons on macOS) -->
+    <button id="back-to-shelf" data-i18n-title title="Back to your bookshelf (Esc)" data-i18n-label="Back to your bookshelf (Esc)"><span aria-hidden="true">&#8592;</span> <span data-i18n>Back to Shelf</span></button>
+
     <!-- Left hover zone: chapter navigation -->
     <div id="nav-hotzone"></div>
     <nav id="nav-pane" data-i18n-label="Chapters">
@@ -113,7 +116,6 @@
 
     <!-- Bottom bar: tabs + counters -->
     <footer id="bottombar">
-      <button id="back-to-shelf" data-i18n-title title="Back to your bookshelf" data-i18n-label="Back to your bookshelf"><span aria-hidden="true">&#8676;</span> <span data-i18n>Shelf</span></button>
       <div id="tabs" role="tablist">
         <div class="tab active" role="tab" tabindex="0" aria-selected="true" data-tab="manuscript" data-i18n>Manuscript</div>
         <div class="tab" role="tab" tabindex="0" aria-selected="false" data-tab="notes" data-i18n>Notes</div>

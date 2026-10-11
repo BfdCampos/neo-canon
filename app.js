@@ -6598,10 +6598,12 @@ function spEditorMode() {
   spTitlePage(on);
   spApplyStyle();
   // the pane stays open beside a script, unless the writer unpinned it there
+  // (and on the Canon tab both panes do, unless unpinned there)
   if (!NO_HOVER) {
     let kept = {};
     try { kept = JSON.parse(localStorage.getItem('neo-pinned-panes') || '{}'); } catch { /* nothing kept */ }
-    pinPane('nav', on ? kept.scriptNav !== false : !!kept.nav, on ? 'scriptNav' : 'nav');
+    if (book && canonPinning()) panePins();
+    else pinPane('nav', on ? kept.scriptNav !== false : !!kept.nav, on ? 'scriptNav' : 'nav');
   }
 }
 if (SP_NARROW.addEventListener) {
@@ -7606,7 +7608,7 @@ function wireHoverPane(hotzone, pane, isPinnable) {
   // (a menu opened from the Chapters pane keeps it open while it's up)
   const pinned = () => (isPinnable && pane.dataset.pinned === '1') ||
     (pane.id === 'nav-pane' && (chapterDragActive || !!document.querySelector('.pop-menu'))) ||
-    (pane.id === 'side-pane' && $('#editor-view').matches('.darlings-tab, .canon-side')); // the snapshots (and a pass's slips) stay
+    (pane.id === 'side-pane' && $('#editor-view').matches('.darlings-tab, .canon-side:not(.canon-needs)')); // the snapshots (and a pass's slips) stay
   hotzone.addEventListener('mouseenter', (e) => {
     if (e.buttons) return; // dragging something — stand down
     pane.classList.add('open');
@@ -7628,7 +7630,7 @@ wireHoverPane($('#side-hotzone'), $('#side-pane'), true);
 function closeUnpinnedPanes() {
   // Wayland can blur the window as a native chapter drag begins.
   if (!chapterDragActive && $('#nav-pane').dataset.pinned !== '1') $('#nav-pane').classList.remove('open');
-  if ($('#side-pane').dataset.pinned !== '1' && !$('#editor-view').matches('.darlings-tab, .canon-side')) $('#side-pane').classList.remove('open');
+  if ($('#side-pane').dataset.pinned !== '1' && !$('#editor-view').matches('.darlings-tab, .canon-side:not(.canon-needs)')) $('#side-pane').classList.remove('open');
 }
 document.documentElement.addEventListener('mouseleave', closeUnpinnedPanes);
 window.addEventListener('blur', closeUnpinnedPanes);
@@ -7659,8 +7661,27 @@ function pinPane(side, on, key = side) {
     localStorage.setItem('neo-pinned-panes', JSON.stringify(kept));
   } catch { /* fine: it just won't be remembered */ }
 }
-$('#side-pin').onclick = () => pinPane('side', $('#side-pane').dataset.pinned !== '1');
-$('#nav-pin').onclick = () => pinPane('nav', $('#nav-pane').dataset.pinned !== '1', book && isScript() ? 'scriptNav' : 'nav');
+// The Canon tab of a shelf that keeps one opens with both panes pinned
+// (its entries on the left, Needs You on the right: a first-time writer
+// couldn't find the facts), until the writer unpins one there. That's kept
+// apart from the page's own choice, which the panes go back to after.
+const canonPinning = () => currentTab === 'canon' && !!book && CANON_ON && !!canonIdFor(book.id);
+const paneKey = (side) => canonPinning() ? (side === 'nav' ? 'canonNav' : 'canonSide') : side === 'nav' && book && isScript() ? 'scriptNav' : side;
+function panePins(close = false) {
+  if (NO_HOVER || !book) return;
+  let kept = {};
+  try { kept = JSON.parse(localStorage.getItem('neo-pinned-panes') || '{}'); } catch { /* nothing kept */ }
+  const c = canonPinning();
+  for (const side of ['nav', 'side']) {
+    const key = paneKey(side);
+    const on = c ? kept[key] !== false : key === 'scriptNav' ? kept.scriptNav !== false : !!kept[key];
+    pinPane(side, on, key);
+    const pane = $(side === 'nav' ? '#nav-pane' : '#side-pane');
+    if (close && !on && !(side === 'side' && $('#editor-view').matches('.darlings-tab, .canon-side:not(.canon-needs)'))) pane.classList.remove('open');
+  }
+}
+$('#side-pin').onclick = () => pinPane('side', $('#side-pane').dataset.pinned !== '1', paneKey('side'));
+$('#nav-pin').onclick = () => pinPane('nav', $('#nav-pane').dataset.pinned !== '1', paneKey('nav'));
 if (!NO_HOVER) {
   try {
     const kept = JSON.parse(localStorage.getItem('neo-pinned-panes') || '{}');
@@ -7924,6 +7945,7 @@ function switchTab(name) {
   const fromCanon = currentTab === 'canon';
   currentTab = name;
   if (fromCanon && name !== 'canon') renderNav();
+  if (fromCanon !== (name === 'canon')) panePins(true);
   queueSideCards();
   applyBright();
   $$('.tab').forEach((t) => {
@@ -16100,7 +16122,7 @@ window.neo.onMenu(async (msg) => {
   if ($('#keyboard-shortcuts') && msg.type !== 'help') return;
   // a window the menu opens (⌘, for Goals, say) never stacks on one that's
   // already open: pressing it again used to pile up overlays
-  const WINDOWS = ['stats', 'about', 'emailSettings', 'coverArt', 'reshelve', 'checkUpdate', 'welcome'];
+  const WINDOWS = ['stats', 'about', 'emailSettings', 'coverArt', 'reshelve', 'checkUpdate', 'welcome', 'reader'];
   if (WINDOWS.includes(msg.type) && document.querySelector('.modal-backdrop:not([hidden])')) {
     if (msg.type === 'checkUpdate' && updateDialog) updateDialog.focus();
     return;
@@ -16110,6 +16132,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'worldMap' && CANON_ON) { if (mapUp()) mapClose(); else mapOpen(); }
   if (msg.type === 'about') showAbout();
   if (msg.type === 'welcome') showWelcome();
+  if (msg.type === 'reader') showCanonReader();
   if (msg.type === 'tutorial') openTutorial(!!msg.afresh);
   if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'update') updateMessage(msg);
@@ -16677,6 +16700,7 @@ async function canonLoad(force) {
   if (canon && canon.id === id && !force) return canon;
   const r = await window.neo.canonOpen(id);
   if (!book || canonIdFor(book.id) !== id) return null;
+  canonRdr = r.reader;
   canon = { id, meta: r.meta, notSlips: r.notSlips, reader: r.reader, shelf: r.shelf, setAside: r.setAside, entries: new Map(r.entries.map((x) => [x.id, x])) };
   return canon;
 }
@@ -16931,6 +16955,9 @@ async function renderCanon() {
   view.innerHTML = '';
   const rec = canonShown && canon.entries.get(canonShown);
   canonSideUpdate();
+  // where the reader stands, at the top of every page of the tab (the
+  // setup page, with no reader and no entry picked, says it in full)
+  if (rec || canon.reader.installed) view.appendChild(canonReaderLine());
   if (!rec) { view.appendChild(canonHome()); return; }
   if (rec.error) {
     const p = document.createElement('p');
@@ -17001,6 +17028,7 @@ async function canonReadShelfNow(again = false) {
   canonPaused = false;
   canonReadAt = null;
   canonReadLine = res.error === 'stopped' || res.stopped ? t('Canon stopped reading. What it read is kept; Read the Shelf carries on from there.')
+    : res.error === 'no-reader' ? t('Reading the shelf needs the reader. Download it above.')
     : res.error ? t('Canon couldn’t read the shelf just now. Try again in a moment.')
       : t('Canon found {entries} and {facts}. {ok} checked out; {needs}.', { entries: t('{n} entries', { n: res.entries }), facts: t('{n} facts', { n: res.facts }), ok: res.verified, needs: t('{n} need you', { n: res.needs }) });
   if (canon && canon.id === id && (await canonLoad(true)) && currentTab === 'canon') renderCanon();
@@ -17092,10 +17120,12 @@ let canonJustReady = false;
 // the shelf has words to read: the reader starts on them once it's here
 const canonHasWords = () => !!(canon && canon.shelf && canon.shelf.words);
 async function canonDownloadEvent(msg) {
+  if (canonRdr) canonRdr.download = msg;
+  if (msg.state === 'done') await canonRdrNow();
+  canonReaderRedraw();
   if (!canon) return;
   canon.reader.download = msg;
   if (msg.state === 'done') {
-    canon.reader = await window.neo.canonReaderStatus();
     // one button: the download checked out, so Canon reads (Stop Reading stays)
     if (canonHasWords() && !Object.keys(canon.meta.read || {}).length) { canonReadShelfNow(); return; }
     canonJustReady = true;
@@ -17116,7 +17146,7 @@ function canonSetup() {
   const tiers = CANON_TIERS();
   const dl = r.download || { state: 'idle' };
   const after = canonHasWords() ? t('When it’s here, Canon starts reading — you can keep writing.') : t('You can keep writing while it downloads.');
-  say(t('Canon needs a reader'), 'cn-h');
+  say(canon.entries.size ? t('Get the reader') : t('Canon needs a reader'), 'cn-h');
   say(t('Canon reads your books and notes and keeps track of who and what is in your world — every fact tied to the line that says it. The reader runs on this computer. Nothing you write is sent anywhere.'));
   const get = (tier) => { window.neo.canonDownload(tier); canon.reader.download = { state: 'downloading', tier, got: 0, total: r.catalogue[tier].size }; box.replaceWith(canonSetup()); };
   const label = canonHasWords() ? t('Download and Read the Shelf') : t('Download');
@@ -17184,6 +17214,198 @@ function canonSetup() {
   if (!canon.entries.size) say(t('World-building notes? Right-click + on the shelf → New Notebook.'), 'cn-note cn-fine', hand);
   box.appendChild(hand);
   return box;
+}
+
+// ---- the reader, always findable (a writer looked everywhere for it) ----
+// A quiet line at the top of the Canon tab says where the reader stands
+// (none yet, downloading, ready and on what), with its one button and
+// Reader settings; Help → Canon Reader… (and ⌘K) opens the same small
+// window from anywhere, the shelf too; a pass that checked less for want
+// of a reader says so in its pane. canonRdr is main's latest word.
+let canonRdr = null;
+async function canonRdrNow() {
+  canonRdr = await window.neo.canonReaderStatus();
+  if (canon) canon.reader = canonRdr;
+  return canonRdr;
+}
+// what the reader runs on, in a word: "Apple M2 GPU", "NVIDIA GeForce RTX 4070", "CPU"
+function canonDevice(r) {
+  const d = r && r.device;
+  if (!d) return '';
+  if (!d.gpu) return t('CPU');
+  const name = (d.names || [])[0];
+  if (!name) return t('GPU');
+  return /\bGPU\b/i.test(name) || d.gpu !== 'metal' ? name : t('{name} GPU', { name });
+}
+const canonPct = (dl) => (dl && dl.total ? Math.min(100, Math.floor((dl.got / dl.total) * 100)) : 0);
+function canonGetReader(tier) {
+  const r = canonRdr;
+  if (!r || !tier || !r.catalogue[tier]) return;
+  window.neo.canonDownload(tier);
+  r.download = { state: 'downloading', tier, got: (r.download && r.download.tier === tier && r.download.got) || 0, total: r.catalogue[tier].size };
+  canonReaderRedraw();
+}
+function canonReaderLine(cls = 'cn-reader-line', inWindow = false) {
+  const box = document.createElement('div');
+  box.className = cls;
+  box.setAttribute('role', 'status');
+  const r = canonRdr;
+  if (!r) return box;
+  const dl = r.download || { state: 'idle' };
+  const say = (text) => { const x = document.createElement('span'); x.textContent = text; box.appendChild(x); };
+  const button = (label, fn, c = 'cn-btn cn-rl-go') => { const b = document.createElement('button'); b.className = c; b.textContent = label; b.onclick = fn; box.appendChild(b); return b; };
+  const best = r.recommend === 'short' ? null : r.recommend;
+  if (r.installed && dl.state !== 'downloading' && dl.state !== 'paused') {
+    const dev = canonDevice(r);
+    say(t('Reader ready') + (dev ? ' · ' + dev : ''));
+  } else if (dl.state === 'downloading') {
+    say(t('Downloading the reader… {n}%', { n: canonPct(dl) }) + ' · ');
+    button(t('Pause'), () => window.neo.canonPauseDownload());
+  } else if (dl.state === 'paused') {
+    say(t('The reader’s download is paused at {n}%', { n: canonPct(dl) }) + ' · ');
+    button(t('Resume'), () => canonGetReader(dl.tier));
+  } else if (dl.state === 'error') {
+    say((dl.error === 'damaged' ? t('The download arrived damaged. NEO threw it away.') : t('NEO can’t reach the download right now.')) + ' ');
+    button(t('Try Again'), () => canonGetReader(dl.tier));
+  } else if (best && inWindow) {
+    say(t('No reader on this computer yet.'));
+    box.appendChild(document.createElement('br'));
+    button(t('Download the Reader ({size} GB)', { size: canonGB(r.catalogue[best].size) }), () => canonGetReader(best), 'btn-gold rs-download');
+  } else if (best) {
+    say(t('No reader yet') + ' — ');
+    button(t('Download ({size} GB)', { size: canonGB(r.catalogue[best].size) }), () => canonGetReader(best));
+  } else say(t('No reader: this computer is short on memory for one. Canon still works by hand.'));
+  if (inWindow) return box;
+  const more = document.createElement('button');
+  more.className = 'cn-btn cn-rl-settings';
+  more.textContent = t('Reader settings');
+  more.onclick = () => showCanonReader();
+  box.appendChild(more);
+  return box;
+}
+// every place that shows the reader, drawn again
+function canonReaderRedraw() {
+  for (const old of document.querySelectorAll('#canon-view .cn-reader-line')) old.replaceWith(canonReaderLine());
+  for (const old of document.querySelectorAll('.cs-reader')) old.replaceWith(canonPassReader());
+  if ($('#canon-reader')) canonReaderFill($('#canon-reader'));
+}
+// a pass's pane, when it checked less for want of a reader: one line, one button
+function canonPassReader() {
+  const r = canonRdr;
+  const box = document.createElement('div');
+  box.className = 'cs-note cs-reader';
+  const dl = r && r.download;
+  const best = r && r.recommend !== 'short' ? r.recommend : null;
+  if (!r || r.installed) return box;
+  if (dl && (dl.state === 'downloading' || dl.state === 'paused' || dl.state === 'error')) { box.appendChild(canonReaderLine()); return box; }
+  box.append(t('Some checks need the reader.') + ' ');
+  if (!best) { box.append(t('This computer is short on memory for it.')); return box; }
+  const b = document.createElement('button');
+  b.className = 'cs-get';
+  b.textContent = t('Download it');
+  b.onclick = () => canonGetReader(best);
+  box.append(b, ' ' + t('({size} GB, runs on this computer).', { size: canonGB(r.catalogue[best].size) }));
+  return box;
+}
+
+// Help → Canon Reader…: where the reader stands, and the two choices an
+// advanced writer may want (the hardware, and which reader). Kept in
+// settings.json by main; nothing here is in the library.
+async function showCanonReader() {
+  if (!CANON_ON || $('#canon-reader')) return;
+  const bd = document.createElement('div');
+  bd.className = 'modal-backdrop';
+  bd.id = 'canon-reader';
+  bd.tabIndex = -1;
+  bd.innerHTML = '<div class="modal wl rs" role="dialog" aria-labelledby="rs-h"></div>';
+  document.body.appendChild(bd);
+  const close = () => bd.remove();
+  bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  bd.addEventListener('mousedown', (e) => { if (e.target === bd) close(); });
+  canonReaderFill(bd);
+  bd.focus();
+  await canonRdrNow();
+  if (bd.isConnected) canonReaderFill(bd);
+}
+function canonReaderFill(bd) {
+  const m = bd.querySelector('.modal');
+  const r = canonRdr;
+  m.innerHTML = '';
+  const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; m.appendChild(x); return x; };
+  el('h2', '', t('Canon Reader')).id = 'rs-h';
+  el('p', 'wl-lead', t('Canon’s reader reads your story to find its people, places, facts and key points. It runs on this computer, offline: nothing you write leaves it.'));
+  if (!r) return;
+  const dl = r.download || {};
+  if (dl.state === 'downloading' || dl.state === 'paused') {
+    const bar = el('div', 'cn-bar');
+    const fill = document.createElement('i');
+    fill.style.width = canonPct(dl) + '%';
+    bar.appendChild(fill);
+  }
+  m.appendChild(canonReaderLine('cn-reader-line rs-status', true));
+  const pick = (title, rows) => {
+    el('div', 'cn-h', title);
+    const row = el('div', 'rs-row');
+    for (const x of rows) {
+      const b = document.createElement('button');
+      b.className = 'fr-choice' + (x.on ? ' sel' : '');
+      b.setAttribute('aria-pressed', x.on ? 'true' : 'false');
+      b.innerHTML = `<strong>${escHtml(x.name)}</strong><span>${escHtml(x.desc)}</span>`;
+      b.onclick = x.go;
+      row.appendChild(b);
+    }
+  };
+  const set = async (change) => {
+    canonRdr = await window.neo.canonReaderSettings(change);
+    if (canon) canon.reader = canonRdr;
+    canonReaderRedraw();
+  };
+  const dev = canonDevice(r);
+  pick(t('Hardware'), [
+    { name: t('Automatic'), desc: t('The fastest part of this computer: its graphics card if it has one, else the processor.') + (r.hardware === 'auto' && dev ? ' ' + t('Now: {device}.', { device: dev }) : ''), on: r.hardware !== 'cpu', go: () => set({ hardware: 'auto' }) },
+    { name: t('CPU only'), desc: t('Slower, and never touches the graphics card.'), on: r.hardware === 'cpu', go: () => set({ hardware: 'cpu' }) }
+  ]);
+  const tiers = CANON_TIERS();
+  const chosen = r.installed || (dl.state === 'downloading' || dl.state === 'paused' ? dl.tier : null);
+  pick(t('Reader'), ['careful', 'quick'].filter((x) => r.catalogue[x]).map((x) => ({
+    name: `${tiers[x].name} · ${canonGB(r.catalogue[x].size)} GB`,
+    desc: tiers[x].desc + (x === r.recommend ? ' ' + t('Recommended for this computer.') : ''),
+    on: x === chosen,
+    go: () => { if (x !== r.installed) set({ choice: x }); }
+  })));
+  el('p', 'wl-fine rs-note', t('A reader that isn’t on this computer yet downloads when you choose it.'));
+  const pace = canonPace();
+  el('p', 'wl-fine rs-speed', pace ? t('Measured here: the reader reads about {n} words a minute.', { n: fmtNum(Math.max(1, Math.round(60000 / pace))) })
+    : t('Speed: measured the first time Canon reads a shelf on this computer.'));
+  const foot = el('div', 'wl-foot');
+  const done = document.createElement('button');
+  done.className = 'btn-gold rs-close';
+  done.textContent = t('Close');
+  done.onclick = () => bd.remove();
+  foot.appendChild(done);
+}
+// a link in a page (the Tutorial's "Download the reader"): neo:reader
+// starts the recommended reader's download and shows how it's going
+async function canonReaderLink() {
+  const r = await canonRdrNow();
+  const dl = r.download || {};
+  if (!r.installed && r.recommend !== 'short' && dl.state !== 'downloading') canonGetReader(dl.state === 'paused' || dl.state === 'error' ? dl.tier : r.recommend);
+  showCanonReader();
+}
+if (CANON_ON) {
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="neo:"]');
+    if (!a) return;
+    e.preventDefault();
+    if (a.getAttribute('href') === 'neo:reader') canonReaderLink();
+  });
+  window.neo.onCanon((msg) => {
+    if (msg.type !== 'hardware') return;
+    const { type, ...status } = msg;
+    canonRdr = status;
+    if (canon) canon.reader = canonRdr;
+    canonReaderRedraw();
+  });
 }
 
 // Needs You: only what Canon can't settle by itself. The first thing the
@@ -17321,7 +17543,12 @@ function canonHome() {
   const box = document.createElement('div');
   box.className = 'cn-home';
   const say = (text, cls = 'cn-note') => { const p = document.createElement('p'); p.className = cls; p.textContent = text; box.appendChild(p); return p; };
-  if (!canon.reader.installed) { box.appendChild(canonSetup()); return box; }
+  // (with entries kept already, they come first: the facts are on the left)
+  if (!canon.reader.installed) {
+    if (canon.entries.size) say(t('Pick an entry from the list on the left to see its facts, each with the line it came from.'));
+    box.appendChild(canonSetup());
+    return box;
+  }
   if (!canon.entries.size) {
     const p = say(t('Nothing in this Canon yet. Read the shelf, or add one by hand:') + ' ');
     const add = document.createElement('button');
@@ -17330,7 +17557,7 @@ function canonHome() {
     add.onclick = () => canonNewEntry(add);
     p.appendChild(add);
     say(t('World-building notes? Right-click + on the shelf → New Notebook.'));
-  } else say(t('Pick an entry from the list.'));
+  } else say(t('Pick an entry from the list on the left to see its facts, each with the line it came from.'));
   if (canonJustReady) say(t('The reader is ready.'), 'cn-note cn-ready');
   say(t('Read the Shelf'), 'cn-h');
   const sh = canon.shelf;
@@ -17966,13 +18193,16 @@ function canonSideUpdate(tab = currentTab) {
   const on = !!mode && !mapFull; // (the full map has the whole window)
   const was = $('#editor-view').classList.contains('canon-side');
   $('#editor-view').classList.toggle('canon-side', on);
-  if (on) $('#side-pane').classList.add('open');
+  // (Needs You opens with the pane pinned, and goes with it when unpinned)
+  $('#editor-view').classList.toggle('canon-needs', on && mode === 'needs');
+  if (on && (mode !== 'needs' || $('#side-pane').dataset.pinned === '1')) $('#side-pane').classList.add('open');
   else if (was && $('#side-pane').dataset.pinned !== '1' && !$('#editor-view').classList.contains('darlings-tab')) $('#side-pane').classList.remove('open');
   if (!on) { if ($('#canon-side')) $('#canon-side').innerHTML = ''; return; }
   const box = canonSideBox();
   box.innerHTML = '';
   const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
-  if (mode === 'needs') { mapSmallBox(box); if (canon.reader.installed) canonNeedsList(box, el); canonDismissedList(box, el); return; }
+  // (Needs You shows without a reader too: the facts kept by hand ask as well)
+  if (mode === 'needs') { mapSmallBox(box); if (canon.reader.installed || canonNeeds().length) canonNeedsList(box, el); canonDismissedList(box, el); return; }
   if (mode === 'review') { canonReviewList(box, el); return; }
   box.appendChild(el('div', 'cs-title', t('Continuity Pass')));
   const shown = canonShownSlips();
@@ -17990,7 +18220,7 @@ function canonSideUpdate(tab = currentTab) {
     const facts = t('{n} facts', { n: canonPassFacts });
     box.appendChild(el('div', 'cs-note', asks ? t('No slips found against {facts} · {asks}', { facts, asks: t('{n} worth a look', { n: asks }) }) : t('No slips found against {facts}.', { facts })));
   }
-  if (canon && !canon.reader.installed) box.appendChild(el('div', 'cs-note', t('Without Canon’s reader, only the plainest slips are checked.')));
+  if (canon && !canon.reader.installed) box.appendChild(canonPassReader());
   const asked = shown.filter((s) => s.ask);
   for (const s of shown.filter((x) => !x.ask).concat(asked)) {
     if (s === asked[0]) box.appendChild(el('div', 'cs-ask-head', t('Worth a look')));
@@ -18475,7 +18705,9 @@ function canonCaretPara() {
 }
 async function canonQuietCheck() {
   canonQuietT = null;
-  if (!canonQuietOn() || !book || currentTab !== 'manuscript' || document.hidden || canonPassOn) return;
+  // (with a pass's marks up it still looks at what changed since: a line
+  // written after ⌘' is checked too; never while the pass is still running)
+  if (!canonQuietOn() || !book || currentTab !== 'manuscript' || document.hidden || (canonPassOn && canonProgress)) return;
   const at = canonCaretPara();
   // (with no reader, the facts kept by hand still catch what's spelt out)
   if (!at || !(await canonLoad())) return;
@@ -18493,9 +18725,11 @@ async function canonQuietCheck() {
     return;
   }
   // P0 #8: a key since the question means the writer is writing again
-  if (canonLastKey > asked || !book || !canon || currentTab !== 'manuscript' || canonPassOn) return;
+  if (canonLastKey > asked || !book || !canon || currentTab !== 'manuscript' || (canonPassOn && canonProgress)) return;
   const fresh = new Set(res.checked);
-  canonSlips = canonSlips.filter((s) => !(s.quiet && s.chId === chId && fresh.has(s.para))).concat(res.slips.concat(res.asks || []).map((s) => ({ ...s, quiet: true })));
+  canonSlips = canonSlips.filter((s) => !(s.quiet && s.chId === chId && fresh.has(s.para)));
+  const shown = (s) => canonSlips.some((x) => x.bookId === s.bookId && x.chId === s.chId && x.para === s.para && x.at === s.at && x.span === s.span);
+  canonSlips = canonSlips.concat(res.slips.concat(res.asks || []).filter((s) => !shown(s)).map((s) => ({ ...s, quiet: true })));
   canonPaint();
 }
 if (CANON_ON) {
@@ -18640,8 +18874,10 @@ async function mapOpen() {
   mapFull = { view, map, legend, empty };
   NeoMap.active = map;
   // the whole window is the map's: the pane steps aside until it closes
+  // (the Canon tab's own pinned panes too: they come back with mapClose)
   $('#editor-view').classList.remove('canon-side');
-  if ($('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
+  if ($('#side-pane').dataset.pinned !== '1' || canonPinning()) $('#side-pane').classList.remove('open');
+  if (canonPinning()) $('#nav-pane').classList.remove('open');
   mapFullDraw();
   canonCountsFetch();
 }
@@ -18676,6 +18912,7 @@ function mapClose() {
   NeoMap.active = null;
   mapFull = null;
   canonSideUpdate();
+  if (canonPinning()) panePins();
 }
 function mapFindFocus() {
   const f = mapFull && mapFull.view.querySelector('.map-find');
