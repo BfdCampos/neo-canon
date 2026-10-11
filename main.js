@@ -2362,11 +2362,17 @@ const canonQuietDone = new Map(); // canonId/bookId/chId → Set of paragraph ha
 const canonSend = (e, msg) => { if (!e.sender.isDestroyed()) e.sender.send('canon', msg); };
 ipcMain.handle('canon:check', async (e, opts) => {
   canonStopped = false;
-  const reader = canonReader({ urgent: opts.mode !== 'quiet' });
-  const engine = Canon.createEngine({ io: canonIO(opts.canonId), reader });
+  let { reader, failed } = await canonReaderReady({ urgent: opts.mode !== 'quiet' });
+  let engine = Canon.createEngine({ io: canonIO(opts.canonId), reader });
+  // a reader that dies part way: the pass is run again without it
+  const lost = (err) => err && (err.code === 'gone' || err.code === 'failed') && reader;
+  const again = () => { reader = null; failed = true; engine = Canon.createEngine({ io: canonIO(opts.canonId), reader: null }); };
   if (opts.mode !== 'quiet') {
-    return engine.check({ ...opts, stop: () => canonStopped,
+    const run = () => engine.check({ ...opts, stop: () => canonStopped,
       onSource: (src, slips, n, of) => canonSend(e, { type: 'checked', run: opts.run, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, n, of, slips }) });
+    let res;
+    try { res = await run(); } catch (err) { if (!lost(err)) throw err; again(); res = await run(); }
+    return { ...res, readerFailed: failed };
   }
   const key = [opts.canonId, opts.bookId, opts.chId].join('/');
   const read = readJSON(canonFile(opts.canonId, 'canon.json'), {}).read || {};
@@ -2377,9 +2383,14 @@ ipcMain.handle('canon:check', async (e, opts) => {
   const done = canonQuietDone.get(key) || new Set();
   const skip = opts.skip ? Canon.norm(opts.skip) : null;
   const checked = Canon.sourceParas((opts.html || {})[opts.chId] || '').filter((p) => !done.has(p.hash) && Canon.norm(p.text) !== skip).map((p) => p.hash);
-  const res = await engine.check({ ...opts, done, stop: () => canonStopped });
+  let res;
+  try { res = await engine.check({ ...opts, done: new Set(done), stop: () => canonStopped }); } catch (err) {
+    if (!lost(err)) throw err;
+    again();
+    res = await engine.check({ ...opts, done: new Set(done), stop: () => canonStopped });
+  }
   canonQuietDone.set(key, new Set([...done, ...checked]));
-  return { ...res, checked };
+  return { ...res, checked, readerFailed: failed };
 });
 ipcMain.handle('canon:stop', () => {
   canonStopped = true;
@@ -2391,9 +2402,10 @@ ipcMain.handle('canon:stop', () => {
 // One read at a time; progress goes to the window as it goes.
 let canonReading = null;
 ipcMain.handle('canon:readShelf', async (e, canonId, opts = {}) => {
-  const reader = canonReader();
-  if (!reader) return { error: 'no-reader' };
   if (canonReading) return { error: 'busy' };
+  const { reader, failed } = await canonReaderReady();
+  if (failed) return { error: 'reader-failed' };
+  if (!reader) return { error: 'no-reader' };
   canonStopped = false;
   canonReading = Canon.createEngine({ io: canonIO(canonId), reader })
     .readShelf({ again: !!opts.again, stop: () => canonStopped, onProgress: (p) => canonSend(e, { type: 'progress', canonId, ...p }) });
@@ -2401,6 +2413,7 @@ ipcMain.handle('canon:readShelf', async (e, canonId, opts = {}) => {
     return await canonReading;
   } catch (err) {
     if (err.code === 'stopped') return { error: 'stopped' };
+    if (err.code === 'failed' || err.code === 'gone') return { error: 'reader-failed' };
     logError('canon read', err);
     return { error: 'failed' };
   } finally { canonReading = null; }
@@ -2464,14 +2477,19 @@ const fileSize = (file) => { try { return fs.statSync(file).size; } catch { retu
 // memory, or Apple silicon with 16 GB (shared by the GPU), runs the careful
 // one well; otherwise memory decides: 16 GB the careful reader, 8 GB the
 // quick one, less is short.
-function readerPick({ totalGB, platform, arch, vramGB = 0 }) {
-  if (vramGB >= 6) return 'careful';
-  if (platform === 'darwin' && arch === 'arm64' && totalGB >= 15) return 'careful';
-  return totalGB >= 15 ? 'careful' : totalGB >= 7.5 ? 'quick' : 'short';
+// On the processor alone (no such card, not Apple silicon) the careful
+// reader can't start inside NEO (canonFailed), so the quick one is
+// recommended there; and once a reader has failed here, the other.
+function readerPick({ totalGB, platform, arch, vramGB = 0, failed = null }) {
+  const pick = vramGB >= 6 ? 'careful'
+    : platform === 'darwin' && arch === 'arm64' ? (totalGB >= 15 ? 'careful' : totalGB >= 7.5 ? 'quick' : 'short')
+      : totalGB >= 7.5 ? 'quick' : 'short';
+  return pick === 'careful' && failed === 'careful' ? 'quick' : pick;
 }
 function canonRecommend() {
-  const dev = readSettings().readerDevice;
-  return readerPick({ totalGB: os.totalmem() / 2 ** 30, platform: process.platform, arch: process.arch, vramGB: dev && dev.gpu ? (dev.vram || 0) / 2 ** 30 : 0 });
+  const s = readSettings();
+  const dev = s.readerDevice;
+  return readerPick({ totalGB: os.totalmem() / 2 ** 30, platform: process.platform, arch: process.arch, vramGB: dev && dev.gpu ? (dev.vram || 0) / 2 ** 30 : 0, failed: s.readerFailed && s.readerFailed.tier });
 }
 // What the reader runs on, kept in settings.json once known: found by a
 // probe the first time the reader's status is asked for (never at launch),
@@ -2606,24 +2624,24 @@ function canonResumeDownload() {
 // It runs at the lowest priority with two cores left for the writing room.
 let canonChild = null;
 let canonSeq = 0;
-const canonWaiting = new Map();
 let canonLoaded = null; // the model file the worker has loaded
+// (each worker answers its own questions: one that dies leaves the next alone)
 function canonWorker(msg) {
   return new Promise((resolve) => {
     if (!canonChild) {
       try {
-        canonChild = utilityProcess.fork(path.join(__dirname, 'canon-worker.js'), [], { serviceName: 'NEO reader' });
-        const child = canonChild;
+        const child = utilityProcess.fork(path.join(__dirname, 'canon-worker.js'), [], { serviceName: 'NEO reader' });
+        child.waiting = new Map();
+        canonChild = child;
         child.on('spawn', () => { try { os.setPriority(child.pid, 19); } catch { /* best effort */ } });
-        canonChild.on('message', (m) => {
-          const done = canonWaiting.get(m.id);
-          if (done) { canonWaiting.delete(m.id); done(m); }
+        child.on('message', (m) => {
+          const done = child.waiting.get(m.id);
+          if (done) { child.waiting.delete(m.id); done(m); }
         });
-        canonChild.on('exit', () => {
-          canonChild = null;
-          canonLoaded = null;
-          for (const done of canonWaiting.values()) done({ ok: false, error: 'gone' });
-          canonWaiting.clear();
+        child.on('exit', (code) => {
+          if (canonChild === child) { canonChild = null; canonLoaded = null; }
+          for (const done of child.waiting.values()) done({ ok: false, error: 'gone', code });
+          child.waiting.clear();
         });
       } catch (err) {
         logError('canon reader', err);
@@ -2633,21 +2651,58 @@ function canonWorker(msg) {
       }
     }
     const id = ++canonSeq;
-    canonWaiting.set(id, resolve);
+    canonChild.waiting.set(id, resolve);
     canonChild.postMessage({ ...msg, id });
   });
 }
-let canonRunning = null; // the prompt being answered, so typing can stop it
-async function canonAsk(msg, urgent = false) {
+function canonWorkerStop() {
+  const child = canonChild;
+  canonChild = null;
+  canonLoaded = null;
+  if (child) { try { child.kill(); } catch { /* gone already */ } }
+}
+// A reader that can't start here (the worker dies loading it, or the load
+// fails) is remembered in settings.json as readerFailed, so Canon stops
+// trying it: the checks run without it and the window says so, until the
+// writer tries again or changes Reader settings. Automatic that dies is
+// tried once more on the processor (readerFellBack keeps that it worked).
+// Seen here: in Electron's processes a model whose weights need one block
+// over 2 GiB (the careful reader on a CPU) is refused by Chromium's
+// allocator and the worker dies (exit 5); plain Node loads it.
+function canonFailed(tier, why) {
+  const s = readSettings();
+  s.readerFailed = { tier, error: String(why || 'gone'), at: new Date().toISOString() };
+  writeSettings(s);
+  logError('canon reader', new Error(`the ${tier} reader couldn't start: ${why}`));
+  canonBroadcast({ type: 'hardware', ...canonReaderStatus() });
+}
+const canonFailedNow = () => { const f = readSettings().readerFailed; return f && f.tier === canonInstalled() ? f : null; };
+async function canonLoadModel() {
   const tier = canonInstalled();
   const file = tier && path.join(modelsDir(), canonReaders()[tier].file);
   if (!file) throw Object.assign(new Error('no reader'), { code: 'gone' });
-  if (canonLoaded !== file) {
-    const r = await canonWorker({ type: 'load', chat: file, threads: Math.max(1, os.cpus().length - 2), cpu: readSettings().readerHardware === 'cpu' });
-    if (!r.ok) { logError('canon reader', new Error(r.error)); throw Object.assign(new Error(r.error), { code: 'gone' }); }
-    canonDeviceKeep(r.result);
-    canonLoaded = file;
+  if (canonLoaded === file) return;
+  if (canonFailedNow()) throw Object.assign(new Error('failed'), { code: 'failed' });
+  const threads = Math.max(1, os.cpus().length - 2);
+  const cpu = readSettings().readerHardware === 'cpu';
+  let r = await canonWorker({ type: 'load', chat: file, threads, cpu });
+  if (!r.ok && !cpu) {
+    logError('canon reader', new Error('load failed on Automatic, trying the processor: ' + r.error + (r.code != null ? ' (exit ' + r.code + ')' : '')));
+    r = await canonWorker({ type: 'load', chat: file, threads, cpu: true });
+    if (r.ok) { const s = readSettings(); s.readerFellBack = tier; writeSettings(s); }
   }
+  if (!r.ok) {
+    canonFailed(tier, r.error + (r.code != null ? ' (exit ' + r.code + ')' : ''));
+    throw Object.assign(new Error(r.error), { code: 'failed' });
+  }
+  const s = readSettings();
+  if (s.readerFailed) { delete s.readerFailed; writeSettings(s); }
+  canonDeviceKeep(r.result);
+  canonLoaded = file;
+}
+let canonRunning = null; // the prompt being answered, so typing can stop it
+async function canonAsk(msg, urgent = false) {
+  await canonLoadModel();
   // (a pass the writer started isn't stopped by their typing)
   const id = canonSeq + 1;
   if (!urgent) canonRunning = () => canonWorker({ type: 'abort', target: id });
@@ -2655,6 +2710,13 @@ async function canonAsk(msg, urgent = false) {
   if (!urgent) canonRunning = null;
   if (r.ok) return r.result;
   throw Object.assign(new Error(r.error), r.error === 'aborted' || r.error === 'gone' ? { code: r.error } : {});
+}
+// Before a pass or a reading: the reader, loaded, or null when it can't
+// start (the work then runs as with no reader, and says so)
+async function canonReaderReady(opts) {
+  const reader = canonReader(opts);
+  if (!reader || (!app.isPackaged && process.env.NEO_CANON_FAKE)) return { reader, failed: false };
+  try { await canonLoadModel(); return { reader, failed: false }; } catch { return { reader: null, failed: true }; }
 }
 
 // Typing pauses the reader: the prompt being answered stops within a token
@@ -2740,6 +2802,7 @@ function canonReaderStatus() {
     download: canonDlState(),
     hardware: s.readerHardware === 'cpu' ? 'cpu' : 'auto',
     device: fake ? { gpu: false, names: [], vram: 0 } : s.readerDevice || null,
+    failed: canonFailedNow(),
     quietMs: !app.isPackaged && +process.env.NEO_CANON_QUIET_MS ? +process.env.NEO_CANON_QUIET_MS : null
   };
 }
@@ -2756,12 +2819,10 @@ ipcMain.handle('canon:readerSettings', (_e, change = {}) => {
   if (change.hardware === 'cpu' || change.hardware === 'auto') {
     const was = s.readerHardware === 'cpu' ? 'cpu' : 'auto';
     if (change.hardware === 'cpu') s.readerHardware = 'cpu'; else delete s.readerHardware;
-    if (was !== change.hardware) {
-      delete s.readerDevice;
-      if (canonChild) { try { canonChild.kill(); } catch { /* gone already */ } }
-    }
+    if (was !== change.hardware) { delete s.readerDevice; delete s.readerFailed; canonWorkerStop(); }
   }
-  if (change.choice && canonReaders()[change.choice]) s.readerChoice = change.choice;
+  if (change.choice && canonReaders()[change.choice]) { if (s.readerChoice !== change.choice) delete s.readerFailed; s.readerChoice = change.choice; }
+  if (change.retry) { delete s.readerFailed; canonWorkerStop(); }
   writeSettings(s);
   if (change.choice && canonInstalled() !== change.choice) canonDownload(change.choice);
   const r = canonReaderStatus();

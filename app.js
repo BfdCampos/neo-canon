@@ -981,13 +981,15 @@ async function renderShelves() {
       });
     }
     label.addEventListener('blur', async () => {
-      const before = shelf.name;
-      shelf.name = label.textContent.trim() || shelf.name;
-      label.textContent = shelf.name;
+      // (library.json read again since this was drawn: the shelf as it is now)
+      const live = library.shelves.find((x) => x.id === shelf.id) || shelf;
+      const before = live.name;
+      live.name = label.textContent.trim() || live.name;
+      label.textContent = live.name;
       if (NO_HOVER) label.contentEditable = 'false';
       await writeLibrary(library);
       // a bound shelf's name is its book's title: the cover follows it
-      if (isBound(shelf) && shelf.name !== before) { await syncCoverTitle(shelf); renderShelves(); }
+      if (isBound(live) && live.name !== before) { await syncCoverTitle(live); renderShelves(); }
     });
     label.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); label.blur(); }
@@ -7611,6 +7613,7 @@ function wireHoverPane(hotzone, pane, isPinnable) {
     (pane.id === 'side-pane' && $('#editor-view').matches('.darlings-tab, .canon-side:not(.canon-needs)')); // the snapshots (and a pass's slips) stay
   hotzone.addEventListener('mouseenter', (e) => {
     if (e.buttons) return; // dragging something — stand down
+    if (document.getElementById('map-view')) return; // the World Map has the whole window
     pane.classList.add('open');
   });
   hotzone.addEventListener('mouseleave', (e) => {
@@ -12511,6 +12514,8 @@ async function structuralUndo() {
   restoreCaret(snap.caret); // back to work, no announcement
   if (snap.rejoin) rejoinAtCaret();
   resetNativeUndo();
+  // a change across the series taken back from here: its card says so again
+  if (CANON_ON && canonReview) canonReviewRecheck();
 }
 
 // after undoing a double-Enter break, close the split the gesture made:
@@ -16618,6 +16623,8 @@ const CANON_ON = !!(window.neo.canonOpen && window.Canon);
 // Right-click a shelf's name → Keep a Canon for This Shelf. A folder kept
 // from before is taken up again with everything in it.
 async function keepCanon(shelf) {
+  // (a shelf object drawn before library.json was read again: the live one)
+  shelf = library.shelves.find((x) => x.id === shelf.id) || shelf;
   try {
     shelf.canonId = await window.neo.canonCreate(shelf.id, shelf.name);
   } catch (err) {
@@ -17029,14 +17036,16 @@ async function canonReadShelfNow(again = false) {
   canonReadAt = null;
   canonReadLine = res.error === 'stopped' || res.stopped ? t('Canon stopped reading. What it read is kept; Read the Shelf carries on from there.')
     : res.error === 'no-reader' ? t('Reading the shelf needs the reader. Download it above.')
+    : res.error === 'reader-failed' ? t('The reader couldn’t start on this computer. Reader settings can try CPU only, or the Quick reader.')
     : res.error ? t('Canon couldn’t read the shelf just now. Try again in a moment.')
       : t('Canon found {entries} and {facts}. {ok} checked out; {needs}.', { entries: t('{n} entries', { n: res.entries }), facts: t('{n} facts', { n: res.facts }), ok: res.verified, needs: t('{n} need you', { n: res.needs }) });
   if (canon && canon.id === id && (await canonLoad(true)) && currentTab === 'canon') renderCanon();
 }
 
 // How long reading takes, said before it starts (QA-VERIFY 3). Measured
-// with no graphics card (ACCURACY.md): about 2.5–4 minutes per 1,000 words
-// for either reader. Once a shelf has been read here, this computer's own
+// with no graphics card: about 2.5–4 minutes per 1,000 words for either
+// reader (ACCURACY.md), and up to 10 on a slow four-core computer (QA of
+// the Tutorial: 12 minutes for its 1,300 words). Once a shelf has been read here, this computer's own
 // pace (seconds per 1,000 words, kept on this device) replaces the range.
 const CANON_PACE_KEY = 'neo.canonPace';
 function canonPace() {
@@ -17052,7 +17061,7 @@ function canonReadGuess(words) {
   const n = fmtNum(words);
   if (pace) return t('On this computer, reading the shelf’s {words} words should take {time}.', { words: n, time: canonAbout((words / 1000) * pace) });
   const lo = (words / 1000) * 150;
-  const hi = (words / 1000) * 240;
+  const hi = (words / 1000) * 600;
   const time = hi < 90 ? t('a minute or two')
     : lo >= 5400 ? t('{a} to {b} hours', { a: Math.round(lo / 3600), b: Math.max(Math.round(lo / 3600) + 1, Math.round(hi / 3600)) })
       : hi >= 5400 ? t('{a} minutes to {b} hours', { a: Math.round(lo / 60), b: Math.round(hi / 3600) })
@@ -17113,12 +17122,16 @@ if (CANON_ON) {
 // ---- the reader's setup page: one button, inside the Canon tab ----
 const canonGB = (bytes) => fmtNum(Math.round(bytes / 1e8) / 10);
 const CANON_TIERS = () => ({
-  careful: { name: t('Careful reader'), desc: t('Reads closely and misses less. For computers with 16 GB of memory.') },
-  quick: { name: t('Quick reader'), desc: t('Faster, misses more. For computers with 8 GB of memory.') }
+  careful: { name: t('Careful reader'), desc: t('Reads closely and misses less. For a computer with a graphics card, or a Mac with Apple silicon and 16 GB of memory.') },
+  quick: { name: t('Quick reader'), desc: t('Faster, misses more. Runs on any computer with 8 GB of memory.') }
 });
 let canonJustReady = false;
 // the shelf has words to read: the reader starts on them once it's here
 const canonHasWords = () => !!(canon && canon.shelf && canon.shelf.words);
+// the reader starts on a shelf once it's here, but not on the Tutorial's:
+// its lessons say when to read, and its world stays as they describe it
+const canonIsTutorial = () => !!(canon && library && library.shelves.some((s) => s.canonId === canon.id && Array.isArray(s.tutorial)));
+const canonAutoRead = () => canonHasWords() && !canonIsTutorial();
 async function canonDownloadEvent(msg) {
   if (canonRdr) canonRdr.download = msg;
   if (msg.state === 'done') await canonRdrNow();
@@ -17127,7 +17140,7 @@ async function canonDownloadEvent(msg) {
   canon.reader.download = msg;
   if (msg.state === 'done') {
     // one button: the download checked out, so Canon reads (Stop Reading stays)
-    if (canonHasWords() && !Object.keys(canon.meta.read || {}).length) { canonReadShelfNow(); return; }
+    if (canonAutoRead() && !Object.keys(canon.meta.read || {}).length) { canonReadShelfNow(); return; }
     canonJustReady = true;
     if (currentTab === 'canon') renderCanon();
     return;
@@ -17145,11 +17158,11 @@ function canonSetup() {
   const r = canon.reader;
   const tiers = CANON_TIERS();
   const dl = r.download || { state: 'idle' };
-  const after = canonHasWords() ? t('When it’s here, Canon starts reading — you can keep writing.') : t('You can keep writing while it downloads.');
+  const after = canonAutoRead() ? t('When it’s here, Canon starts reading — you can keep writing.') : t('You can keep writing while it downloads.');
   say(canon.entries.size ? t('Get the reader') : t('Canon needs a reader'), 'cn-h');
   say(t('Canon reads your books and notes and keeps track of who and what is in your world — every fact tied to the line that says it. The reader runs on this computer. Nothing you write is sent anywhere.'));
   const get = (tier) => { window.neo.canonDownload(tier); canon.reader.download = { state: 'downloading', tier, got: 0, total: r.catalogue[tier].size }; box.replaceWith(canonSetup()); };
-  const label = canonHasWords() ? t('Download and Read the Shelf') : t('Download');
+  const label = canonAutoRead() ? t('Download and Read the Shelf') : t('Download');
   if (dl.state === 'downloading' || dl.state === 'paused') {
     const bar = document.createElement('div');
     bar.className = 'cn-bar';
@@ -17255,7 +17268,10 @@ function canonReaderLine(cls = 'cn-reader-line', inWindow = false) {
   const say = (text) => { const x = document.createElement('span'); x.textContent = text; box.appendChild(x); };
   const button = (label, fn, c = 'cn-btn cn-rl-go') => { const b = document.createElement('button'); b.className = c; b.textContent = label; b.onclick = fn; box.appendChild(b); return b; };
   const best = r.recommend === 'short' ? null : r.recommend;
-  if (r.installed && dl.state !== 'downloading' && dl.state !== 'paused') {
+  if (r.installed && r.failed && dl.state !== 'downloading') {
+    say(t('The reader couldn’t start on this computer.') + ' ');
+    button(t('Try Again'), () => canonReaderRetry());
+  } else if (r.installed && dl.state !== 'downloading' && dl.state !== 'paused') {
     const dev = canonDevice(r);
     say(t('Reader ready') + (dev ? ' · ' + dev : ''));
   } else if (dl.state === 'downloading') {
@@ -17283,6 +17299,14 @@ function canonReaderLine(cls = 'cn-reader-line', inWindow = false) {
   box.appendChild(more);
   return box;
 }
+// Try Again, after the reader couldn't start: Canon forgets that and tries it
+async function canonReaderRetry() {
+  canonRdr = await window.neo.canonReaderSettings({ retry: true });
+  canonReadLine = '';
+  if (canon) canon.reader = canonRdr;
+  canonReaderRedraw();
+  if (currentTab === 'canon') renderCanon();
+}
 // every place that shows the reader, drawn again
 function canonReaderRedraw() {
   for (const old of document.querySelectorAll('#canon-view .cn-reader-line')) old.replaceWith(canonReaderLine());
@@ -17296,6 +17320,15 @@ function canonPassReader() {
   box.className = 'cs-note cs-reader';
   const dl = r && r.download;
   const best = r && r.recommend !== 'short' ? r.recommend : null;
+  if (r && r.installed && r.failed) {
+    box.append(t('The reader couldn’t start on this computer — checks ran without it.') + ' ');
+    const b = document.createElement('button');
+    b.className = 'cs-get';
+    b.textContent = t('Reader settings…');
+    b.onclick = () => showCanonReader();
+    box.appendChild(b);
+    return box;
+  }
   if (!r || r.installed) return box;
   if (dl && (dl.state === 'downloading' || dl.state === 'paused' || dl.state === 'error')) { box.appendChild(canonReaderLine()); return box; }
   box.append(t('Some checks need the reader.') + ' ');
@@ -17343,9 +17376,18 @@ function canonReaderFill(bd) {
     bar.appendChild(fill);
   }
   m.appendChild(canonReaderLine('cn-reader-line rs-status', true));
+  if (r.installed && r.failed) el('p', 'wl-fine rs-failed', t('Try CPU only, or the Quick reader, below: the Quick reader needs less memory in one piece. Until then Canon’s checks run without the reader.'));
+  // the choices, for whoever wants them: nothing here needs choosing
+  const more = el('details', 'rs-more');
+  more.open = !!(r.installed && r.failed) || bd.dataset.more === '1';
+  more.ontoggle = () => { bd.dataset.more = more.open ? '1' : ''; };
+  const sum = document.createElement('summary');
+  sum.textContent = t('Settings (you can leave these as they are)');
+  more.appendChild(sum);
+  const into = (x) => { more.appendChild(x); return x; };
   const pick = (title, rows) => {
-    el('div', 'cn-h', title);
-    const row = el('div', 'rs-row');
+    into(el('div', 'cn-h', title));
+    const row = into(el('div', 'rs-row'));
     for (const x of rows) {
       const b = document.createElement('button');
       b.className = 'fr-choice' + (x.on ? ' sel' : '');
@@ -17373,10 +17415,10 @@ function canonReaderFill(bd) {
     on: x === chosen,
     go: () => { if (x !== r.installed) set({ choice: x }); }
   })));
-  el('p', 'wl-fine rs-note', t('A reader that isn’t on this computer yet downloads when you choose it.'));
+  into(el('p', 'wl-fine rs-note', t('A reader that isn’t on this computer yet downloads when you choose it.')));
   const pace = canonPace();
-  el('p', 'wl-fine rs-speed', pace ? t('Measured here: the reader reads about {n} words a minute.', { n: fmtNum(Math.max(1, Math.round(60000 / pace))) })
-    : t('Speed: measured the first time Canon reads a shelf on this computer.'));
+  into(el('p', 'wl-fine rs-speed', pace ? t('Measured here: the reader reads about {n} words a minute.', { n: fmtNum(Math.max(1, Math.round(60000 / pace))) })
+    : t('Speed: measured the first time Canon reads a shelf on this computer.')));
   const foot = el('div', 'wl-foot');
   const done = document.createElement('button');
   done.className = 'btn-gold rs-close';
@@ -17566,6 +17608,21 @@ function canonHome() {
     say(t('Canon will read {what} ({words}). You can keep writing; Canon steps aside whenever you type.', { what, words: t('{n} words', { n: sh.words }) }));
   } else say(t('Canon reads every book and notebook on this shelf, and only what changed since it last read. Facts you wrote or confirmed are never changed.'));
   if (canonReading) { box.appendChild(canonReadProgress()); return box; }
+  // a reader that couldn't start here: Try Again, or Reader settings (never the same crash on every click)
+  if (canon.reader.failed) {
+    say(t('The reader couldn’t start on this computer. Reader settings can try CPU only, or the Quick reader. Until then, the checks run without it.'), 'cn-note cn-read-line');
+    const row = document.createElement('div');
+    row.className = 'cn-failed';
+    for (const [label, fn, cls] of [[t('Try Again'), () => canonReaderRetry(), 'btn-gold'], [t('Reader settings'), () => showCanonReader(), 'cn-btn']]) {
+      const b = document.createElement('button');
+      b.className = cls;
+      b.textContent = label;
+      b.onclick = fn;
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+    return box;
+  }
   const go = document.createElement('button');
   go.className = 'cn-read btn-gold';
   go.textContent = t('Read the Shelf');
@@ -17829,6 +17886,8 @@ function canonBacklinks(page, e, el) {
       b.append(el('i', '', x.book), el('span', 'cn-where-in', ', ' + x.label + ' — '),
         el('q', 'cn-quote', ''));
       b.querySelector('q').append(x.snippet.slice(0, k), el('b', '', x.span), x.snippet.slice(k + x.span.length));
+      // (a passage that opens on speech has its own quote mark: not two)
+      if (/^[“"‘]/.test(x.snippet)) b.querySelector('q').classList.add('cn-q-open');
       b.onclick = () => canonOpenMention(x);
       li.appendChild(b);
       return li;
@@ -18220,7 +18279,7 @@ function canonSideUpdate(tab = currentTab) {
     const facts = t('{n} facts', { n: canonPassFacts });
     box.appendChild(el('div', 'cs-note', asks ? t('No slips found against {facts} · {asks}', { facts, asks: t('{n} worth a look', { n: asks }) }) : t('No slips found against {facts}.', { facts })));
   }
-  if (canon && !canon.reader.installed) box.appendChild(canonPassReader());
+  if (canon && (!canon.reader.installed || canon.reader.failed)) box.appendChild(canonPassReader());
   const asked = shown.filter((s) => s.ask);
   for (const s of shown.filter((x) => !x.ask).concat(asked)) {
     if (s === asked[0]) box.appendChild(el('div', 'cs-ask-head', t('Worth a look')));

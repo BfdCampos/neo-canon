@@ -2528,6 +2528,12 @@ body.light .cn-reader-line { color: #6e695f; }
 .modal.rs .fr-choice span { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
 .modal.rs .fr-choice.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .modal.rs .rs-note { margin: 8px 0 0; font-size: 12px; }
+.modal.rs .rs-more { margin-top: 14px; }
+.modal.rs .rs-more > summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+.modal.rs .rs-more > summary:hover { color: var(--accent); }
+.modal.rs .rs-failed { margin: 8px 0 0; }
+.modal.rs .wl-foot { margin-top: 14px; }
+.cn-home .cn-failed { display: flex; gap: 14px; align-items: center; }
 .modal.rs .rs-speed { margin: 14px 0 4px; }
 .modal.rs .rs-status .rs-download { margin-top: 10px; font-size: 13px; }
 /* a link in a page that does something in NEO (the Tutorial's Download the reader) */
@@ -2537,3 +2543,6 @@ body.light .cn-reader-line { color: #6e695f; }
   color: var(--bg); background: var(--accent); text-indent: 0; margin: 10px 0 14px;
 }
 .chapter-body a[href^="neo:"]:hover { filter: brightness(1.08); }
+
+/* a Mentioned in passage that opens on speech keeps its own quote mark */
+q.cn-q-open::before { content: no-open-quote; }
