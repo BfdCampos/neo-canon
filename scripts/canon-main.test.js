@@ -16,7 +16,7 @@ const root = path.join(__dirname, '..');
 const localRequire = createRequire(path.join(root, 'main.js'));
 const FIXTURE = path.join(__dirname, 'fixtures', 'canon', 'library');
 
-function loadMain(dir) {
+function loadMain(dir, opts = {}) {
   const handlers = new Map();
   const electron = {
     app: { commandLine: { appendSwitch() {} }, getPath: () => dir, getLocale: () => 'en', requestSingleInstanceLock: () => true, whenReady: () => ({ then() {} }), on() {} },
@@ -24,7 +24,7 @@ function loadMain(dir) {
     BrowserWindow: { getFocusedWindow: () => null, getAllWindows: () => [] },
     Menu: { buildFromTemplate: (items) => items, setApplicationMenu() {} },
     dialog: {},
-    utilityProcess: { fork: () => ({ on() {}, postMessage() {} }) },
+    utilityProcess: { fork: opts.fork || (() => ({ on() {}, postMessage() {} })) },
     screen: {}
   };
   const context = vm.createContext({
@@ -39,6 +39,7 @@ function loadMain(dir) {
     return out === undefined ? out : JSON.parse(JSON.stringify(out));
   };
   call.context = context;
+  call.handler = (name) => handlers.get(name);
   return call;
 }
 
@@ -172,5 +173,72 @@ describe('canon files', { concurrency: 1 }, () => {
       server.close();
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // Which reader suits this computer: the graphics card first, then memory
+  test('the reader recommended from the hardware: a 6 GB GPU or Apple silicon with 16 GB → careful; the processor alone → quick', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-pick-'));
+    try {
+      const call = loadMain(dir);
+      const pick = (o) => vm.runInContext(`readerPick(${JSON.stringify(o)})`, call.context);
+      assert.equal(pick({ totalGB: 8, platform: 'win32', arch: 'x64', vramGB: 12 }), 'careful');
+      assert.equal(pick({ totalGB: 8, platform: 'linux', arch: 'x64', vramGB: 6 }), 'careful');
+      assert.equal(pick({ totalGB: 8, platform: 'linux', arch: 'x64', vramGB: 4 }), 'quick');
+      assert.equal(pick({ totalGB: 16, platform: 'darwin', arch: 'arm64' }), 'careful');
+      assert.equal(pick({ totalGB: 8, platform: 'darwin', arch: 'arm64' }), 'quick');
+      // on the processor alone the careful reader can't start inside NEO (one block over 2 GiB)
+      assert.equal(pick({ totalGB: 32, platform: 'linux', arch: 'x64' }), 'quick');
+      assert.equal(pick({ totalGB: 32, platform: 'darwin', arch: 'x64' }), 'quick');
+      assert.equal(pick({ totalGB: 6, platform: 'linux', arch: 'x64' }), 'short');
+      assert.equal(pick({ totalGB: 6, platform: 'linux', arch: 'x64', vramGB: 8 }), 'careful');
+      // and once the careful reader failed here, the other
+      assert.equal(pick({ totalGB: 32, platform: 'darwin', arch: 'arm64', failed: 'careful' }), 'quick');
+      // Reader settings: the hardware and the reader chosen are kept in settings.json
+      const r = call('canon:readerSettings', { hardware: 'cpu' });
+      assert.equal(r.hardware, 'cpu');
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).readerHardware, 'cpu');
+      assert.equal(call('canon:readerSettings', { hardware: 'auto' }).hardware, 'auto');
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).readerHardware, undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // A reader on disk whose worker dies loading it (as the careful reader's
+  // does inside Electron on a CPU): tried again on the processor, then
+  // remembered; the pass runs without it and says so, Read the Shelf too
+  test('a reader that can\'t start: retried on the processor, remembered, and the pass runs without it', async () => {
+    const dir = library();
+    try {
+      const forks = [];
+      const call = loadMain(dir, { fork: () => {
+        const on = {};
+        const child = { on: (ev, fn) => { on[ev] = fn; }, postMessage: (m) => { forks.push(m); setTimeout(() => on.exit && on.exit(5)); }, kill() {} };
+        return child;
+      } });
+      const models = path.join(dir, 'models');
+      fs.mkdirSync(models, { recursive: true });
+      const careful = vm.runInContext('READERS.careful', call.context);
+      fs.closeSync(fs.openSync(path.join(models, careful.file), 'w'));
+      fs.truncateSync(path.join(models, careful.file), careful.size); // (sparse: no 2.5 GB written)
+      assert.equal(call('canon:readerStatus').installed, 'careful');
+      const canonId = 'canon-the-ashfall-road-shelf-ash';
+      const lib = JSON.parse(fs.readFileSync(path.join(dir, 'library.json'), 'utf8'));
+      const bookId = lib.shelves[0].bookIds[0];
+      const res = await call.handler('canon:check')({ sender: { isDestroyed: () => true } }, { canonId, bookId, scope: 'book', html: {} });
+      assert.equal(res.readerFailed, true);
+      assert.ok(Array.isArray(res.slips));
+      // Automatic, then the processor: two loads, the second with cpu
+      assert.deepEqual(forks.filter((m) => m.type === 'load').map((m) => m.cpu), [false, true]);
+      const settings = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8'));
+      assert.equal(settings.readerFailed.tier, 'careful');
+      const status = call('canon:readerStatus');
+      assert.equal(status.failed.tier, 'careful');
+      // remembered: the next pass doesn't try again, Read the Shelf says why
+      const n = forks.length;
+      assert.equal((await call.handler('canon:check')({ sender: { isDestroyed: () => true } }, { canonId, bookId, scope: 'book', html: {} })).readerFailed, true);
+      assert.equal((await call.handler('canon:readShelf')({ sender: { isDestroyed: () => true } }, canonId, {})).error, 'reader-failed');
+      assert.equal(forks.length, n);
+      // Try Again forgets it
+      assert.equal(call('canon:readerSettings', { retry: true }).failed, null);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

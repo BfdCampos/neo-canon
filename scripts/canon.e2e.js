@@ -3,7 +3,9 @@
 // scripts/canon.e2e.js where there's no display). With CANON_SHOTS=1,
 // screenshots of the tab, a slip's popover, the reader's download, Read the
 // Shelf at work, the review of a change and a notebook go to
-// docs/semantics/screens/ (without it, nothing tracked is written).
+// docs/semantics/screens/ (without it, nothing tracked is written), and from
+// the Tutorial's walk, with no reader: the Canon tab's first open, the
+// reader's line and window in each state, Get the Reader, Back to Shelf.
 
 'use strict';
 
@@ -21,7 +23,8 @@ for (const name of fs.readdirSync(os.tmpdir())) {
 }
 // A part (NEO_E2E_PART) runs in a child NEO of its own, on a fresh computer
 // and an empty library (NEO_E2E_TMP): 'tutorial' meets the welcome and the
-// Tutorial; 'relaunch' opens NEO again on the same folders.
+// Tutorial, then walks its lessons with no reader; 'relaunch' opens NEO
+// again on the same folders.
 const PART = process.env.NEO_E2E_PART || '';
 const tmp = PART ? process.env.NEO_E2E_TMP : fs.mkdtempSync(path.join(os.tmpdir(), `neo-canon-test-${process.pid}-`));
 const LIB = path.join(tmp, 'NEO Library');
@@ -55,8 +58,9 @@ const server = http.createServer((req, res) => {
   const send = () => {
     if (res.destroyed) return;
     if (at >= MODEL.length) { res.end(); return; }
-    res.write(MODEL.subarray(at, at + 600000));
-    at += 600000;
+    const chunk = PART === 'tutorial' ? 150000 : 600000; // (the Tutorial's walk watches it longer)
+    res.write(MODEL.subarray(at, at + chunk));
+    at += chunk;
     setTimeout(send, 50);
   };
   send();
@@ -308,6 +312,46 @@ test('Read the Shelf (the fake reader), started by the download: progress, a pau
   await until(`currentTab === 'notes' && CSS.highlights.has('neo-canon-quote')`);
   assert.equal(await js(`[...CSS.highlights.get('neo-canon-quote')][0].toString()`), 'Bramble is in foal by the end of book 2?');
   await js(`switchTab('canon')`);
+});
+
+test('the reader, always findable: Reader ready · CPU at the top of an entry; Help → Canon Reader… with its settings', async () => {
+  await js(`canonGo('bramble')`);
+  await until(`/^Reader ready · CPU/.test(document.querySelector('#canon-view .cn-reader-line')?.textContent)`);
+  assert.equal(await js(`document.querySelector('#canon-view').firstElementChild.classList.contains('cn-reader-line')`), true);
+  await tick(300);
+  await shot('canon-reader-ready.png');
+  // the line's Reader settings, Help → Canon Reader… and ⌘K all open one window
+  wc.send('menu', { type: 'reader' });
+  await until(`!!document.querySelector('#canon-reader .rs-status') && /Reader ready · CPU/.test(document.querySelector('#canon-reader').textContent)`);
+  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-reader .fr-choice.sel strong')].map((b) => b.textContent)`), ['Automatic', (tier === 'careful' ? 'Careful' : 'Quick') + ' reader · 0.1 GB']);
+  assert.match(await js(`document.querySelector('#canon-reader').textContent`), /Now: CPU\./);
+  assert.match(await js(`document.querySelector('#canon-reader .rs-speed').textContent`), /^Measured here: the reader reads about [\d,]+ words a minute\.$/);
+  await js(`document.querySelector('#canon-reader .rs-more').open = true`);
+  await tick(150);
+  await shot('canon-reader-settings.png');
+  // CPU only is kept in settings.json, and Automatic takes it away again
+  await js(`[...document.querySelectorAll('#canon-reader .fr-choice')].find((b) => b.textContent.startsWith('CPU only')).click()`);
+  await until(`canonRdr.hardware === 'cpu' && document.querySelector('#canon-reader .fr-choice.sel strong').textContent === 'CPU only'`);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'app', 'settings.json'), 'utf8')).readerHardware, 'cpu');
+  await js(`[...document.querySelectorAll('#canon-reader .fr-choice')].find((b) => b.textContent.startsWith('Automatic')).click()`);
+  await until(`canonRdr.hardware === 'auto'`);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'app', 'settings.json'), 'utf8')).readerHardware, undefined);
+  key('Escape');
+  await until(`!document.querySelector('#canon-reader')`);
+  await js(`document.querySelector('#canon-view .cn-rl-settings').click()`);
+  await until(`!!document.querySelector('#canon-reader')`);
+  await js(`document.querySelector('#canon-reader .rs-close').click()`);
+  await until(`!document.querySelector('#canon-reader')`);
+  // a reader that couldn't start here: said in one line, Try Again and Reader settings, never a dead end
+  await js(`canon.reader.failed = { tier: canon.reader.installed }; canonReaderRedraw()`);
+  await until(`/^The reader couldn’t start on this computer\. Try AgainReader settings$/.test(document.querySelector('#canon-view .cn-reader-line').textContent)`);
+  await js(`canonShown = null; renderCanon()`);
+  await until(`!!document.querySelector('#canon-view .cn-failed')`);
+  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-failed button')].map((b) => b.textContent)`), ['Try Again', 'Reader settings']);
+  await tick(200);
+  await shot('canon-reader-failed.png');
+  await js(`document.querySelector('#canon-view .cn-failed button').click()`);
+  await until(`!canon.reader.failed && !!document.querySelector('#canon-view .cn-read')`);
 });
 
 const chapterFiles = () => ['c1', 'c2', 'c3'].map((c) => fs.readFileSync(path.join(LIB, SALT, 'chapters', c + '.html'), 'utf8'));
@@ -1071,11 +1115,212 @@ part('tutorial', 'the Tutorial on the shelf, and ⌘\' in its story finds exactl
   key("'", [CMD]);
   await until(`canonPassOn && canonProgress === '' && canonSlips.length === 3`, 9000);
   assert.deepEqual(await js(`canonSlips.map((s) => s.chId + ' ' + s.span + ' → ' + s.to)`), ['c2 his → her', 'c3 Marowby → Marrowby', 'c3 brown → grey']);
+  // fewer checks without the reader, said in one line with its button
+  assert.equal(await js(`document.querySelector('#canon-side .cs-reader').textContent`), 'Some checks need the reader. Download it (0.1 GB, runs on this computer).');
   await js(`canonSlips[0].range.startContainer.parentElement.scrollIntoView({ block: 'center' })`);
   await tick(400);
   await shot('tutorial-pass.png');
   key("'", [CMD]);
   await until(`!canonPassOn`);
+});
+
+// The Tutorial walked through, lesson by lesson, on a computer with no
+// reader: every Try this that needs none succeeds, and the lessons that need
+// the reader say so with a button that gets it.
+const lessons = () => js(`${tutorialShelf}.tutorial[0]`);
+const storyId = () => js(`${tutorialShelf}.tutorial[1]`);
+const lessonText = async (n) => { const id = await lessons(); return fs.readFileSync(path.join(LIB, id, 'chapters', 'l' + String(n).padStart(2, '0') + '.html'), 'utf8'); };
+const openStory = async (tab = 'manuscript') => {
+  const id = await storyId();
+  if (await js(`!book || book.id !== '${id}'`)) { await js(`openBook('${id}')`); await until(`book && book.id === '${id}'`); }
+  if (await js(`currentTab !== '${tab}'`)) await js(`switchTab('${tab}')`);
+};
+const caretAtEndOf = (chId) => js(`(() => { const ps = document.querySelectorAll('.chapter[data-id="${chId}"] .chapter-body p'); const p = ps[ps.length - 1]; p.scrollIntoView({ block: 'center' }); const r = document.createRange(); r.selectNodeContents(p); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); p.closest('.chapter-body').focus(); })()`);
+
+part('tutorial', 'lesson 1: ← Back to Shelf at the top left, in sight, and the darling already cut', async () => {
+  assert.match(await lessonText(1), /Back to Shelf/);
+  await openStory();
+  const b = await js(`(() => { const b = $('#back-to-shelf'); const r = b.getBoundingClientRect(); return { text: b.textContent.trim(), left: r.left, top: r.top, w: r.width, opacity: +getComputedStyle(b).opacity, inBar: !!b.closest('#bottombar') }; })()`);
+  assert.equal(b.text, '← Back to Shelf');
+  assert.ok(b.left < 120 && b.top < 20 && b.w > 60 && b.opacity >= 0.5 && !b.inBar, JSON.stringify(b));
+  assert.equal(await js(`!!document.querySelector('#bottombar #back-to-shelf')`), false); // one way back, not two
+  await tick(300);
+  await shot('back-to-shelf.png');
+  await theme('light');
+  await shot('back-to-shelf-light.png');
+  await theme('night');
+  await js(`$('#back-to-shelf').click()`);
+  await until(`!$('#bookshelf-view').hidden && $('#editor-view').hidden`);
+  await openStory('darlings');
+  await until(`/bitten a bishop/.test(document.querySelector('#darlings-list').textContent)`);
+});
+
+part('tutorial', 'the Canon tab, first open with no reader: both panes pinned, the reader line with Download; unpinned, it stays so', async () => {
+  assert.match(await lessonText(2), /read Chapter 1 of/);
+  await openStory('canon');
+  await until(`!!document.querySelector('#canon-view .cn-setup') && !!document.querySelector('#nav-list .cn-item')`);
+  const panes = `['#nav-pane', '#side-pane'].map((p) => $(p).dataset.pinned === '1' && $(p).classList.contains('open'))`;
+  assert.deepEqual(await js(panes), [true, true]);
+  assert.match(await js(`document.querySelector('#canon-view .cn-home').textContent`), /^Pick an entry from the list on the left/);
+  await tick(400);
+  await shot('canon-tab-first-open.png');
+  await theme('light');
+  await shot('canon-tab-first-open-light.png');
+  await theme('night');
+  // an entry: the reader line at the top, no reader yet, one button
+  await js(`canonGo('juniper')`);
+  await until(`/^No reader yet — Download \\(0\\.1 GB\\)Reader settings$/.test(document.querySelector('#canon-view .cn-reader-line')?.textContent)`);
+  await shot('canon-reader-none.png');
+  // the manuscript keeps its hover-hidden panes; the Canon tab its pins
+  await js(`switchTab('manuscript')`);
+  assert.deepEqual(await js(`['#nav-pane', '#side-pane'].map((p) => $(p).dataset.pinned === '1')`), [false, false]);
+  await js(`switchTab('canon')`);
+  assert.deepEqual(await js(panes), [true, true]);
+  await js(`$('#nav-pin').click()`);
+  await js(`switchTab('manuscript'); switchTab('canon')`);
+  assert.equal(await js(`$('#nav-pane').dataset.pinned`), '0'); // this device remembers
+  await js(`$('#nav-pin').click()`);
+  // Help → Canon Reader… opens from here, and ⌘K finds it
+  wc.send('menu', { type: 'reader' });
+  await until(`!!document.querySelector('#canon-reader') && /No reader on this computer yet\\.Download the Reader \\(0\\.1 GB\\)/.test(document.querySelector('#canon-reader').textContent)`);
+  await shot('canon-reader-window-none.png');
+  key('Escape');
+  await until(`!document.querySelector('#canon-reader')`);
+  await until2(() => key('K', [CMD]), `!!go`);
+  wc.insertText('canon reader');
+  await until(`(${goRows}[0] || '') === 'Canon Reader… | Command'`);
+  key('Return');
+  await until(`!!document.querySelector('#canon-reader')`);
+  key('Escape');
+  await until(`!document.querySelector('#canon-reader')`);
+});
+
+part('tutorial', 'lesson 3: Get the Reader, its button in the page starts the download and shows it; the Canon tab\'s line follows; Pause', async () => {
+  const id = await lessons();
+  await js(`openBook('${id}')`);
+  await until(`book && book.id === '${id}'`);
+  const link = `document.querySelector('.chapter[data-id="l03"] a[href="neo:reader"]')`;
+  await until(`!!${link}`);
+  assert.equal(await js(`${link}.textContent`), 'Download the reader');
+  // a link in the page is saved with it, as the lesson was written
+  assert.match(await js(`captureBody(document.querySelector('.chapter[data-id="l03"] .chapter-body'))`), /<a href="neo:reader">Download the reader<\/a>/);
+  await js(`${link}.scrollIntoView({ block: 'center' })`);
+  await tick(300);
+  await shot('tutorial-get-reader.png');
+  await js(`${link}.click()`);
+  await until(`!!document.querySelector('#canon-reader') && canonRdr.download.state === 'downloading'`);
+  await until(`/Downloading the reader… \\d+%/.test(document.querySelector('#canon-reader .rs-status').textContent)`);
+  await shot('canon-reader-window.png');
+  key('Escape');
+  await until(`!document.querySelector('#canon-reader')`);
+  await openStory('canon');
+  await js(`canonGo('juniper')`);
+  await until(`/^Downloading the reader… \\d+% · Pause/.test(document.querySelector('#canon-view .cn-reader-line')?.textContent) && canonRdr.download.got > 0`);
+  await shot('canon-reader-downloading.png');
+  await js(`[...document.querySelectorAll('#canon-view .cn-reader-line button')].find((b) => b.textContent === 'Pause').click()`);
+  await until(`/^The reader’s download is paused at \\d+% · Resume/.test(document.querySelector('#canon-view .cn-reader-line')?.textContent)`);
+  assert.equal(await js(`canonRdr.installed`), null);
+  // the Tutorial's Canon isn't read when the reader arrives: its lessons say when
+  assert.equal(await js(`canonIsTutorial() && !canonAutoRead()`), true);
+});
+
+part('tutorial', 'lessons 4 and 5, no reader: Juniper\'s source opens Chapter 1 lit; Hesketh\'s Story so far; ⌘\' finds the three slips, two fixed, one Not a slip', async () => {
+  assert.match(await lessonText(4), /Before this lesson,<\/b> read Chapter 2/);
+  assert.match(await lessonText(5), /Before this lesson,<\/b> read Chapter 3/);
+  await openStory('canon');
+  await js(`canonGo('juniper')`);
+  await until(`document.querySelector('#canon-view .cn-name')?.textContent === 'Juniper'`);
+  await js(`[...document.querySelectorAll('#canon-view .cn-fact')].find((f) => /Sex/.test(f.textContent)).querySelector('.cn-where').click()`);
+  await until(`currentTab === 'manuscript' && CSS.highlights.has('neo-canon-quote')`);
+  assert.match(await js(`[...CSS.highlights.get('neo-canon-quote')][0].toString()`), /Juniper, the bay mare/);
+  await js(`switchTab('canon'); canonGo('hesketh')`);
+  await until(`document.querySelectorAll('#canon-view .cn-event').length === 2`);
+  await js(`switchTab('manuscript')`);
+  await js(`document.querySelector('.chapter[data-id="c1"] .chapter-body').focus()`);
+  key("'", [CMD]);
+  await until(`canonPassOn && canonProgress === '' && canonSlips.length === 3`, 9000);
+  // (the pass's pane says the reader would check more: here, where its download stands)
+  assert.match(await js(`document.querySelector('#canon-side .cs-reader').textContent`), /^The reader’s download is paused at \d+% · ResumeReader settings$/);
+  await js(`canonApply(canonSlips.find((s) => s.span === 'his'))`);
+  await js(`canonApply(canonSlips.find((s) => s.span === 'Marowby'))`);
+  await until(`canonShownSlips().length === 1`);
+  await js(`canonNotSlip(canonShownSlips()[0])`);
+  await until(`canonShownSlips().length === 0`);
+  assert.match(await js(`chapterHTML.c2`), /Juniper tossed her head/);
+  assert.match(await js(`chapterHTML.c3`), /lamps of Marrowby/);
+  key("'", [CMD]);
+  await until(`!canonPassOn`);
+});
+
+part('tutorial', 'lesson 6, no reader: "Juniper shook his mane." at the end of Chapter 3 is marked after the pause, and by ⌘\' at once', async () => {
+  assert.match(await lessonText(6), /Juniper shook his mane\./);
+  await openStory();
+  await caretAtEndOf('c3');
+  key('Return');
+  await tick(100);
+  wc.insertText('Juniper shook his mane.');
+  await tick(300);
+  assert.equal(await js(`canonSlips.length`), 0); // nothing while typing
+  await until(`canonSlips.some((s) => s.quiet && s.span === 'his' && s.sentence === 'Juniper shook his mane.')`, 8000);
+  assert.equal(await js(`CSS.highlights.get('neo-slip').size`), 1);
+  await tick(200);
+  await shot('tutorial-quiet-check.png');
+  // the impatient way: ⌘' finds it as well
+  key("'", [CMD]);
+  await until(`canonPassOn && canonProgress === '' && canonSlips.some((s) => s.sentence === 'Juniper shook his mane.')`, 9000);
+  key("'", [CMD]);
+  await until(`!canonPassOn`);
+  // done with it: the sentence goes, as the lesson says
+  await js(`(() => { const ps = document.querySelectorAll('.chapter[data-id="c3"] .chapter-body p'); const p = ps[ps.length - 1]; const body = p.closest('.chapter-body'); p.remove(); syncChapter(body, 'c3'); })()`);
+});
+
+part('tutorial', 'lessons 7 and 8, no reader: Juniper made a stallion through a review list; a link to Odile Fenn makes her entry', async () => {
+  await openStory('canon');
+  await js(`(() => { const e = canon.entries.get('juniper').data; const old = e.facts.find((f) => f.attr === 'sex'); canonChangeAcross('juniper', Canon.handFact('Sex: stallion'), old); })()`);
+  await until(`canonReview && !canonReview.loading && canonReview.items.length > 0`);
+  assert.ok(await js(`canonReview.items.some((x) => x.span === 'her' && x.to === 'his')`));
+  await js(`[...[...document.querySelectorAll('#canon-side .cs-review')][0].querySelectorAll('button')].find((b) => b.textContent === 'Apply').click()`);
+  await until(`canonReview.items[0].state === 'applied'`);
+  // ⌘Z from the Canon tab: the words go back, and the card says so again
+  await js(`switchTab('canon')`);
+  await js(`structuralUndo()`);
+  await until(`canonReview.items[0].state === 'todo'`);
+  if (await js(`currentTab !== 'manuscript'`)) await js(`switchTab('manuscript')`);
+  await js(`[...document.querySelectorAll('#canon-side button')].find((b) => b.textContent === 'Stop Reviewing').click()`);
+  await until(`!canonReview`);
+  await js(`switchTab('canon')`);
+  await js(`canonEdit('wren-calloway', (d) => { d.words = 'Carries a letter for [[Odile Fenn]].\\n'; })`);
+  await js(`canonGo('wren-calloway')`);
+  await until(`!!document.querySelector('#canon-view .cn-words .cn-link.cn-unresolved')`);
+  await js(`document.querySelector('#canon-view .cn-words .cn-link.cn-unresolved').click()`);
+  await until(`[...document.querySelectorAll('.pop-menu button')].some((b) => b.textContent === 'Make an entry for “Odile Fenn”')`);
+  await js(`[...document.querySelectorAll('.pop-menu button')].find((b) => b.textContent === 'Make an entry for “Odile Fenn”').click()`);
+  await until(`[...document.querySelectorAll('.pop-menu .pm-title')].some((x) => x.textContent === 'What is Odile Fenn?')`);
+  await menuPick('Person');
+  await until(`[...canon.entries.values()].some((x) => x.data && x.data.name === 'Odile Fenn')`);
+});
+
+part('tutorial', 'lesson 9, no reader: ⌘K "bay mare" finds Juniper; the World Map has Ballast and Hesketh', async () => {
+  await openStory();
+  await until2(() => key('K', [CMD]), `!!go`);
+  wc.insertText('bay mare');
+  await until(`(${goRows}[0] || '') === 'Juniper | Entry'`);
+  key('Escape');
+  await until(`!go`);
+  wc.send('menu', { type: 'worldMap' });
+  await until(`!!document.querySelector('#map-view') && NeoMap.nodes().length > 0`);
+  const ids = await js(`NeoMap.nodes().map((d) => d.id)`);
+  assert.ok(ids.includes('ballast') && ids.includes('hesketh'), ids.join());
+  await js(`mapClose()`);
+});
+
+part('tutorial', 'lesson 10: Needs You asks about Hesketh\'s mule with no reader; Read the Shelf\'s part says it needs the reader, with its button', async () => {
+  assert.match(await lessonText(10), /This one needs the reader\. Not got it yet\? <a href="neo:reader">Download the reader<\/a>/);
+  await openStory('canon');
+  await js(`canonShown = null; renderCanon()`);
+  await until(`[...document.querySelectorAll('#canon-side .cs-need strong')].some((x) => /^Hesketh says Juniper/.test(x.textContent))`);
+  await js(`[...document.querySelectorAll('#canon-side .cs-need button')].find((b) => b.textContent === 'Only what’s said').click()`);
+  await until(`!canon.entries.get('juniper').data.facts.some((f) => f.value === 'mule')`);
 });
 
 part('tutorial', 'the Canon tab on a book whose shelf keeps none: the explainer, Keep a Canon for “Works in Progress”, the Tutorial', async () => {

@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('neo', {
   canonRestore: (canonId, entryId) => ipcRenderer.invoke('canon:restore', canonId, entryId),
   canonSaveMeta: (canonId, patch) => ipcRenderer.invoke('canon:saveMeta', canonId, patch),
   canonReaderStatus: () => ipcRenderer.invoke('canon:readerStatus'),
+  canonReaderSettings: (change) => ipcRenderer.invoke('canon:readerSettings', change),
   canonCheck: (opts) => ipcRenderer.invoke('canon:check', opts),
   canonStop: () => ipcRenderer.invoke('canon:stop'),
   canonReadShelf: (canonId, opts) => ipcRenderer.invoke('canon:readShelf', canonId, opts),

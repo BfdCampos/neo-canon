@@ -93,8 +93,8 @@ describe('the Tutorial', { concurrency: 1 }, () => {
       assert.deepEqual(canonMeta.out, { [lessons]: meta.chapterOrder });
       assert.ok(fs.statSync(path.join(dir, r.canonId, 'set-aside')).isDirectory());
       // keys as written on this computer (the test's is Linux)
-      const l04 = fs.readFileSync(path.join(dir, lessons, 'chapters', 'l04.html'), 'utf8');
-      assert.match(l04, /Ctrl\+' runs a Continuity Pass/);
+      const l05 = fs.readFileSync(path.join(dir, lessons, 'chapters', 'l05.html'), 'utf8');
+      assert.match(l05, /Ctrl\+' runs a Continuity Pass/);
       assert.doesNotMatch(meta.chapterOrder.map((c) => fs.readFileSync(path.join(dir, lessons, 'chapters', c + '.html'), 'utf8')).join(''), /[⌘⌥⇧]/);
       assert.equal(vm.runInContext('keysHere("⌘⇧M, ⌥Enter, ⌘\'", "win32")', call.context), 'Ctrl+Shift+M, Alt+Enter, Ctrl+\'');
       assert.equal(vm.runInContext('keysHere("⌘⇧M", "darwin")', call.context), '⌘⇧M');
@@ -194,8 +194,47 @@ describe('the Tutorial', { concurrency: 1 }, () => {
     // the one question for Needs You (lesson 10): what Hesketh says, never a fact of the story's
     assert.deepEqual(waiting, ['juniper/species: mule · unverified']);
     assert.equal(entries.find((e) => e.id === 'juniper').facts.find((f) => f.value === 'mule').sources[0].said, 'Hesketh');
-    // and the Story so far lessons 3 and 10 point to: Canon's notes, each quote the story's own
+    // and the Story so far lessons 4 and 10 point to: Canon's notes, each quote the story's own
     assert.deepEqual(entries.find((e) => e.id === 'hesketh').story.map((x) => x.state), ['note', 'note']);
     for (const e of entries) for (const x of e.story) for (const s of x.sources) assert.ok(Canon.gateQuote(s.quote, Canon.sourceParas(chapter(s.ch)).map((p) => p.text).join('\n')), s.quote);
+  });
+
+  test('the lessons keep pace with the story: a chapter is read before a lesson uses it, and the reader is asked for plainly', () => {
+    const dir = path.join(root, 'tutorial', 'start-here');
+    const meta = JSON.parse(fs.readFileSync(path.join(dir, 'book.json'), 'utf8'));
+    const lesson = (id) => fs.readFileSync(path.join(dir, 'chapters', id + '.html'), 'utf8');
+    const read = new Set();
+    const readBy = {};
+    for (const id of meta.chapterOrder) {
+      for (const m of lesson(id).matchAll(/read Chapter (\d)/g)) read.add('c' + m[1]);
+      readBy[id] = new Set(read);
+    }
+    // the reading is spread out: Chapter 1 with lesson 2, Chapter 2 before lesson 4, Chapter 3 before lesson 5
+    assert.deepEqual([...readBy.l02], ['c1']);
+    assert.deepEqual([...readBy.l04].sort(), ['c1', 'c2']);
+    // every slip the Continuity Pass (lesson 5) finds is in a chapter already read
+    for (const ch of ['c2', 'c3']) assert.ok(readBy.l05.has(ch), ch);
+    // and the Needs You question of lesson 4's Canon tab (Hesketh's mule) is in Chapter 2
+    assert.match(fs.readFileSync(path.join(root, 'tutorial', 'story', 'chapters', 'c2.html'), 'utf8'), /more mule than horse/);
+    // Get the Reader comes straight after What Canon Is, with its button; lesson 10 needs the reader for its second part, and says so
+    assert.equal(meta.chapterTitles.l03, '3 · Get the Reader');
+    for (const id of ['l03', 'l10']) assert.match(lesson(id), /<a href="neo:reader">Download the reader<\/a>/, id);
+    assert.deepEqual(meta.chapterOrder.filter((id) => /neo:reader/.test(lesson(id))), ['l03', 'l10']);
+    // lesson 6's sentence is one the rules catch with no reader (scripts/canon*.test.js check the rule)
+    assert.match(lesson('l06'), /Juniper shook his mane\./);
+  });
+
+  test('lesson 6\'s sentence, typed at the end of Chapter 3, is a slip with no reader: "his" for the mare', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-tutorial-'));
+    try {
+      const call = loadMain(dir);
+      const r = call('tutorial:open', false);
+      shelve(dir, r);
+      const story = r.bookIds[1];
+      const engine = Canon.createEngine({ io: { ...vm.runInContext(`canonIO(${JSON.stringify(r.canonId)})`, call.context), knownWords } });
+      const html = fs.readFileSync(path.join(dir, story, 'chapters', 'c3.html'), 'utf8') + '<p>Juniper shook his mane.</p>';
+      const { slips } = await engine.check({ bookId: story, chId: 'c3', mode: 'quiet', html: { c3: html }, done: new Set() });
+      assert.deepEqual(slips.filter((x) => x.sentence === 'Juniper shook his mane.').map((x) => [x.span, x.to, x.entry]), [['his', 'her', 'juniper']]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

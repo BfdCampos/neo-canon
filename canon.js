@@ -1868,6 +1868,8 @@
           const facts = again || meta.read[key] !== h;
           const story = storied(src) && (again || meta.story[key] !== h);
           if (!facts && !story) continue;
+          // (an empty page is read at once, and never counted as one to read)
+          if (!paras.length) { meta.read[key] = h; if (storied(src)) meta.story[key] = h; continue; }
           todo.push({ src, key, paras, facts, story });
           const idx = mentionIndex(entries);
           left += paras.filter((p, j) => cueful(p.text, idx) && ((facts && !cache.proposals[ctxKey(paras, j)]) + (story && !cache.events[evKey(paras, j)]))).length;
