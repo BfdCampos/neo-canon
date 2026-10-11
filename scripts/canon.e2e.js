@@ -930,7 +930,7 @@ test('the QA pass: ⌘\' starts at once with a reader, and the World Map from th
 // point under Story so far and In this chapter, ⌘K finds it, and the
 // swap is a slip on "Dave" whose fix is one undoable edit.
 const OWNER_TEXT = '“Hello” John said. But there was no answer. He reached his hand through the swirling red vortex in front of him, as pages and random items flew around his room. Just as he fixed his blue eyes on the chaos, he perceived something—someone… Faintly he heard back. “Hello”.';
-const SWAP_TEXT = 'It was Dave who touched the vortex, that night, and nobody else.';
+const SWAP_TEXT = 'It was Dave who touched the red vortex that night, and nobody else.';
 let DOOR;
 test('the owner\'s text, read: the first thing said of John is kept, nothing for him waits in Needs You, and Story so far has his vortex', async () => {
   await js(`canonPassOn && canonPassOff()`);

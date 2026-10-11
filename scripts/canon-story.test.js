@@ -133,7 +133,7 @@ test('a Canon\'s note follows its passage: gone when the passage goes, made afre
 });
 
 // Chapter 2 gives the deed to Dave; its decoys don't
-const SWAP = 'It was Dave who touched the vortex that night, and nobody else.';
+const SWAP = 'It was Dave who reached through the red vortex that night, and nobody else.';
 const DECOYS = [
   'Dave kicked the vortex shut behind them.',
   'Dave remembered John reaching into the vortex.',
@@ -142,7 +142,7 @@ const DECOYS = [
 ];
 const STORY = {
   ...ANSWERS,
-  events: [...ANSWERS.events, { para: 'It was Dave', events: [{ who: ['Dave'], did: 'Dave touched the vortex', where: '', quote: 'It was Dave who touched the vortex that night' }] },
+  events: [...ANSWERS.events, { para: 'It was Dave', events: [{ who: ['Dave'], did: 'Dave reached through the red vortex', where: '', quote: 'It was Dave who reached through the red vortex that night' }] },
     { para: 'Dave kicked', events: [{ who: ['Dave'], did: 'Dave kicked the vortex shut', where: '', quote: 'Dave kicked the vortex shut behind them' }] }],
   contradicts: [{ sentence: 'It was Dave', who: 'John', answer: 'yes' }, { sentence: 'Dave kicked', answer: 'no' }, { sentence: 'Dave remembered', answer: 'no' }]
 };
@@ -151,7 +151,7 @@ test('a later sentence that gives John\'s deed to Dave is a slip on "Dave", citi
   const S = shelf([OWNER, [SWAP, ...DECOYS]]);
   const reader = Canon.fakeReader(STORY);
   await Canon.createEngine({ io: S.io, reader }).readShelf();
-  assert.deepEqual(S.entry('dave').story.map((x) => x.did), ['Dave touched the vortex', 'Dave kicked the vortex shut']);
+  assert.deepEqual(S.entry('dave').story.map((x) => x.did), ['Dave reached through the red vortex', 'Dave kicked the vortex shut']);
   const asked = [];
   const r2 = { ...reader, contradicts: async (q) => { asked.push(q.sentence); return reader.contradicts(q); } };
   const { slips, asks } = await Canon.createEngine({ io: S.io, reader: r2 }).check({ bookId: 'door' });
@@ -159,8 +159,10 @@ test('a later sentence that gives John\'s deed to Dave is a slip on "Dave", citi
   assert.deepEqual(deeds.map((s) => [s.chId, s.span, s.to, s.name, s.value, s.sources[0].label, s.sources[0].quote]),
     [['c2', 'Dave', 'John', 'John', 'John reached through a red vortex in his room', 'The Door, Ch 1', REACHED]]);
   assert.deepEqual(asks, []);
-  // speech and reported speech are never asked about; the rest are, and answered no
-  assert.deepEqual(asked, [SWAP, DECOYS[0], DECOYS[1]]);
+  // only what shares two distinctive words with the deed (or one found nowhere
+  // else) is asked: not the kick (only "vortex", which the shelf says often),
+  // never speech or reported speech
+  assert.deepEqual(asked, [SWAP]);
   // the slip's word is Dave's, in the writer's own text
   const p = Canon.sourceParas(S.io.sources()[1].html).find((x) => x.hash === deeds[0].para);
   assert.equal(p.text.slice(deeds[0].at, deeds[0].at + 4), 'Dave');
@@ -177,10 +179,10 @@ test('only an earlier key point counts; unclear or the quick reader is worth a l
     const { slips, asks } = await Canon.createEngine({ io: S.io, reader: r }).check({ bookId: 'door' });
     return [slips.filter((s) => s.attr === 'event').map((s) => s.span), asks.filter((s) => s.attr === 'event').map((s) => s.span)];
   };
-  assert.deepEqual(await deeds({ ...reader, contradicts: async () => 'unclear' }), [[], ['Dave', 'Dave']]); // the swap and the kick; "remembered John" names him
-  // the quick reader isn't asked: the swap and the kick are worth a look, "Dave remembered John" isn't
+  assert.deepEqual(await deeds({ ...reader, contradicts: async () => 'unclear' }), [[], ['Dave']]); // the swap; "remembered John" names him
+  // the quick reader isn't asked: the swap is worth a look, "Dave remembered John" isn't
   const quick = Canon.localReader({ id: 'q', tier: 'quick', ask: async () => { throw new Error('asked'); } });
-  assert.deepEqual(await deeds({ ...reader, contradicts: quick.contradicts }), [[], ['Dave', 'Dave']]);
+  assert.deepEqual(await deeds({ ...reader, contradicts: quick.contradicts }), [[], ['Dave']]);
   assert.deepEqual(await deeds(null), [[], []]);
   // John's own chapter is never checked against itself
   const own = await Canon.createEngine({ io: S.io, reader: { ...reader, contradicts: async () => 'yes' } }).check({ bookId: 'door', chId: 'c1' });

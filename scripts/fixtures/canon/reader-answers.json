@@ -100,7 +100,7 @@
       { "who": ["John"], "did": "John reached through a red vortex", "where": "in his room", "quote": "He reached his hand through the swirling red vortex in front of him, as pages and random items flew around his room" }
     ] },
     { "para": "It was Dave who touched", "events": [
-      { "who": ["Dave"], "did": "Dave touched the vortex", "where": "", "quote": "It was Dave who touched the vortex" }
+      { "who": ["Dave"], "did": "Dave touched the red vortex", "where": "", "quote": "It was Dave who touched the red vortex" }
     ] }
   ],
   "contradicts": [

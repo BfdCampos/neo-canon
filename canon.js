@@ -1054,7 +1054,9 @@
       const here = every.filter((m) => m.start >= s.start && m.end <= s.end && byId.get(m.id) && ['person', 'creature'].includes(byId.get(m.id).kind));
       if (!here.length) continue;
       for (const ev of story) {
-        if (ev.pos >= pos || ![...ev.words].some((w) => own.has(w))) continue;
+        // two distinctive words shared, or one found nowhere else ("vortex")
+        const shared = [...ev.words].filter((w) => own.has(w));
+        if (ev.pos >= pos || !(shared.length >= 2 || shared.some((w) => rare.only(w)))) continue;
         // the one the sentence puts first is its doer; the doer named first
         // is let past only by a "not" ("It wasn't John, it was Dave")
         const other = here.find((m) => !ev.ids.includes(m.id));
@@ -1314,7 +1316,8 @@
   // Words that carry no deed: never "invented", never what makes two
   // passages about the same thing
   const LIGHT = new Set([...STOP, 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'as', 'it', 'its', 'who', 'what', 'but', 'not', 'one', 'out', 'off', 'all', 'any', 'our', 'did', 'got', 'how', 'just', 'then', 'than', 'there', 'here', 'also', 'very', 'some', 'been', 'being', 'have', 'would', 'could', 'should', 'will', 'they', 'them', 'him', 'she', 'you', 'your', 'are', 'is', 'be', 'no', 'so', 'up', 'down', 'over', 'back', 'away', 'again', 'once', 'when', 'while', 'where', 'which', 'whose', 'only', 'even', 'still', 'more', 'most', 'much', 'many', 'such', 'own', 'other', 'another', 'each', 'every', 'something', 'someone', 'nothing', 'thing', 'things']);
-  const stemOf = (w) => w.replace(/['’]s$/, '').replace(/(?:ing|ed|es|s)$/, '').slice(0, 5);
+  // (a suffix only off a word left with three letters: "red" stays red)
+  const stemOf = (w) => { w = w.replace(/['’]s$/, ''); const m = /(?:ing|ed|es|s)$/.exec(w); return (m && m.index >= 3 ? w.slice(0, m.index) : w).slice(0, 5); };
   const heavy = (text) => wordsOf(text).map((w) => w.replace(/['’]s$/, '')).filter((w) => w.length >= 3 && !LIGHT.has(w) && !PRONOUNS[w]);
   const MEMORY = /(?<![\p{L}])(?:remembered|remembers|recalled|recalls|recalling|remembering|dreamed|dreamt|dreams|imagined|imagines|pictured|wondered|thought of|thinking of)(?![\p{L}])/iu;
   const TALK_WORDS = /^(?:said|says|say|asked|asks|told|tells|called|calls|replied|answered|whispered|shouted|cried|muttered|heard|hears|thought|thinks|wondered)$/;
@@ -1433,6 +1436,8 @@
     return [...out.values()];
   }
 
+  // what nearly every story's paragraphs do and have: never what ties two deeds
+  const COMMON = new Set(['rode', 'ride', 'head', 'came', 'come', 'went', 'turn', 'look', 'back', 'gate', 'door', 'room', 'hand', 'eyes', 'eye', 'wate', 'road', 'nigh', 'morn', 'time', 'kept', 'keep', 'took', 'take', 'made', 'make', 'found', 'find', 'stood', 'stand', 'walk', 'told', 'tell', 'felt', 'feel', 'left', 'leave', 'wait', 'light', 'house', 'town', 'away', 'there', 'first', 'last', 'long', 'little', 'great', 'every', 'never', 'always', 'again'].map(stemOf));
   // A distinctive word: in few of the shelf's paragraphs ("vortex"; not
   // "hand", "room"). → stem → is it rare
   function rarity(sources) {
@@ -1444,8 +1449,11 @@
         for (const w of new Set(heavy(p.text).map(stemOf))) df.set(w, (df.get(w) || 0) + 1);
       }
     }
-    const most = Math.max(8, Math.ceil(n * 0.05));
-    return (w) => w.length >= 4 && (df.get(w) || 0) <= most;
+    const most = Math.max(5, Math.ceil(n * 0.03));
+    const rare = (w) => w.length >= 3 && !COMMON.has(w) && (df.get(w) || 0) <= most;
+    // in two paragraphs at most: the deed's own and the one that retells it
+    rare.only = (w) => rare(w) && (df.get(w) || 0) <= 2;
+    return rare;
   }
 
   /* ---------- the gates on checking (docs/semantics/ACCURACY.md) ---------- */
@@ -2280,7 +2288,7 @@
       },
       // does B give A's deed to someone else? The quick reader isn't asked:
       // the writer is (Worth a look)
-      async contradicts({ a, label, who, did, sentence, paragraph }) {
+      async contradicts({ a, label, who, did, sentence }) {
         if (tier === 'quick') return 'unasked';
         // asked twice, the second the other way round: the same deed, given
         // to someone else (yes), and not a different deed (no)
