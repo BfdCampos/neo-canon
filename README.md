@@ -60,7 +60,7 @@ Needs Node.js 20.19 or newer (22 LTS recommended).
 npm install && npm start
 ```
 
-On first launch NEO Canon asks your name and a font, then shows a short welcome. Press **Open the Tutorial**: a *Tutorial* shelf appears that already keeps a Canon, with a short story (*Across the Saltings*, a courier and her mare crossing a salt marsh) and a *Start Here* notebook of eleven short lessons. Open the story and press ⌘' (Ctrl+' on Windows and Linux): Canon finds the three slips planted in it, with no download. Help → Open the Tutorial brings it back at any time, and Help → Start the Tutorial Afresh sets your copy aside and lays out a clean one.
+On first launch NEO Canon asks your name and a font, then shows a short welcome. Press **Open the Tutorial**: a *Tutorial* shelf appears that already keeps a Canon, with a short story (*Across the Saltings*, a courier and her mare crossing a salt marsh) and a *Start Here* notebook of eleven short lessons that tell you when to read each chapter of the story. Open the story and press ⌘' (Ctrl+' on Windows and Linux): Canon finds the three slips planted in it, with no download. Lesson 3 has a button that gets Canon's reader (one download of a few gigabytes, then it runs offline, on the graphics card when there is one); the line at the top of the Canon tab, and Help → Canon Reader…, always say where it stands. **← Back to Shelf**, at the top left, takes you back to your books. Help → Open the Tutorial brings it back at any time, and Help → Start the Tutorial Afresh sets your copy aside and lays out a clean one.
 
 ## Download
 
