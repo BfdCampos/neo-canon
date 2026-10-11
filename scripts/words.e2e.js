@@ -21,6 +21,9 @@ for (const name of fs.readdirSync(os.tmpdir())) {
 }
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `neo-words-test-${process.pid}-`));
 app.setPath('userData', path.join(tmp, 'app'));
+// (the welcome to NEO Canon was answered on this computer long ago)
+fs.mkdirSync(path.join(tmp, 'app'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'app', 'settings.json'), JSON.stringify({ canonWelcome: true }));
 app.setPath('documents', tmp);
 fs.mkdirSync(path.join(tmp, 'NEO Library'));
 fs.writeFileSync(path.join(tmp, 'NEO Library', 'library.json'), JSON.stringify({

@@ -19,15 +19,24 @@ for (const name of fs.readdirSync(os.tmpdir())) {
   try { process.kill(+pid[1], 0); continue; } catch (err) { if (err.code === 'EPERM') continue; }
   fs.rmSync(path.join(os.tmpdir(), name), { recursive: true, force: true });
 }
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `neo-canon-test-${process.pid}-`));
+// A part (NEO_E2E_PART) runs in a child NEO of its own, on a fresh computer
+// and an empty library (NEO_E2E_TMP): 'tutorial' meets the welcome and the
+// Tutorial; 'relaunch' opens NEO again on the same folders.
+const PART = process.env.NEO_E2E_PART || '';
+const tmp = PART ? process.env.NEO_E2E_TMP : fs.mkdtempSync(path.join(os.tmpdir(), `neo-canon-test-${process.pid}-`));
 const LIB = path.join(tmp, 'NEO Library');
 const FIXTURE = path.join(__dirname, 'fixtures', 'canon');
-fs.cpSync(path.join(FIXTURE, 'library'), LIB, { recursive: true });
-// the shelf starts without a Canon: the test keeps one, as a writer would
 const libFile = path.join(LIB, 'library.json');
-const lib = JSON.parse(fs.readFileSync(libFile, 'utf8'));
-delete lib.shelves[0].canonId;
-fs.writeFileSync(libFile, JSON.stringify(lib));
+if (!PART) {
+  fs.cpSync(path.join(FIXTURE, 'library'), LIB, { recursive: true });
+  // the shelf starts without a Canon: the test keeps one, as a writer would
+  const lib = JSON.parse(fs.readFileSync(libFile, 'utf8'));
+  delete lib.shelves[0].canonId;
+  fs.writeFileSync(libFile, JSON.stringify(lib));
+  // (the welcome to NEO Canon was answered on this computer long ago)
+  fs.mkdirSync(path.join(tmp, 'app'), { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'app', 'settings.json'), JSON.stringify({ canonWelcome: true }));
+}
 app.setPath('userData', path.join(tmp, 'app'));
 app.setPath('documents', tmp);
 process.env.NEO_CANON_FAKE = path.join(FIXTURE, 'reader-answers.json');
@@ -85,11 +94,17 @@ const CANON = 'canon-the-ashfall-road-shelf-ash';
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('a shelf without a Canon: no Canon tab', async () => {
+test('a shelf without a Canon: the Canon tab says what Canon is and offers one, naming the shelf', async () => {
   await js(`openBook('${SALT}')`);
   await until(`book && book.id === '${SALT}'`);
-  assert.equal(await js(`$('.tab[data-tab="canon"]').hidden`), true);
-  assert.equal(await js(`[...document.querySelectorAll('.tab')].filter((t) => !t.hidden).length`), 4);
+  assert.equal(await js(`[...document.querySelectorAll('.tab')].filter((t) => !t.hidden).length`), 5);
+  await js(`switchTab('canon')`);
+  await until(`!!document.querySelector('#canon-view .cn-invite')`);
+  assert.equal(await js(`document.querySelector('.cn-invite .cn-offer').textContent`), 'Keep a Canon for “The Ashfall Road”');
+  assert.equal(await js(`document.querySelector('.cn-invite .cn-tutorial button').textContent`), 'Open the Tutorial');
+  assert.equal(fs.existsSync(path.join(LIB, CANON, 'canon.json')), true); // (the fixture's, not taken up yet)
+  assert.equal(JSON.parse(fs.readFileSync(libFile, 'utf8')).shelves[0].canonId, undefined);
+  await js(`switchTab('manuscript')`);
 });
 
 test('Keep a Canon for This Shelf takes up the Canon folder and the books gain the tab', async () => {
@@ -856,6 +871,118 @@ test('the QA pass: ⌘\' starts at once with a reader, and the World Map from th
   await js(`mapClose()`);
 });
 
+/* ---------- the welcome and the Tutorial, on a fresh computer ---------- */
+
+const parts = [];
+const part = (which, name, fn) => parts.push({ which, name, fn });
+const settings = () => { try { return JSON.parse(fs.readFileSync(path.join(tmp, 'app', 'settings.json'), 'utf8')); } catch { return {}; } };
+const tutorialShelf = `library.shelves.find((s) => s.tutorial)`;
+
+part('tutorial', 'a fresh computer: the first run, then the welcome; Esc puts it away for good', async () => {
+  await until(`!$('#firstrun').hidden`);
+  await js(`document.querySelector('#firstrun .fr-choice').click()`);
+  await until(`!$('#fr-step2').hidden`);
+  await js(`$('#fr-done').click()`);
+  await until(`!!$('#welcome')`);
+  assert.equal(await js(`$('#wl-h').textContent`), 'Welcome to NEO Canon');
+  assert.deepEqual(await js(`[...document.querySelectorAll('#welcome button')].map((b) => b.querySelector('strong') ? b.querySelector('strong').textContent : b.textContent)`), ['Open the Tutorial', 'Set Up the Reader', 'Later']);
+  // the reader offered is the catalogue's, sized
+  await until(`!/^Canon’s reader finds/.test($('#welcome .wl-reader span').textContent)`);
+  assert.match(await js(`$('#welcome .wl-reader span').textContent`), /GB — recommended for this computer|short on memory/);
+  assert.equal(settings().canonWelcome, undefined); // shown is not answered
+  await shot('welcome-sheet.png');
+  await theme('light');
+  await shot('welcome-sheet-light.png');
+  await theme('night');
+  key('Escape');
+  await until(`!$('#welcome')`);
+  for (let i = 0; i < 40 && !settings().canonWelcome; i++) await tick(50);
+  assert.equal(settings().canonWelcome, true);
+});
+
+part('tutorial', 'Help → Welcome to NEO Canon… shows it again; Open the Tutorial makes the shelf, keeping a Canon, and opens Start Here', async () => {
+  wc.send('menu', { type: 'welcome' });
+  await until(`!!$('#welcome')`);
+  await js(`$('#welcome .wl-tutorial').click()`);
+  await until(`!!${tutorialShelf} && book && book.format === 'notebook'`);
+  const shelf = await js(tutorialShelf);
+  assert.equal(shelf.name, 'Tutorial');
+  assert.ok(shelf.canonId);
+  assert.deepEqual(shelf.tutorial, shelf.bookIds);
+  assert.equal(await js(`book.id`), shelf.bookIds[0]);
+  const disk = JSON.parse(fs.readFileSync(libFile, 'utf8')).shelves.find((s) => s.tutorial);
+  assert.equal(disk.canonId, shelf.canonId);
+  assert.equal(fs.readdirSync(path.join(LIB, shelf.canonId, 'entries')).length, 6);
+  assert.equal(await js(`book.title`), 'Start Here');
+  assert.equal(await js(`book.chapterOrder.length`), 11);
+  await js(`$('#nav-pane').classList.add('open')`);
+  await tick(500);
+  await shot('tutorial-start-here.png');
+  await js(`$('#nav-pane').classList.remove('open')`);
+});
+
+part('tutorial', 'the Tutorial on the shelf, and ⌘\' in its story finds exactly the three seeded slips, with no reader', async () => {
+  await js(`backToShelf()`);
+  await until(`!$('#bookshelf-view').hidden && !!document.querySelector('.shelf')`);
+  await tick(600);
+  await shot('tutorial-shelf.png');
+  const story = (await js(tutorialShelf)).tutorial[1];
+  await js(`openBook('${story}')`);
+  await until(`book && book.id === '${story}'`);
+  assert.equal(await js(`canonIdFor(book.id) === ${tutorialShelf}.canonId`), true);
+  await js(`(() => { const b = document.querySelector('.chapter[data-id="c1"] .chapter-body'); b.focus(); })()`);
+  key("'", [CMD]);
+  await until(`canonPassOn && canonProgress === '' && canonSlips.length === 3`, 9000);
+  assert.deepEqual(await js(`canonSlips.map((s) => s.chId + ' ' + s.span + ' → ' + s.to)`), ['c2 his → her', 'c3 Marowby → Marrowby', 'c3 brown → grey']);
+  await js(`canonSlips[0].range.startContainer.parentElement.scrollIntoView({ block: 'center' })`);
+  await tick(400);
+  await shot('tutorial-pass.png');
+  key("'", [CMD]);
+  await until(`!canonPassOn`);
+});
+
+part('tutorial', 'the Canon tab on a book whose shelf keeps none: the explainer, Keep a Canon for “Works in Progress”, the Tutorial', async () => {
+  const id = await js(`(async () => { const b = await window.neo.createBook({ title: 'My Novel' }); library.shelves[0].bookIds.push(b.id); await writeLibrary(library); return b.id; })()`);
+  await js(`openBook('${id}')`);
+  await until(`book && book.id === '${id}'`);
+  await js(`switchTab('canon')`);
+  await until(`!!document.querySelector('#canon-view .cn-invite')`);
+  assert.equal(await js(`document.querySelector('.cn-invite .cn-offer').textContent`), 'Keep a Canon for “Works in Progress”');
+  assert.equal(await js(`document.querySelectorAll('.cn-invite .cn-offer').length`), 2); // (and Move… to a shelf of its own)
+  await tick(300);
+  await shot('canon-tab-no-canon.png');
+  await theme('light');
+  await shot('canon-tab-no-canon-light.png');
+  await theme('night');
+  // its link: the Tutorial again, the same shelf, nothing copied twice
+  const before = fs.readdirSync(LIB).filter((d) => /^(book|canon)-/.test(d)).length;
+  await js(`document.querySelector('.cn-invite .cn-tutorial button').click()`);
+  await until(`book && book.id === ${tutorialShelf}.tutorial[0]`);
+  assert.equal(await js(`library.shelves.filter((s) => s.tutorial).length`), 1);
+  assert.equal(fs.readdirSync(LIB).filter((d) => /^(book|canon)-/.test(d)).length, before);
+});
+
+part('tutorial', 'Start the Tutorial Afresh: a clean copy, the old one set aside with its words', async () => {
+  const old = await js(tutorialShelf);
+  const c1 = path.join(LIB, old.tutorial[1], 'chapters', 'c1.html');
+  fs.writeFileSync(c1, '<p>A line of my own.</p>');
+  wc.send('menu', { type: 'tutorial', afresh: true });
+  await until(`!!document.querySelector('.modal-backdrop:not(#firstrun) .fr-choice')`);
+  await js(`document.querySelector('.modal-backdrop:not(#firstrun) .fr-choice').click()`);
+  await until(`${tutorialShelf}.id !== '${old.id}' && book && book.id === ${tutorialShelf}.tutorial[0]`);
+  assert.equal(await js(`library.shelves.filter((s) => s.tutorial).length`), 1);
+  assert.equal(await js(`library.shelves.some((s) => s.bookIds.includes('${old.tutorial[1]}'))`), false);
+  assert.equal(fs.readFileSync(c1, 'utf8'), '<p>A line of my own.</p>'); // set aside, never thrown away
+  assert.ok(fs.existsSync(path.join(LIB, old.canonId, 'canon.json')));
+});
+
+part('relaunch', 'NEO opened again: the welcome, answered, never shows; the Tutorial is still there', async () => {
+  await tick(1500);
+  assert.equal(await js(`!!$('#welcome')`), false);
+  assert.equal(await js(`library.shelves.filter((s) => s.tutorial).length`), 1);
+  assert.equal(settings().canonWelcome, true);
+});
+
 /* ---------- runner ---------- */
 
 async function main() {
@@ -877,7 +1004,8 @@ async function main() {
     await tick(300);
     win.focus();
     if (process.env.CANON_LIGHT) await theme('light'); // screenshots in the light theme
-    for (const t of tests.slice(0, +process.env.CANON_UPTO || tests.length)) {
+    const run = PART ? parts.filter((x) => x.which === PART) : tests.slice(0, +process.env.CANON_UPTO || tests.length);
+    for (const t of run) {
       try {
         await t.fn();
         console.log('ok   ' + t.name);
@@ -886,7 +1014,16 @@ async function main() {
         console.log('FAIL ' + t.name + '\n     ' + String(err.message).replace(/\n/g, '\n     '));
       }
     }
-    console.log(`\n${tests.length - failed} passed, ${failed} failed`);
+    console.log(`\n${run.length - failed} passed, ${failed} failed${PART ? ' (' + PART + ')' : ''}`);
+    // then a fresh computer, in NEOs of their own: the welcome, the Tutorial, a relaunch
+    if (!PART && !process.env.CANON_UPTO) {
+      const fresh = fs.mkdtempSync(path.join(os.tmpdir(), `neo-canon-test-${process.pid}-fresh-`));
+      for (const which of ['tutorial', 'relaunch']) {
+        const r = require('child_process').spawnSync(process.execPath, [...process.argv.slice(1).filter((a) => a.startsWith('--')), __filename],
+          { env: { ...process.env, NEO_E2E_PART: which, NEO_E2E_TMP: fresh }, stdio: 'inherit' });
+        if (r.status !== 0) failed++;
+      }
+    }
   } catch (err) {
     failed++;
     console.error(err);

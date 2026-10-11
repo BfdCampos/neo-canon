@@ -20,6 +20,9 @@ for (const name of fs.readdirSync(os.tmpdir())) {
 }
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `neo-tabs-test-${process.pid}-`));
 app.setPath('userData', path.join(tmp, 'app'));
+// (the welcome to NEO Canon was answered on this computer long ago)
+fs.mkdirSync(path.join(tmp, 'app'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'app', 'settings.json'), JSON.stringify({ canonWelcome: true }));
 app.setPath('documents', tmp);
 fs.mkdirSync(path.join(tmp, 'NEO Library'));
 fs.writeFileSync(path.join(tmp, 'NEO Library', 'library.json'), JSON.stringify({
@@ -58,15 +61,15 @@ const caretInChapter = () => js(`(() => {
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('→ walks Manuscript, Notes, Outline, Darlings, then round to Manuscript', async () => {
-  for (const name of ['notes', 'outline', 'darlings', 'manuscript']) {
+test('→ walks Manuscript, Notes, Outline, Canon, Darlings, then round to Manuscript', async () => {
+  for (const name of ['notes', 'outline', 'canon', 'darlings', 'manuscript']) {
     await press(RIGHT);
     assert.equal(await tab(), name);
   }
 });
 
 test('← walks back, round from Manuscript to Darlings', async () => {
-  for (const name of ['darlings', 'outline', 'notes', 'manuscript']) {
+  for (const name of ['darlings', 'canon', 'outline', 'notes', 'manuscript']) {
     await press(LEFT);
     assert.equal(await tab(), name);
   }
@@ -82,7 +85,7 @@ test('the other platform\'s modifier, or a missing Alt or an extra Shift, does n
 test('a tab swap does not redraw the tab you stay on', async () => {
   await press(LEFT); // Darlings
   await js(`window.__renders = 0; const f = renderDarlings; renderDarlings = () => { window.__renders++; return f(); }; 0`);
-  await press(LEFT); // Outline
+  await press(LEFT); // Canon
   await press(RIGHT); // Darlings again: one draw
   assert.equal(await js('window.__renders'), 1);
   await press(RIGHT); // Manuscript
