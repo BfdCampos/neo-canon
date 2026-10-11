@@ -552,3 +552,9 @@ Each milestone ends with `npm test` green, `npm run lint` clean, and `node scrip
     - The fixture's expectations changed: Oren's sex and Bramble's owner now wait for the writer.
     - `canon.e2e.js` passes 28/28.
 
+### Decisions made for the owner's real use (first said, first kept; Story so far)
+
+48. **First said, first kept** (`firstCome`, replacing `settle`). A first fact was asked of the writer ("John has green eyes", the first thing written about him). Now what gets through the gates is checked without asking, and the first value in reading order stands, the writer's Notes and notebook pages first. A later value that differs is left out of the entry (the slip marks it); a proposal that fails a gate is left out with its reason in the cache (`dropped`). Needs You groups the writer's notes against the prose as one *Which is right?* item; nothing else but what is said or planned waits there. A rule ties "E has/had <colour> eyes|hair". The tutorial's unchecked owner became Hesketh's "more mule than horse", said.
+49. **Story so far** (STORY.md): `localReader.events` (one more prompt per story paragraph, cached as `cache.events`, `STORY_PROMPT`), `gateEvent`, the `## Story so far` section with `note:` marks, `canon.json` `story`, re-derivation by chapter, and `deedSlips` in `checkSources` with `localReader.contradicts` asked both ways round. Nothing in main.js but the reader wrappers.
+50. **Measured** (ACCURACY.md): Careful, both fixtures, 100% precision, 0 false slips, the actor swap found; the owner's text gives no Needs You, the vortex line, and the swap as a slip with its decoys clean.
+

@@ -16327,6 +16327,11 @@ function goItems() {
         items.push({ key: `fact:${e.id}/${f.attr}/${f.label || ''}/${f.value}`, group: 'fact', entry: 'entry:' + e.id, texts: [`${canonLabel(f)}: ${canonValue(f)}`, f.value, f.as || '', ...quotes],
           title: `${canonLabel(f)}: ${canonValue(f)}`, sub: e.name, quotes, to: { id: e.id } });
       }
+      // the story's key points: "vortex" finds what John did there
+      (e.story || []).forEach((ev, i) => {
+        const quotes = ev.sources.filter((s) => !s.written).map((s) => s.quote);
+        items.push({ key: `story:${e.id}/${i}`, group: 'fact', entry: 'entry:' + e.id, texts: [ev.did, '', '', ...quotes], title: ev.did, sub: e.name, quotes, to: { id: e.id } });
+      });
     }
   }
   for (const m of go.commands) {
@@ -17181,17 +17186,29 @@ function canonSetup() {
   return box;
 }
 
-// Needs You: the facts not yet checked, and values that disagree, one by
-// one with their passage. Ignoring the list only means fewer slips.
+// Needs You: only what Canon can't settle by itself. The first thing the
+// books or notes say is kept without asking (ACCURACY.md, first said, first
+// kept); a later word against it is a slip, not a question. What waits:
+// the writer's notes against the prose ("Which is right?", every value
+// with its passage), and what a character only says or a plan.
 const canonSkipped = new Set();
+const canonHeard = (f) => f.state === 'unverified' && f.sources.some((x) => !x.written) && f.sources.every((x) => x.written || x.said || x.plan);
 function canonNeeds() {
   if (!canon) return [];
   const out = [];
   for (const x of canonSorted()) {
     if (!x.data) continue;
+    const which = new Map();
     for (const f of x.data.facts) {
+      if (f.state === 'disagree') {
+        const key = x.id + '|' + f.attr;
+        if (canonSkipped.has(key)) continue;
+        if (!which.has(key)) { which.set(key, { e: x.data, f, key, all: [] }); out.push(which.get(key)); }
+        which.get(key).all.push(f);
+        continue;
+      }
       const key = x.id + '|' + f.attr + '|' + f.value;
-      if ((f.state === 'unverified' || f.state === 'disagree') && !canonSkipped.has(key)) out.push({ e: x.data, f, key });
+      if (canonHeard(f) && !canonSkipped.has(key)) out.push({ e: x.data, f, key });
     }
   }
   return out;
@@ -17199,10 +17216,34 @@ function canonNeeds() {
 function canonNeedsList(box, el) {
   const needs = canonNeeds();
   box.appendChild(el('div', 'cs-title', t('Needs You') + (needs.length ? ' · ' + fmtNum(needs.length) : '')));
-  if (!needs.length) { box.appendChild(el('div', 'cs-note', t('Nothing waiting. Every fact is checked or yours.'))); return; }
+  if (!needs.length) { box.appendChild(el('div', 'cs-note', t('Nothing waiting. Canon asks only when your notes and your story disagree, or about what someone only says.'))); return; }
   const at = (d, f) => d.facts.findIndex((x) => x.attr === f.attr && x.value === f.value);
-  for (const { e, f, key } of needs) {
+  for (const { e, f, key, all } of needs) {
     const item = el('div', 'cs-need');
+    if (all) {
+      // the writer's notes and the story say different things: which?
+      item.appendChild(el('strong', '', t('{name} · {label}: which is right?', { name: e.name, label: canonLabel(f) })));
+      const row = el('div', 'cs-row');
+      for (const g of all) {
+        const s = g.sources.find((x) => !x.written);
+        if (s) {
+          const src = el('div', 'cs-src');
+          const where = el('button', 'cs-where-btn', s.label + ': ');
+          where.onclick = () => canonOpenSource(s);
+          src.append(where, el('q', '', s.quote));
+          item.appendChild(src);
+        }
+        const b = el('button', '', canonValue(g));
+        b.onclick = () => canonEdit(e.id, (d) => { const i = at(d, g); if (i >= 0) Canon.confirmFact(d, i); });
+        row.appendChild(b);
+      }
+      const skip = el('button', '', t('Skip'));
+      skip.onclick = () => { canonSkipped.add(key); canonSideUpdate(); };
+      row.appendChild(skip);
+      item.appendChild(row);
+      box.appendChild(item);
+      continue;
+    }
     // only a speaker or a plan says so: asked as that, never "is it right?"
     const heard = f.state === 'unverified' && f.sources.some((x) => !x.written) && f.sources.every((x) => x.written || x.said || x.plan);
     const plan = heard && f.sources.every((x) => x.written || x.plan);
@@ -17259,7 +17300,7 @@ function canonDismissedList(box, el) {
     const item = el('div', 'cs-need');
     const [entry, attr] = n.fact.split('/');
     const rec = canon.entries.get(entry);
-    item.appendChild(el('strong', '', `${rec ? canonName(rec) : entry} · ${CANON_LABELS()[attr] || t('Spelling')}`));
+    item.appendChild(el('strong', '', `${rec ? canonName(rec) : entry} · ${attr === 'event' ? t('Story so far') : CANON_LABELS()[attr] || t('Spelling')}`));
     item.appendChild(el('q', 'cs-src', n.text));
     const row = el('div', 'cs-row');
     const b = el('button', '', t('Restore'));
@@ -17445,6 +17486,45 @@ function canonEntryPage(e) {
     page.appendChild(el('h4', 'cn-h cn-sub', t('What others say · Plans')));
     page.appendChild(factList(others.map(([f]) => f), false, others.map(([, i]) => i)));
   }
+  // Story so far (docs/semantics/STORY.md): the key points, in reading
+  // order, each with its passage; Canon's notes until the writer edits one
+  const story = el('div', 'cn-story');
+  story.appendChild(el('h3', 'cn-h', t('Story so far')));
+  if (!canon.reader.installed) story.appendChild(el('div', 'cn-note cn-story-none', t('Canon needs the reader to keep the story’s key points.')));
+  else if (!e.story.length) story.appendChild(el('div', 'cn-note cn-story-none', t('Nothing yet. When Canon reads, it notes who did what here, each with its passage.')));
+  const points = el('ul', 'cn-events');
+  e.story.forEach((x, i) => {
+    const li = el('li', 'cn-event' + (x.state === 'note' ? ' st-note' : ''));
+    li.hidden = i >= 8;
+    const row = el('div', 'cn-row');
+    row.appendChild(el('span', 'cn-did', x.did));
+    if (x.state === 'note') row.appendChild(el('span', 'cn-tag cn-by', t('Canon’s note')));
+    const ctl = el('span', 'cn-ctl');
+    ctl.appendChild(button(t('Edit'), async () => {
+      const v = await askInput(t('Edit the key point'), t('What happened'), x.did);
+      const did = v === null ? '' : v.replace(/\s+/g, ' ').trim();
+      // the writer's words now: Canon never rewrites them
+      if (did && did !== x.did) edit((d) => { if (d.story[i]) d.story[i] = { ...d.story[i], did, state: 'yours' }; });
+    }));
+    row.appendChild(ctl);
+    li.appendChild(row);
+    for (const s of x.sources) {
+      const src = el('div', 'cn-src');
+      const where = el('button', 'cn-where', s.label);
+      where.onclick = () => canonOpenSource(s);
+      src.append(where, el('q', 'cn-quote', s.quote));
+      if (s.changed) src.appendChild(el('span', 'cn-tag cn-changed', t('This passage has changed')));
+      li.appendChild(src);
+    }
+    points.appendChild(li);
+  });
+  story.appendChild(points);
+  if (e.story.length > 8) {
+    const more = el('button', 'cn-btn cn-show-all', t('Show all {n}', { n: e.story.length }));
+    more.onclick = () => { for (const li of points.children) li.hidden = false; more.remove(); };
+    story.appendChild(more);
+  }
+  page.appendChild(story);
   if (e.setAside.length) {
     page.appendChild(el('h3', 'cn-h', t('Set aside')));
     page.appendChild(factList(e.setAside, true));
@@ -17674,11 +17754,12 @@ function canonHereUpdate(force) {
     canonHereMemo = { key, html, order: [...new Set(Canon.paraEntries(Canon.sourceParas(html), w.index).flat())] };
   }
   const here = new Set(caret ? Canon.mentions(canonTextOf(caret).text, w.index).map((m) => m.id) : []);
-  const sig = key + canonHereMemo.order.join() + '|' + [...here].join();
+  const points = canonKeyPoints(chId, html);
+  const sig = key + canonHereMemo.order.join() + '|' + [...here].join() + '|' + points.length;
   if (box.dataset.sig === sig && !force) return;
   box.dataset.sig = sig;
   box.textContent = '';
-  if (!canonHereMemo.order.length) return;
+  if (!canonHereMemo.order.length && !points.length) return;
   const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
   box.appendChild(el('div', 'ch-title', currentTab === 'notes' || isNotebook() ? t('On this page') : t('In this chapter')));
   const kinds = CANON_KINDS();
@@ -17704,6 +17785,35 @@ function canonHereUpdate(force) {
     box.appendChild(row);
   }
   box.appendChild(facts);
+  // the chapter's key points (Story so far), in page order; one opens its entry
+  if (points.length) {
+    box.appendChild(el('div', 'ch-sub', t('Key points')));
+    const ul = el('ul', 'ch-points');
+    for (const x of points) {
+      const li = el('li');
+      const b = el('button', 'ch-point', x.did);
+      b.title = x.quote;
+      b.onclick = (ev) => { if (ev.altKey) { canonAside = x.id; canonHereUpdate(true); } else canonGo(x.id); };
+      li.appendChild(b);
+      ul.appendChild(li);
+    }
+    box.appendChild(ul);
+  }
+}
+// a chapter's key points from every entry's Story so far, once each, in page order
+function canonKeyPoints(chId, html) {
+  if (!book || !canon || chId === 'notes') return [];
+  const paras = Canon.sourceParas(html).map((p) => Canon.norm(p.text));
+  const seen = new Map();
+  for (const x of canon.entries.values()) {
+    for (const ev of (x.data && x.data.story) || []) {
+      const s = ev.sources.find((y) => !y.written && y.book === book.id && y.ch === chId);
+      if (!s || seen.has(Canon.norm(s.quote))) continue;
+      const at = paras.findIndex((p) => p.includes(Canon.norm(s.quote)));
+      seen.set(Canon.norm(s.quote), { did: ev.did, quote: s.quote, id: x.id, at: at < 0 ? paras.length : at });
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.at - b.at);
 }
 if (CANON_ON) {
   $('#side-hotzone').addEventListener('mouseenter', () => canonHereUpdate(true));
@@ -17934,6 +18044,7 @@ function canonClaim(s) {
   if (s.attr === 'species') return tA('{name} is a {value}.', v);
   if (s.attr === 'birthplace') return t('{name} was born in {value}.', v);
   if (s.attr === 'sibling') return t('{name} is the {word} sibling of {value}.', v);
+  if (s.attr === 'event') return t('Canon has {name} doing this.', v);
   return t('It’s spelt {name}.', v);
 }
 const SEXED_KINDS = new Set(['creature']);
@@ -17962,6 +18073,7 @@ function canonPopOpen(s, x, y) {
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; pop.appendChild(n); return n; };
   const rec = canon && canon.entries.get(s.entry);
   s.entryKind = rec && rec.data ? rec.data.kind : '';
+  if (s.attr === 'event') { canonDeedPop(s, pop, el); canonPopPlace(s, pop, x, y); return; }
   if (s.ask) { canonAskPop(s, pop, el); canonPopPlace(s, pop, x, y); return; }
   el('div', 'cp-claim', canonClaim(s));
   const where = s.sources.map((x) => x.label);
@@ -18001,6 +18113,29 @@ function canonPopOpen(s, x, y) {
   }
   btn(t('Not a slip'), () => canonNotSlip(s));
   canonPopPlace(s, pop, x, y);
+}
+// A later sentence gives a key point's deed to someone else (STORY.md §5):
+// the earlier passage, Canon's note of it, and the plain name swap if
+// there is one. Worth a look asks the same, more gently.
+function canonDeedPop(s, pop, el) {
+  const v = { name: s.name, span: s.span, where: s.sources[0] ? s.sources[0].label : '' };
+  el('div', 'cp-claim', s.ask ? t('Did {name} do this?', v) : canonClaim(s));
+  el('div', 'cp-deed', s.value);
+  el('div', 'cp-where', t('Canon’s note from {where}', v));
+  if (s.sources[0]) el('q', 'cp-quote', s.sources[0].quote);
+  el('div', 'cp-why', t('Here, “{span}” seems to have done it.', v));
+  if (!s.to) el('div', 'cp-ask', t('No plain name to swap here: the words are yours to change.'));
+  const row = el('div', 'cp-row');
+  const btn = (label, fn, cls = '') => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; row.appendChild(b); return b; };
+  // the button is the exact change, pressed: one ⌘Z-able edit
+  if (s.to) {
+    const keep = btn(t('Keep — it was {name}', { name: s.to }), () => { if (canonApply(s)) toast(t('Changed. {key} brings it back.', { key: K('⌘Z', 'Ctrl+Z') })); }, 'cp-main cp-swap');
+    const swap = document.createElement('span');
+    swap.className = 'cp-sub';
+    swap.textContent = `${s.span} → ${s.to}`;
+    keep.appendChild(swap);
+  }
+  btn(t('Not a slip'), () => canonNotSlip(s, s.ask ? 'no' : undefined));
 }
 // Worth a look: Canon can't tell whom the word means, so it asks. Each
 // answer but the change is remembered against the sentence, like Not a slip.

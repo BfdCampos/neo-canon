@@ -37,7 +37,7 @@ function shelfSources(lib) {
     const meta = JSON.parse(fs.readFileSync(path.join(lib, bookId, 'book.json'), 'utf8'));
     const notebook = meta.format === 'notebook';
     meta.chapterOrder.forEach((chId, i) => out.push({ bookId, chId, book: meta.title,
-      label: notebook ? meta.chapterTitles[chId] : 'Ch ' + (i + 1), html: fs.readFileSync(path.join(lib, bookId, 'chapters', chId + '.html'), 'utf8') }));
+      label: notebook ? meta.chapterTitles[chId] : 'Ch ' + (i + 1), notebook, html: fs.readFileSync(path.join(lib, bookId, 'chapters', chId + '.html'), 'utf8') }));
     if (!notebook) out.push({ bookId, chId: 'notes', book: meta.title, label: 'Notes', notes: true, html: fs.readFileSync(path.join(lib, bookId, 'notes.html'), 'utf8') });
   }
   return out;
@@ -54,13 +54,15 @@ function handKept() {
 
 const notSlips = () => JSON.parse(fs.readFileSync(path.join(FIXTURE, 'library', CANON, 'not-slips.json'), 'utf8'));
 const pick = (s) => ({ chapter: s.chId, sentence: s.sentence, span: s.span, to: s.to, entry: s.entry, attr: s.attr, strength: s.strength });
+// (kept by hand there is no story so far: the deed given to Ilsa needs the reader's key points)
+const TRAIT_SLIPS = EXPECTED.slips.filter((s) => s.attr !== 'event');
 
 test('Continuity Pass, kept by hand with no reader: the three strong slips in The Salt Crown, the two weak ones worth a look', async () => {
   const sources = shelfSources(path.join(FIXTURE, 'library')).filter((s) => s.bookId === SALT && !s.notes);
   const { slips, asks } = await Canon.checkSources({ sources, entries: handKept(), notSlips: notSlips(), knownWords });
-  assert.deepEqual(slips.map(pick), EXPECTED.slips.filter((s) => s.strength === 'strong'));
+  assert.deepEqual(slips.map(pick), TRAIT_SLIPS.filter((s) => s.strength === 'strong'));
   // the two weak ones, which the reader would confirm, are worth a look; no decoy is
-  assert.deepEqual(asks.map(pick), EXPECTED.slips.filter((s) => s.strength === 'weak'));
+  assert.deepEqual(asks.map(pick), TRAIT_SLIPS.filter((s) => s.strength === 'weak'));
 });
 
 test('Continuity Pass with the reader: exactly the five seeded slips, no decoy', async () => {
@@ -68,9 +70,9 @@ test('Continuity Pass with the reader: exactly the five seeded slips, no decoy',
   const seen = [];
   const { slips, facts } = await Canon.checkSources({ sources, entries: handKept(), notSlips: notSlips(), knownWords,
     reader: Canon.fakeReader(ANSWERS), onSource: (src, found, n, of) => seen.push([src.chId, found.length, n, of]) });
-  assert.deepEqual(slips.map(pick), EXPECTED.slips);
+  assert.deepEqual(slips.map(pick), TRAIT_SLIPS);
   assert.deepEqual(seen, [['c1', 2, 1, 3], ['c2', 2, 2, 3], ['c3', 1, 3, 3]]);
-  assert.equal(facts, 10); // the ones that can raise slips: no titles, owners or states
+  assert.equal(facts, 9); // the ones that can raise slips: no titles, owners or states
   for (const decoy of EXPECTED.decoys) assert.ok(!slips.some((s) => s.sentence === decoy), decoy);
   // each mark sits on its word in the writer's own text
   for (const s of slips) {
@@ -144,7 +146,22 @@ test('Read the Shelf gives the expected entries and facts, each quote the writer
     const texts = new Map(shelfSources(lib).map((s) => [s.bookId + '/' + s.chId, Canon.sourceParas(s.html).map((p) => p.text).join('\n')]));
     for (const e of got) for (const f of e.facts) for (const s of f.sources) assert.ok(texts.get(s.book + '/' + s.ch).includes(s.quote), s.quote);
     assert.equal(got.find((e) => e.id === 'bramble').facts.find((f) => f.attr === 'sex' && f.value === 'male').sources[0].said, 'the horse-trader');
-    assert.deepEqual(summary, { entries: 7, facts: 17, written: 7, calls: summary.calls, stopped: false, verified: 13, needs: 4 });
+    // (the trader's gelding and the foal question wait for the writer; Oren's
+    // "He" and Bramble's "Tamsin rode her" got through no gate, so they're left out)
+    assert.deepEqual(summary, { entries: 7, facts: 15, written: 7, calls: summary.calls, stopped: false, verified: 13, needs: 2 });
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('the story so far: the key points the gates let through, in reading order, as Canon\'s notes; the rest left out', async () => {
+  const { dir, root, cacheFile } = await readOnce();
+  try {
+    const got = readEntries(dir);
+    for (const [id, lines] of Object.entries(EXPECTED.story)) assert.deepEqual(got.find((e) => e.id === id).story.map((x) => x.did), lines, id);
+    assert.ok(got.every((e) => e.story.every((x) => x.state === 'note' && x.sources.length === 1)));
+    assert.deepEqual(got.filter((e) => !EXPECTED.story[e.id]).flatMap((e) => e.story), []);
+    // left out, with why: a who the quote doesn't name, a word nobody wrote
+    const lost = Object.values(JSON.parse(fs.readFileSync(cacheFile, 'utf8')).lostEvents).map((x) => x.why).sort();
+    assert.deepEqual(lost, ['invented', 'who']);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -185,11 +202,11 @@ test('reading again: nothing changed, nothing asked, nothing written; one paragr
     await Canon.createEngine({ io, reader }).readShelf({ again: true });
     assert.deepEqual(entryFiles(dir), files);
     assert.deepEqual(io.writes, []);
-    // the last paragraph of a chapter edited: that context alone is asked
+    // the last paragraph of a chapter edited: that context alone is asked (its facts and its key points)
     const c3 = path.join(lib, 'book-ember-and-thorn-ember1', 'chapters', 'c3.html');
     fs.writeFileSync(c3, fs.readFileSync(c3, 'utf8').replace('the useless one', 'the useless one, and Rook agreed'));
     const one = Canon.fakeReader(ANSWERS);
-    assert.equal((await Canon.createEngine({ io, reader: one }).readShelf()).calls, 1);
+    assert.equal((await Canon.createEngine({ io, reader: one }).readShelf()).calls, 2);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -200,22 +217,23 @@ test('the writer\'s facts survive Read Everything Again; a passage edited away i
     const e = Canon.parseEntry(fs.readFileSync(file, 'utf8'));
     e.facts.push(Canon.handFact('Hair: grey'));
     fs.writeFileSync(file, Canon.serialiseEntry(e));
-    const c2 = path.join(lib, 'book-ember-and-thorn-ember1', 'chapters', 'c2.html');
-    fs.writeFileSync(c2, fs.readFileSync(c2, 'utf8').replace('Tamsin rode her most days.', 'Tamsin rode her on market days.'));
+    const c1 = path.join(lib, 'book-ember-and-thorn-ember1', 'chapters', 'c1.html');
+    fs.writeFileSync(c1, fs.readFileSync(c1, 'utf8').replace('was the only woman on the wall', 'was the only soldier on the wall'));
     await Canon.createEngine({ io, reader: Canon.fakeReader(ANSWERS) }).readShelf({ again: true });
     const after = Canon.parseEntry(fs.readFileSync(file, 'utf8'));
     assert.deepEqual(after.facts.find((f) => f.attr === 'hair'), { attr: 'hair', label: undefined, value: 'grey', as: '', state: 'yours', sources: [{ written: true }] });
-    const owner = after.facts.find((f) => f.attr === 'owner');
-    assert.equal(owner.state, 'unverified');
-    assert.equal(owner.sources[0].changed, true);
-    assert.match(fs.readFileSync(file, 'utf8'), /\{book:book-ember-and-thorn-ember1, ch:c2, changed\}/);
+    const ilsa = path.join(dir, 'entries', 'ilsa-varr.md');
+    const sex = Canon.parseEntry(fs.readFileSync(ilsa, 'utf8')).facts.find((f) => f.attr === 'sex');
+    assert.equal(sex.state, 'unverified');
+    assert.equal(sex.sources[0].changed, true);
+    assert.match(fs.readFileSync(ilsa, 'utf8'), /\{book:book-ember-and-thorn-ember1, ch:c1, changed\}/);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('Not right is remembered: the same value from the same quote is not proposed again', async () => {
   const { root, dir, io } = await readOnce();
   try {
-    const file = path.join(dir, 'entries', 'bramble.md');
+    const file = path.join(dir, 'entries', 'rook.md');
     const e = Canon.parseEntry(fs.readFileSync(file, 'utf8'));
     Canon.setAsideFact(e, e.facts.findIndex((f) => f.attr === 'owner'), true);
     fs.writeFileSync(file, Canon.serialiseEntry(e));
@@ -226,7 +244,7 @@ test('Not right is remembered: the same value from the same quote is not propose
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('a reading that contradicts an established fact waits in Needs You; the fact keeps its slips', async () => {
+test('first said, first kept: a later reading that contradicts the fact is the pass\'s slip, never a question', async () => {
   // a reader that also takes the slips at their word, as a small model does
   const answers = structuredClone(ANSWERS);
   answers.propose.unshift(
@@ -241,24 +259,42 @@ test('a reading that contradicts an established fact waits in Needs You; the fac
       const of = (id, attr) => got.find((e) => e.id === id).facts.filter((f) => f.attr === attr && !f.sources.every((s) => s.said)).map((f) => f.value + ' ' + f.state).sort();
       return [of('bramble', 'sex'), of('ilsa-varr', 'eyes')];
     };
-    // all in one first read: what was said first goes on to checking
+    // all in one first read: what was said first is kept; the later word is no fact
     const first = await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).readShelf();
-    assert.deepEqual(states(), [['female verified', 'male disagree'], ['brown disagree', 'grey verified']]);
-    // these two; the foal question; the trader's gelding (his own, never joined to a
-    // reading of the story's); Oren's sex and Bramble's owner (a pronoun, no owner word)
-    assert.equal(first.needs, 6);
+    assert.deepEqual(states(), [['female verified'], ['grey verified']]);
+    // only the foal question and the trader's gelding wait for the writer
+    assert.equal(first.needs, 2);
     assert.deepEqual(await check(), EXPECTED.slips);
     // and read again with the facts already checked: nothing moves
     await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).readShelf({ again: true });
-    assert.deepEqual(states(), [['female verified', 'male disagree'], ['brown disagree', 'grey verified']]);
+    assert.deepEqual(states(), [['female verified'], ['grey verified']]);
     assert.deepEqual(await check(), EXPECTED.slips);
-    // That's right on the newcomer: it becomes the writer's, the other steps aside
-    const file = path.join(where.dir, 'entries', 'bramble.md');
-    const e = Canon.parseEntry(fs.readFileSync(file, 'utf8'));
-    Canon.confirmFact(e, e.facts.findIndex((f) => f.attr === 'sex' && f.value === 'male' && f.state === 'disagree'));
-    // (the trader's line stays his own, beside it: "said", never the writer's source)
-    assert.deepEqual(e.facts.filter((f) => f.attr === 'sex').map((f) => f.value + ' ' + f.state + (f.sources.every((x) => x.said) ? ' said' : '')), ['male unverified said', 'male yours']);
-    assert.ok(e.setAside.some((f) => f.attr === 'sex' && f.value === 'female'));
+  } finally { fs.rmSync(where.root, { recursive: true, force: true }); }
+});
+
+test('the writer\'s notes against the prose: "Which is right?", both sources, no slip until the writer picks', async () => {
+  const where = copyLibrary();
+  const io = folderIO(where);
+  try {
+    // the House Varr page says brown; Book 1 says grey first
+    const page = path.join(where.lib, 'book-field-notes-notes3', 'chapters', 'p2.html');
+    fs.writeFileSync(page, fs.readFileSync(page, 'utf8').replace('grey eyes', 'brown eyes'));
+    const answers = structuredClone(ANSWERS);
+    for (const x of answers.propose) for (const f of x.facts) if (f.quote.includes('Ilsa: grey eyes')) { f.quote = f.quote.replace('grey', 'brown'); if (f.attr === 'eyes') f.value = 'brown'; }
+    for (const x of answers.propose) if (x.para.startsWith('Ilsa: grey')) x.para = x.para.replace('grey', 'brown');
+    const r = await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).readShelf();
+    const ilsa = () => readEntries(where.dir).find((e) => e.id === 'ilsa-varr');
+    assert.deepEqual(ilsa().facts.filter((f) => f.attr === 'eyes').map((f) => `${f.value} ${f.state} ${f.sources.map((s) => s.ch).join('+')}`).sort(), ['brown disagree p2', 'grey disagree c1']);
+    assert.equal(r.needs, 4);
+    const slips = await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).check({ bookId: SALT });
+    assert.ok(!slips.slips.some((s) => s.attr === 'eyes'));
+    // the writer picks grey: it's theirs, brown steps aside, and the slip is back
+    const file = path.join(where.dir, 'entries', 'ilsa-varr.md');
+    const e = ilsa();
+    Canon.confirmFact(e, e.facts.findIndex((f) => f.attr === 'eyes' && f.value === 'grey'));
+    fs.writeFileSync(file, Canon.serialiseEntry(e));
+    const again = await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).check({ bookId: SALT });
+    assert.ok(again.slips.some((s) => s.attr === 'eyes' && s.span === 'brown'));
   } finally { fs.rmSync(where.root, { recursive: true, force: true }); }
 });
 

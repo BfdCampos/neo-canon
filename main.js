@@ -2658,7 +2658,7 @@ function canonPausable(reader) {
       }
     }
   };
-  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)) };
+  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)), events: wrap(reader.events.bind(reader)), contradicts: wrap(reader.contradicts.bind(reader)) };
 }
 
 // For tests and development a fake reader answers from a file, as slowly as
@@ -2671,7 +2671,7 @@ function canonFake() {
     const t = setTimeout(() => { canonRunning = null; resolve(fn(...args)); }, ms);
     canonRunning = () => { clearTimeout(t); reject(Object.assign(new Error('aborted'), { code: 'aborted' })); };
   });
-  return { ...fake, propose: slow(fake.propose.bind(fake)), judge: slow(fake.judge.bind(fake)), refers: slow(fake.refers.bind(fake)) };
+  return { ...fake, propose: slow(fake.propose.bind(fake)), judge: slow(fake.judge.bind(fake)), refers: slow(fake.refers.bind(fake)), events: slow(fake.events.bind(fake)), contradicts: slow(fake.contradicts.bind(fake)) };
 }
 // A pass the writer started (canon:check, not a quiet one) runs at once:
 // it doesn't wait out the ten seconds after a key, and a key doesn't stop it
@@ -2686,7 +2686,7 @@ function canonUrgent(reader) {
       }
     }
   };
-  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)) };
+  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)), events: wrap(reader.events.bind(reader)), contradicts: wrap(reader.contradicts.bind(reader)) };
 }
 function canonReader({ urgent = false } = {}) {
   const tier = canonInstalled();

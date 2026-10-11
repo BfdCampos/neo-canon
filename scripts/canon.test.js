@@ -335,15 +335,15 @@ async function readWith(text, facts, { files = {}, judge = {} } = {}) {
 }
 const factsOf = (files, id) => files[id] ? Canon.parseEntry(files[id]).facts.map((f) => `${f.attr} ${f.value} ${f.state}`) : [];
 
-test('checking by rule needs the word to be about the entry; a pronoun alone checks nothing', async () => {
+test('checking by rule needs the word to be about the entry; a pronoun alone checks nothing, and what fails is left out, never asked', async () => {
   const p = (entity, attr, value, quote, kind = 'creature') => ({ entity, kind, attr, value, quote });
   let f = await readWith('Bramble stood beside the stallion.', [p('Bramble', 'sex', 'stallion', 'Bramble stood beside the stallion')]);
-  assert.deepEqual(factsOf(f, 'bramble'), ['sex male unverified']);
+  assert.deepEqual(factsOf(f, 'bramble'), []);
   f = await readWith('Tamsin led her own horse, Bramble, up the bank.', [p('Bramble', 'sex', 'female', 'Tamsin led her own horse, Bramble'), p('Tamsin', 'sex', 'female', 'Tamsin led her own horse', 'person')]);
   assert.deepEqual(factsOf(f, 'bramble'), []);
-  assert.deepEqual(factsOf(f, 'tamsin'), ['sex female unverified']); // her own horse: hers, but a pronoun is for the writer to confirm
+  assert.deepEqual(factsOf(f, 'tamsin'), []); // her own horse: hers, but a pronoun alone checks nothing
   f = await readWith('Oren sold Rook to Tamsin Hale.', [p('Tamsin Hale', 'sibling', 'Oren', 'Oren sold Rook to Tamsin Hale', 'person'), p('Rook', 'species', 'horse', 'Oren sold Rook')]);
-  assert.deepEqual(factsOf(f, 'tamsin-hale'), ['sibling Oren unverified']); // kin is never checked by rule: it waits for the reader or the writer
+  assert.deepEqual(factsOf(f, 'tamsin-hale'), []); // no kin word: the reader isn't even asked
   assert.deepEqual(factsOf(f, 'rook'), []);
   f = await readWith('Bramble, the grey mare, would not cross.', [p('Bramble', 'sex', 'mare', 'Bramble, the grey mare'), p('Bramble', 'species', 'horse', 'Bramble, the grey mare')]);
   assert.deepEqual(factsOf(f, 'bramble'), ['sex female verified', 'species horse verified']);

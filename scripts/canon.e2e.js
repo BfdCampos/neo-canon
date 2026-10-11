@@ -283,7 +283,7 @@ test('Read the Shelf (the fake reader), started by the download: progress, a pau
   await until(`!canonReading && /found/.test(canonReadLine)`, 40000); // resumes after ten seconds of quiet
   process.env.NEO_CANON_FAKE_MS = '';
   // (how many check out is the reader's business: canon-fixture.test.js)
-  assert.match(await js(`canonReadLine`), /^Canon found 7 entries and 17 facts\. \d+ checked out; \d+ needs? you\.$/);
+  assert.match(await js(`canonReadLine`), /^Canon found 7 entries and 15 facts\. \d+ checked out; \d+ needs? you\.$/);
   assert.equal(fs.readdirSync(path.join(LIB, CANON, 'entries')).filter((f) => f.endsWith('.md')).length, 7);
   assert.deepEqual(await js(`[...document.querySelectorAll('#nav-list .cn-kind-head')].map((x) => x.textContent)`), ['People', 'Creatures', 'Places']);
   // the writer's own fact stayed theirs, and gained the passages that agree
@@ -313,13 +313,13 @@ test('Read the Shelf (the fake reader), started by the download: progress, a pau
 const chapterFiles = () => ['c1', 'c2', 'c3'].map((c) => fs.readFileSync(path.join(LIB, SALT, 'chapters', c + '.html'), 'utf8'));
 let before;
 
-test('Continuity Pass: five marks, listed in the right-hand pane, none of it in the chapter', async () => {
+test('Continuity Pass: six marks (the five traits and the deed given to Ilsa), listed in the right-hand pane, none of it in the chapter', async () => {
   before = chapterFiles();
   await js(`switchTab('manuscript'); toggleContinuity()`);
-  await until(`canonProgress === '' && canonSlips.length >= 5`);
-  await until(`CSS.highlights.get('neo-slip') && CSS.highlights.get('neo-slip').size === 5`);
-  assert.deepEqual(await js(`canonSlips.map((s) => s.range.toString())`), ['his', 'brown', 'elder', 'Corwyck', 'stallion']);
-  assert.equal(await js(`document.querySelectorAll('#canon-side .cs-slip').length`), 5);
+  await until(`canonProgress === '' && canonSlips.length >= 6`);
+  await until(`CSS.highlights.get('neo-slip') && CSS.highlights.get('neo-slip').size === 6`);
+  assert.deepEqual(await js(`canonSlips.map((s) => s.range.toString())`), ['his', 'brown', 'elder', 'Corwyck', 'Ilsa', 'stallion']);
+  assert.equal(await js(`document.querySelectorAll('#canon-side .cs-slip').length`), 6);
   assert.equal(await js(`$('#side-pane').classList.contains('open')`), true);
   const saved = await js(`[...document.querySelectorAll('.chapter-body')].map((b) => captureBody(b)).join('')`);
   assert.ok(!/slip|canon/i.test(saved));
@@ -354,19 +354,19 @@ test('his → her makes the change as one undoable edit', async () => {
   assert.match(await js(`$('#hint').textContent`), /^Changed\. (⌘Z|Ctrl\+Z) brings it back\.$/);
   const para = `[...document.querySelectorAll('.chapter[data-id="c1"] .chapter-body p')].find((p) => p.textContent.includes('tossed')).textContent`;
   assert.match(await js(para), /Bramble tossed her head/);
-  assert.equal(await js(`CSS.highlights.get('neo-slip').size`), 4);
-  assert.equal(await js(`document.querySelectorAll('#canon-side .cs-slip').length`), 4);
+  assert.equal(await js(`CSS.highlights.get('neo-slip').size`), 5);
+  assert.equal(await js(`document.querySelectorAll('#canon-side .cs-slip').length`), 5);
   // ⌘Z brings the words back, and the mark and the list with them
   await js(`document.execCommand('undo')`);
   assert.match(await js(para), /Bramble tossed his head/);
-  await until(`CSS.highlights.get('neo-slip').size === 5 && document.querySelectorAll('#canon-side .cs-slip').length === 5`);
+  await until(`CSS.highlights.get('neo-slip').size === 6 && document.querySelectorAll('#canon-side .cs-slip').length === 6`);
   assert.match(await js(`document.querySelector('#canon-side .cs-slip q').textContent`), /^Bramble tossed his head and pulled$/);
 });
 
 test('Not a slip is remembered against the sentence', async () => {
   await js(`canonPopOpen(canonSlips.find((s) => s.span === 'brown'), 300, 300)`);
   await js(`[...document.querySelectorAll('.canon-pop button')].find((b) => b.textContent === 'Not a slip').click()`);
-  await until(`canonSlips.length === 4`);
+  await until(`canonSlips.length === 5`);
   const notSlips = JSON.parse(fs.readFileSync(path.join(LIB, CANON, 'not-slips.json'), 'utf8'));
   assert.deepEqual(notSlips.map((n) => n.fact), ['ilsa-varr/eyes', 'ilsa-varr/eyes']);
   assert.equal(notSlips[1].text, 'Ilsa’s brown eyes narrowed.');
@@ -570,6 +570,9 @@ test('links: a rule entry, [[links]] set as links, Linked from both ways, a rena
   await js(`canonRefreshNow()`);
   await until(`canon.entries.has('the-salt-laws')`);
   await until(`[...document.querySelectorAll('#nav-list .cn-kind-head')].some((x) => x.textContent === 'Rules and Systems')`);
+  // (no sentence says whose Bramble is: the writer keeps it by hand)
+  await js(`canonEdit('bramble', (d) => { d.facts.push(Canon.handFact('Owner: Tamsin Hale')); })`);
+  await until(`canon.entries.get('bramble').data.facts.some((f) => f.attr === 'owner')`);
   await js(`canonEdit('tamsin-hale', (d) => { d.words = 'Rides [[Bramble]] most days, and keeps [[The Salt Laws|the salt accounts]]. Born somewhere near [[Ashby]]?\\n'; })`);
   await js(`canonGo('tamsin-hale')`);
   await until(`document.querySelectorAll('#canon-view .cn-words .cn-link').length === 3`);
@@ -638,7 +641,7 @@ test('In this chapter: the right-hand pane lists who and what the chapter names,
   const bramble = `[...document.querySelectorAll('#canon-here .ch-name')].find((b) => b.textContent === 'Bramble')`;
   await js(`${bramble}.dispatchEvent(new MouseEvent('mouseenter'))`);
   // (Owner shows once checked: the reader's checking decides, canon-fixture.test.js)
-  assert.match(await js(`document.querySelector('#canon-here .ch-facts').textContent`), /^horse · (Tamsin Hale · )?stallion$/);
+  assert.match(await js(`document.querySelector('#canon-here .ch-facts').textContent`), /^horse · (Tamsin Hale · )?stallion( · Tamsin Hale)?$/);
   await tick(300);
   await shot('canon-in-this-chapter.png');
   // with the pane open, keeping it current costs next to nothing per key
@@ -919,6 +922,90 @@ test('the QA pass: ⌘\' starts at once with a reader, and the World Map from th
   await tick(600);
   assert.equal(await js(`$('#side-pane').classList.contains('open') || $('#editor-view').classList.contains('canon-side')`), false);
   await js(`mapClose()`);
+});
+
+// The owner's report (docs/semantics/STORY.md): Notes say John has green
+// eyes; Chapter 1 is the owner's own paragraph; Chapter 2 gives the vortex
+// to Dave. With the (fake) reader: nothing in Needs You for John, his key
+// point under Story so far and In this chapter, ⌘K finds it, and the
+// swap is a slip on "Dave" whose fix is one undoable edit.
+const OWNER_TEXT = '“Hello” John said. But there was no answer. He reached his hand through the swirling red vortex in front of him, as pages and random items flew around his room. Just as he fixed his blue eyes on the chaos, he perceived something—someone… Faintly he heard back. “Hello”.';
+const SWAP_TEXT = 'It was Dave who touched the red vortex that night, and nobody else.';
+let DOOR;
+test('the owner\'s text, read: the first thing said of John is kept, nothing for him waits in Needs You, and Story so far has his vortex', async () => {
+  await js(`canonPassOn && canonPassOff()`);
+  DOOR = await js(`(async () => { const b = await window.neo.createBook({ title: 'The Door' }); library.shelves[0].bookIds.push(b.id); await writeLibrary(library); return b.id; })()`);
+  const dir = path.join(LIB, DOOR);
+  const meta = JSON.parse(fs.readFileSync(path.join(dir, 'book.json'), 'utf8'));
+  meta.chapterOrder = ['door1', 'door2'];
+  fs.writeFileSync(path.join(dir, 'book.json'), JSON.stringify(meta));
+  fs.writeFileSync(path.join(dir, 'chapters', 'door1.html'), `<p>${OWNER_TEXT}</p>`);
+  fs.writeFileSync(path.join(dir, 'chapters', 'door2.html'), `<p>${SWAP_TEXT}</p>`);
+  fs.writeFileSync(path.join(dir, 'notes.html'), '<p>John has green eyes and likes to read old books.</p>');
+  await js(`openBook('${DOOR}')`);
+  await until(`book && book.id === '${DOOR}'`);
+  await js(`switchTab('canon'); canonShown = null; renderCanon()`);
+  await until(`!!document.querySelector('#canon-view .cn-read')`);
+  await js(`canonReadShelfNow()`);
+  await until(`!canonReading && /found/.test(canonReadLine)`, 30000);
+  const john = fs.readFileSync(path.join(LIB, CANON, 'entries', 'john.md'), 'utf8');
+  assert.match(john, /- Eyes: green · verified\n {2}- The Door, Notes: "John has green eyes"/);
+  assert.doesNotMatch(john, /blue/);
+  assert.match(john, /## Story so far\n- John reached through a red vortex in his room · Canon’s note\n {2}- The Door, Ch 1: "He reached his hand through the swirling red vortex/);
+  assert.deepEqual(await js(`canonNeeds().filter((x) => x.e.name === 'John' || x.e.name === 'Dave').map((x) => x.key)`), []);
+  await js(`canonShown = 'john'; renderCanon()`);
+  await until(`/John reached through a red vortex in his room/.test(document.querySelector('#canon-view .cn-story')?.textContent)`);
+  assert.equal(await js(`document.querySelector('#canon-view .cn-story .cn-h').textContent`), 'Story so far');
+  assert.equal(await js(`document.querySelector('#canon-view .cn-event .cn-by').textContent`), 'Canon’s note');
+  assert.ok(!(await js(`[...document.querySelectorAll('#canon-side .cs-need strong')].map((x) => x.textContent).join()`)).includes('John'));
+  await js(`$('#nav-pane').classList.add('open')`);
+  await tick(400);
+  await shot('canon-story-so-far.png');
+  await js(`$('#nav-pane').classList.remove('open')`);
+});
+
+test('Key points in In this chapter, and ⌘K "vortex" finds John\'s', async () => {
+  await js(`switchTab('manuscript')`);
+  await js(`(() => { const p = document.querySelector('.chapter .chapter-body p'); p.scrollIntoView({ block: 'center' }); const r = document.createRange(); r.setStart(p.firstChild, 3); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()`);
+  await until2(() => { wc.sendInputEvent({ type: 'mouseMove', x: 700, y: 400 }); wc.sendInputEvent({ type: 'mouseMove', x: SIDE_X, y: 400 }); },
+    `$('#side-pane').classList.contains('open') && !!document.querySelector('#canon-here .ch-point')`);
+  assert.equal(await js(`document.querySelector('#canon-here .ch-sub').textContent`), 'Key points');
+  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-here .ch-point')].map((b) => b.textContent)`), ['John reached through a red vortex in his room']);
+  await tick(300);
+  await shot('canon-key-points.png');
+  await until2(() => key('K', [CMD]), `!!document.querySelector('.go-box .go-input') && document.activeElement === document.querySelector('.go-input')`);
+  wc.insertText('vortex');
+  await until(`${goRows}.some((r) => /^John reached through a red vortex in his room \\| Fact$/.test(r))`);
+  // (Dave's own "touched the vortex" answers too: both entries come first)
+  assert.deepEqual((await js(goRows)).slice(0, 2).sort(), ['Dave | Entry', 'John | Entry']);
+  key('Escape');
+  await until(`!go`);
+});
+
+test('the actor swap: "It was Dave who touched the vortex" is a slip on Dave, citing Ch 1, and Keep — it was John swaps the name as one undoable edit', async () => {
+  await js(`toggleContinuity()`);
+  await until(`canonProgress === '' && canonSlips.some((s) => s.attr === 'event')`, 15000);
+  const deed = `canonSlips.find((s) => s.attr === 'event')`;
+  assert.deepEqual(await js(`[${deed}.span, ${deed}.to, ${deed}.name, !!${deed}.ask, ${deed}.range.toString()]`), ['Dave', 'John', 'John', false, 'Dave']);
+  assert.ok(await js(`[...CSS.highlights.get('neo-slip')].some((r) => r.toString() === 'Dave')`));
+  // "his blue eyes" is a slip too: green came first, from the Notes
+  assert.ok(await js(`canonSlips.some((s) => s.span === 'blue' && !s.ask)`));
+  await js(`${deed}.range.startContainer.parentElement.scrollIntoView({ block: 'center' })`);
+  await tick(300);
+  await js(`(() => { const r = ${deed}.range.getBoundingClientRect(); canonPopOpen(${deed}, r.left, r.bottom + 6); })()`);
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-claim').textContent`), 'Canon has John doing this.');
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-deed').textContent`), 'John reached through a red vortex in his room');
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-where').textContent`), 'Canon’s note from The Door, Ch 1');
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-why').textContent`), 'Here, “Dave” seems to have done it.');
+  assert.deepEqual(await js(`[...document.querySelectorAll('.canon-pop .cp-row button')].map((b) => b.textContent)`), ['Keep — it was JohnDave → John', 'Not a slip']);
+  await shot('canon-deed-popover.png');
+  await js(`document.querySelector('.canon-pop .cp-main').click()`);
+  const para = `[...document.querySelectorAll('.chapter[data-id="door2"] .chapter-body p')][0].textContent`;
+  assert.equal(await js(para), SWAP_TEXT.replace('Dave', 'John'));
+  await js(`document.execCommand('undo')`);
+  assert.equal(await js(para), SWAP_TEXT);
+  assert.ok(!/slip|canon/i.test(await js(`captureBody(document.querySelector('.chapter[data-id="door2"] .chapter-body'))`)));
+  await js(`toggleContinuity()`);
 });
 
 /* ---------- the welcome and the Tutorial, on a fresh computer ---------- */

@@ -496,7 +496,7 @@
   // One Markdown file per entry (ARCHITECTURE §2.2). One line is one thing;
   // "## In my words" and all after it is the writer's and kept byte for byte.
   function newEntry(name, kind, id) {
-    return { id: id || slug(name), name: one(name).trim(), kind: KINDS.includes(kind) ? kind : 'other', aliases: [], extra: [], facts: [], setAside: [], lead: { top: [], facts: [], aside: [] }, words: '' };
+    return { id: id || slug(name), name: one(name).trim(), kind: KINDS.includes(kind) ? kind : 'other', aliases: [], extra: [], facts: [], story: [], setAside: [], lead: { top: [], facts: [], story: [], aside: [] }, words: '' };
   }
 
   // Written by hand in any editor, so a byte-order mark, Windows line ends,
@@ -507,6 +507,10 @@
   const FACT_LINE = /^[-*] (.+?): (.*?)(?: \(([^()]*)\))? · (verified|unverified|yours|disagree|set aside|not right)$/i;
   const SOURCE_LINE = /^(?: {2,}|\t+)[-*] (.*?): "(.*)" \{([^{}]*)\}$/;
   const WRITTEN_LINE = /^(?: {2,}|\t+)[-*] Written in Canon$/i;
+  // Story so far (docs/semantics/STORY.md): a key point, Canon's or the writer's
+  const EVENT_LINE = /^[-*] (.+?)(?: · (canon['’]s note|yours))?$/i;
+  // the mark of the words Canon wrote: changed, the line is the writer's
+  const noteMark = (did) => textHash(norm(did)).split(':')[0].slice(-6);
   function parseEntry(text) {
     text = String(text || '').replace(/^﻿/, '').replace(/\r\n?/g, '\n');
     const bad = (line) => {
@@ -540,7 +544,13 @@
       if (!line || /^# /.test(line)) continue;
       if (/^## Facts$/i.test(line)) { list = e.facts; lead = e.lead.facts; continue; }
       if (/^## Set aside$/i.test(line)) { list = e.setAside; lead = e.lead.aside; continue; }
-      const f = list && FACT_LINE.exec(line);
+      if (/^## Story so far$/i.test(line)) { list = e.story; lead = e.lead.story; continue; }
+      const ev = list === e.story && !/^\s/.test(line) && EVENT_LINE.exec(line);
+      if (ev) {
+        list.push({ did: ev[1], state: ev[2] && /^canon/i.test(ev[2]) ? 'note' : 'yours', sources: [] });
+        continue;
+      }
+      const f = list && list !== e.story && FACT_LINE.exec(line);
       if (f) {
         const attr = attrOf(f[1]) || 'other';
         list.push({ attr, label: attr === 'other' ? f[1] : undefined, value: f[2], as: f[3] || '', state: f[4].toLowerCase(), sources: [] });
@@ -556,11 +566,14 @@
           if (k === 'book' || k === 'ch') src[k] = v.join(':').trim();
           else if (k === 'said') src.said = v.length ? v.join(':') : true;
           else if (k === 'plan' || k === 'changed') src[k] = true;
+          else if (k === 'note') src.note = v.join(':').trim();
         }
         last.sources.push(src);
       } else if (last) (last.notes = last.notes || []).push(raw);
       else lead.push(raw);
     }
+    // a Canon's note whose words aren't the ones Canon wrote: the writer's now
+    for (const x of e.story) if (x.state === 'note' && !x.sources.some((src) => src.note === noteMark(x.did))) x.state = 'yours';
     return e;
   }
 
@@ -568,14 +581,19 @@
     const factLines = (facts) => facts.flatMap((f) => [
       `- ${one(labelOf(f))}: ${one(f.value)}${f.as ? ` (${one(f.as)})` : ''} · ${f.state}`,
       ...f.sources.map((s) => s.written ? '  - Written in Canon'
-        : `  - ${one(s.label)}: "${one(s.quote)}" {book:${s.book}, ch:${s.ch}${s.said ? (s.said === true ? ', said' : `, said:${one(s.said)}`) : ''}${s.plan ? ', plan' : ''}${s.changed ? ', changed' : ''}}`),
+        : `  - ${one(s.label)}: "${one(s.quote)}" {book:${s.book}, ch:${s.ch}${s.said ? (s.said === true ? ', said' : `, said:${one(s.said)}`) : ''}${s.plan ? ', plan' : ''}${s.changed ? ', changed' : ''}${s.note ? `, note:${s.note}` : ''}}`),
       ...(f.notes || [])
+    ]);
+    const storyLines = (story) => story.flatMap((x) => [
+      `- ${one(x.did)} · ${x.state === 'note' ? 'Canon’s note' : 'yours'}`,
+      ...factLines([{ attr: 'other', label: 'x', value: '', state: 'yours', sources: x.sources.map((s) => x.state === 'note' ? { ...s, note: noteMark(x.did) } : { ...s, note: undefined }), notes: x.notes }]).slice(1)
     ]);
     const lead = e.lead || {};
     const alias = (a) => (a.includes(',') ? `"${one(a)}"` : one(a));
     const lines = ['---', `id: ${e.id}`, `name: ${one(e.name)}`, `kind: ${e.kind}`, `aliases: [${e.aliases.map(alias).join(', ')}]`,
       ...e.extra.map(([k, v]) => `${k}: ${one(v)}`), '---', `# ${one(e.name)}`, '', ...(lead.top || []), ...((lead.top || []).length ? [''] : []),
       '## Facts', ...(lead.facts || []), ...factLines(e.facts)];
+    if ((e.story || []).length || (lead.story || []).length) lines.push('', '## Story so far', ...(lead.story || []), ...storyLines(e.story || []));
     if (e.setAside.length || (lead.aside || []).length) lines.push('', '## Set aside', ...(lead.aside || []), ...factLines(e.setAside));
     lines.push('', '## In my words');
     return lines.join('\n') + '\n' + (e.words || '');
@@ -644,6 +662,7 @@
       for (const src of f.sources) if (!had.sources.some((x) => x.written ? src.written : x.book === src.book && x.ch === src.ch && x.quote === src.quote)) had.sources.push(src);
     }
     into.setAside.push(...from.setAside);
+    for (const x of from.story || []) if (!into.story.some((y) => y.did === x.did)) into.story.push(x);
     if (from.words && from.words.trim()) into.words = (into.words ? into.words.replace(/\n*$/, '\n\n') : '') + from.words;
   }
   function restoreFact(e, i) {
@@ -758,15 +777,10 @@
   // ones are kept only if the reader agrees the word means that entry, and
   // are otherwise asked of the writer ("Worth a look").
   // Each: { kind, strength, id, attr, fact, start, end, to, si, ref?, initials? }.
-  function paraCandidates(text, idx, world, names) {
-    const speech = talkSpans(text);
-    const free = (a, b) => !speech.some(([s, e]) => a < e && b > s);
-    const every = mentions(text, idx);
-    const all = every.filter((m) => free(m.start, m.end));
+  // a paragraph as referent() reads it: its mentions, sentences, words
+  // (`initial`: opening a sentence or a quote) and speech
+  function paraCtx(text, idx, world) {
     const sents = sentences(text);
-    const out = [];
-    const sexed = (m) => world.get(m.id) && world.get(m.id).sex;
-    // every word of the paragraph; `initial` opens a sentence or a quote
     const pwords = [];
     sents.forEach((s, si) => {
       for (const m of s.text.matchAll(WORD)) {
@@ -775,7 +789,15 @@
         pwords.push({ w: m[0], lw: m[0].toLowerCase().replace(/['’]s$/, ''), start, end: start + m[0].length, si, initial: !/[\p{L}\p{N}]/u.test(lead) || /[“"‘«„—–:(]\s*$/u.test(lead) });
       }
     });
-    const ctx = { every, pwords, sents, world, speech };
+    return { every: mentions(text, idx), pwords, sents, world, speech: talkSpans(text) };
+  }
+  function paraCandidates(text, idx, world, names) {
+    const ctx = paraCtx(text, idx, world);
+    const { every, sents, speech } = ctx;
+    const free = (a, b) => !speech.some(([s, e]) => a < e && b > s);
+    const all = every.filter((m) => free(m.start, m.end));
+    const out = [];
+    const sexed = (m) => world.get(m.id) && world.get(m.id).sex;
     sents.forEach((s, si) => {
       const inS = all.filter((m) => m.start >= s.start && m.end <= s.end);
       const words = [];
@@ -886,7 +908,12 @@
           const agrees = det && sole && (det.lw === 'her' || det.lw === 'his') && (!sole.sex || PRONOUNS[det.lw] === sole.sex.value);
           // or a note's line: "Ilsa: grey eyes, born in Saltmere"
           const head = c && inS[0] && inS[0].start === s.start && /^\s*(?::|[—–]\s)/.test(text.slice(inS[0].end)) && !inS.some((m) => m !== inS[0] && m.start < c.start) ? inS[0] : null;
-          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head;
+          // or the sentence's subject has them: "John has green eyes", "Mara had red hair"
+          const haver = c && c.end <= w.start && inS.find((m) => {
+            const j = after(m.end);
+            return j >= 0 && ['has', 'had'].includes(words[j].lw) && /^\s+$/.test(text.slice(m.end, words[j].start)) && words[j].end <= c.start && i - j <= 3 && !words.slice(j + 1, i).some(named);
+          });
+          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver;
           const k = owner && world.get(owner.id);
           if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, k[attr].as || k[attr].value) });
           // or, in a sentence naming no one, "his blue eyes" of the one person
@@ -931,7 +958,10 @@
   // The Continuity Pass over some sources: [{ bookId, chId, label, html }].
   // `knownWords(words)` asks the spelling dictionary; `reader` (or null)
   // confirms the weak candidates; `notSlips` are the writer's dismissals.
-  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null }) {
+  // `story` (storyIndex), `rank` (book/ch → place in reading order) and
+  // `rare` (rarity) let the reader check a sentence against the story's
+  // key points (STORY.md §5); without them, or a reader, it isn't.
+  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null, story = null, rank = null, rare = null }) {
     const idx = mentionIndex(entries);
     const world = worldOf(entries, out);
     const names = nameTokens(entries);
@@ -988,6 +1018,14 @@
           ...(ask ? { ask: true, ref } : {})
         });
       }
+      if (story && story.length && rank && rare && reader && typeof reader.contradicts === 'function') {
+        const paras = sourceParas(src.html);
+        for (const [j, p] of paras.entries()) {
+          if (stop && stop()) break;
+          if (paraOk && !paraOk(src, p)) continue;
+          for (const x of await deedSlips({ src, p, pos: rank.get(src.bookId + '/' + src.chId) * 1e4 + j, idx, byId, story, rare, reader, dismissed })) slips.push({ ...x, seq: all.length + slips.length });
+        }
+      }
       all.push(...slips);
       if (onSource) onSource(src, slips, ++n, sources.length);
     }
@@ -995,10 +1033,66 @@
     return { slips: all.filter((x) => !x.ask), asks: all.filter((x) => x.ask), facts };
   }
 
+  // A sentence that gives an earlier key point's deed to someone else
+  // ("It was Dave who touched the vortex", after John reached through it):
+  // the stored points sharing a distinctive word with it, earlier in
+  // reading order, whose who it doesn't name as the doer, asked of the
+  // reader with both passages. yes: a slip on the name; unclear, or a
+  // reader not asked (the quick one): worth a look; no: nothing.
+  async function deedSlips({ src, p, pos, idx, byId, story, rare, reader, dismissed }) {
+    const out = [];
+    const talk = talkSpans(p.text);
+    const every = mentions(p.text, idx).filter((m) => !talk.some(([a, b]) => m.start < b && m.end > a));
+    const names = new Set([...byId.values()].flatMap((e) => [e.name, ...e.aliases]).flatMap(wordsOf).map(stemOf));
+    for (const s of sentences(p.text)) {
+      // a plan, or what someone says, believes or is told: not the story's word
+      if (PLAN.test(s.text) || reportedSpans(p.text).some(([a, b]) => a < s.end && b > s.start)) continue;
+      // the narrator's words only: what someone says or is said to have done is talk
+      const plain = s.text.split('').map((ch, k) => talk.some(([a, b]) => s.start + k >= a && s.start + k < b) ? ' ' : ch).join('');
+      const own = new Set(heavy(plain).map(stemOf).filter((w) => rare(w) && !names.has(w)));
+      if (!own.size) continue;
+      const here = every.filter((m) => m.start >= s.start && m.end <= s.end && byId.get(m.id) && ['person', 'creature'].includes(byId.get(m.id).kind));
+      if (!here.length) continue;
+      for (const ev of story) {
+        // two distinctive words shared, or one found nowhere else ("vortex")
+        const shared = [...ev.words].filter((w) => own.has(w));
+        if (ev.pos >= pos || !(shared.length >= 2 || shared.some((w) => rare.only(w)))) continue;
+        // the one the sentence puts first is its doer; the doer named first
+        // is let past only by a "not" ("It wasn't John, it was Dave")
+        const other = here.find((m) => !ev.ids.includes(m.id));
+        if (!other || (ev.ids.includes(here[0].id) && !/\b(?:not|never|wasn['’]t|weren['’]t|didn['’]t|n['’]t)\b/i.test(s.text))) continue;
+        const named = here.some((m) => ev.ids.includes(m.id));
+        const fact = `${ev.ids[0]}/event/${textHash(norm(ev.quote)).split(':')[0]}`;
+        const sentenceHash = textHash(norm(s.text));
+        if (dismissed.has(fact + '|' + sentenceHash)) continue;
+        let said = await reader.contradicts({ a: ev.quote, label: ev.label, who: ev.names[0], did: ev.did, sentence: s.text, paragraph: p.text });
+        if (said === 'no') continue;
+        // a sentence that names the doer too ("Dave remembered John…") is a
+        // slip only on the reader's yes, never worth a look
+        if (said !== 'yes' && named) continue;
+        if (said !== 'yes') said = 'ask';
+        const span = p.text.slice(other.start, other.end);
+        // the plain fix: the one name, written once, swapped for the doer's
+        const who = byId.get(ev.ids[0]);
+        const form = /\s/.test(span) ? who.name : (nameParts(who.name).find((w) => hasWord(norm(ev.quote + ' ' + ev.did), norm(w))) || who.name.split(/\s+/)[0]);
+        const once = here.filter((m) => m.id === other.id).length === 1 && ev.ids.length === 1;
+        out.push({
+          bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: p.hash, sentence: s.text, sat: s.start, sentenceHash, at: other.start, span,
+          to: once && form !== span ? form : null, kind: 'event', strength: 'weak', entry: who.id, name: who.name, attr: 'event', value: ev.did, as: '', fact,
+          sources: [{ label: ev.label, quote: ev.quote }], more: 0, written: false, note: true,
+          ...(said === 'ask' ? { ask: true, ref: span } : {})
+        });
+        break;
+      }
+    }
+    return out;
+  }
+
   /* ---------- reading ---------- */
 
   // Bumped when the prompts change, so cached proposals are asked again
   const PROMPT = 2;
+  const STORY_PROMPT = 1;
   const STOP = new Set(['the', 'and', 'his', 'her', 'its', 'their', 'with', 'from', 'that', 'this', 'was', 'were', 'had', 'has', 'for', 'into', 'onto', 'by']);
   const CUE = new Set([...Object.keys(SEX_WORDS), ...Object.keys(COLOURS), ...Object.keys(SPECIES), ...Object.keys(KIN), 'born', 'eyes', 'hair']);
   const stripTitles = (name) => String(name || '').trim().split(/\s+/).filter((w, i, all) => i === all.length - 1 || !TITLES.has(w.toLowerCase().replace(/\.$/, ''))).join(' ');
@@ -1217,6 +1311,151 @@
     return f.sources.some((s) => live(s) && !s.said && !s.plan && tiedTo(e, f, s.quote, entries, false));
   }
 
+  /* ---------- story so far (docs/semantics/STORY.md) ---------- */
+
+  // Words that carry no deed: never "invented", never what makes two
+  // passages about the same thing
+  const LIGHT = new Set([...STOP, 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'as', 'it', 'its', 'who', 'what', 'but', 'not', 'one', 'out', 'off', 'all', 'any', 'our', 'did', 'got', 'how', 'just', 'then', 'than', 'there', 'here', 'also', 'very', 'some', 'been', 'being', 'have', 'would', 'could', 'should', 'will', 'they', 'them', 'him', 'she', 'you', 'your', 'are', 'is', 'be', 'no', 'so', 'up', 'down', 'over', 'back', 'away', 'again', 'once', 'when', 'while', 'where', 'which', 'whose', 'only', 'even', 'still', 'more', 'most', 'much', 'many', 'such', 'own', 'other', 'another', 'each', 'every', 'something', 'someone', 'nothing', 'thing', 'things']);
+  // (a suffix only off a word left with three letters: "red" stays red)
+  const stemOf = (w) => { w = w.replace(/['’]s$/, ''); const m = /(?:ing|ed|es|s)$/.exec(w); return (m && m.index >= 3 ? w.slice(0, m.index) : w).slice(0, 5); };
+  const heavy = (text) => wordsOf(text).map((w) => w.replace(/['’]s$/, '')).filter((w) => w.length >= 3 && !LIGHT.has(w) && !PRONOUNS[w]);
+  const MEMORY = /(?<![\p{L}])(?:remembered|remembers|recalled|recalls|recalling|remembering|dreamed|dreamt|dreams|imagined|imagines|pictured|wondered|thought of|thinking of)(?![\p{L}])/iu;
+  const TALK_WORDS = /^(?:said|says|say|asked|asks|told|tells|called|calls|replied|answered|whispered|shouted|cried|muttered|heard|hears|thought|thinks|wondered)$/;
+  const PLACE_WORDS = /^(?:in|at|on|by|near|under|inside|outside|beside|behind|across|through|into|onto|over|beneath|below|above|along|around|from)\s/i;
+
+  // A name the reader gave that isn't an entry yet: one if the usual name
+  // rules allow (as accept() does for facts), else null
+  function newName(entries, name, text, names) {
+    name = stripTitles(String(name || '').trim().split(/\s+/).filter((w, i, all) => !(i < all.length - 1 && LEADERS.has(w.toLowerCase()))).join(' '));
+    if (!/^\p{Lu}/u.test(name)) return null;
+    if (!/\s/.test(name) && names.has && names.has(name.toLowerCase())) {
+      const all = names.get(name.toLowerCase());
+      if (all.size > 1) return null;
+      name = [...all][0];
+    }
+    const parts = name.split(/\s+/);
+    if (!parts.every((w) => hasWord(text, w) && /^\p{Lu}/u.test(w)) || misspelt(name, entries)) return null;
+    if (parts.length === 1 && (PRONOUNS[name.toLowerCase()] || LEADERS.has(name.toLowerCase()) || (names.lower && names.lower.has(name.toLowerCase())))) return null;
+    return name;
+  }
+
+  // One event the reader proposed, through the gates (STORY.md §3): its
+  // quote verbatim, not speech or a plan; each who an entry (or a name the
+  // rules accept) named in the quote, or the one a pronoun in the quote
+  // means by the paragraph's rule; every word of the line the writer's.
+  // → { who: [entry], did, quote, fresh: [new entries] } or { why }
+  function gateEvent(entries, ev, para, prev, full, names = new Map()) {
+    if (!ev || !ev.quote || !ev.did || !Array.isArray(ev.who) || !ev.who.length || ev.who.length > 3) return { why: 'shape' };
+    const quote = gateQuote(ev.quote, full);
+    if (!quote || !norm(para.text).includes(norm(quote))) return { why: 'quote' };
+    if (quote.split(/\s+/).length > 30) return { why: 'long' };
+    const where = quoteIn(quote, para.text);
+    if (where.said || where.plan) return { why: where.said ? 'said' : 'plan' };
+    // (a quote that is mostly speech: “Hello,” John said.)
+    const talk = talkSpans(para.text);
+    const src = normMap(para.text);
+    const qat = src.text.indexOf(norm(quote));
+    const qa = src.map[qat];
+    const qb = src.map[qat + norm(quote).length - 1] + 1;
+    const outside = para.text.slice(qa, qb).split('').map((ch, k) => talk.some(([a, b]) => qa + k >= a && qa + k < b) ? ' ' : ch).join('');
+    if (!heavy(outside).some((w) => !TALK_WORDS.test(w) && !/^\p{Lu}/u.test((outside.match(new RegExp(`(?<![\\p{L}])${w}`, 'iu')) || [''])[0]))) return { why: 'said' };
+    // a memory, a dream, a thought is no deed of the story's now
+    if (MEMORY.test(para.text.slice(Math.max(0, qa - 40), qb))) return { why: 'memory' };
+    let did = one(ev.did).trim().replace(/[.;:,!?]+$/, '');
+    if (!did || /["“”«»]/.test(did)) return { why: 'did' };
+    // the sentences that hold the quote: the words a line may use
+    const sents = sentences(para.text).filter((x) => x.end > qa && x.start < qb);
+    const told = sents.map((x) => x.text).join(' ');
+    const at = one(ev.where || '').trim().replace(/[.,;]+$/, '');
+    const toldStems = new Set(heavy(told).map(stemOf));
+    if (at && PLACE_WORDS.test(at) && !norm(did).includes(norm(at)) && heavy(at).length && heavy(at).every((w) => toldStems.has(stemOf(w)))) did += ' ' + at;
+    if (did.split(/\s+/).length > 14) return { why: 'long' };
+    // who: each an entry, or a name the rules let in
+    const fresh = [];
+    const who = [];
+    const text = prev + '\n' + para.text;
+    for (const name of ev.who) {
+      let e = findEntry(entries, name) || fresh.find((x) => norm(x.name) === norm(stripTitles(name)));
+      if (!e) {
+        const n = newName(entries, name, text, names);
+        if (!n) return { why: 'who' };
+        e = findEntry(entries, n) || newEntry(n, 'person');
+        if (!entries.includes(e)) fresh.push(e);
+      }
+      // someone who acts: a person, a creature, a group (not a place or a thing)
+      if (e.locked || !['person', 'creature', 'group', 'other'].includes(e.kind)) return { why: 'who' };
+      if (!who.includes(e)) who.push(e);
+    }
+    // each named in the quote, or the one its first pronoun means
+    const all = [...entries, ...fresh];
+    const idx = mentionIndex(all);
+    const world = worldOf(all, {});
+    const ctx = paraCtx(para.text, idx, world);
+    const pr = ctx.pwords.find((w) => w.start >= qa && w.end <= qb && PRONOUNS[w.lw] && w.lw !== 'hers');
+    for (const e of who) {
+      const forms = [e.name, ...e.aliases, ...nameParts(e.name)].map(norm);
+      if (forms.some((x) => hasWord(norm(quote), x))) continue;
+      const r = pr && referent(para.text, pr.start, pr.si, ctx, PRONOUNS[pr.lw]);
+      const k = r && world.get(r.id);
+      if (!r || r.weak || r.id !== e.id || (k.sex && k.sex.value !== PRONOUNS[pr.lw])) return { why: 'who' };
+    }
+    // no word the writer didn't write: names from the paragraph, the rest from the quote's sentences
+    const mine = new Set(who.flatMap((e) => [e.name, ...e.aliases]).flatMap(wordsOf));
+    const near = new Set(wordsOf(text));
+    const stems = new Set(heavy(told).map(stemOf));
+    for (const m of did.matchAll(WORD)) {
+      const w = norm(m[0]).replace(/['’]s$/, '');
+      if (mine.has(w)) continue;
+      if (/^\p{Lu}/u.test(m[0]) && m.index > 0 && !near.has(w)) return { why: 'invented' };
+      if (w.length < 3 || LIGHT.has(w) || PRONOUNS[w]) continue;
+      if (!stems.has(stemOf(w))) return { why: 'invented' };
+    }
+    return { who, did: did.charAt(0).toUpperCase() + did.slice(1), quote, fresh };
+  }
+
+  // Every key point on the shelf, once each, with all the entries it is
+  // kept on, and where it is in reading order: [{ ids, names, did, quote,
+  // book, ch, label, pos, key }]
+  function storyIndex(entries, sources, rank) {
+    const out = new Map();
+    for (const e of entries) {
+      for (const x of e.story || []) {
+        const s = x.sources.find((y) => !y.written && !y.changed);
+        if (!s || !rank.has(s.book + '/' + s.ch)) continue;
+        const key = s.book + '/' + s.ch + '|' + norm(s.quote);
+        if (!out.has(key)) {
+          const i = rank.get(s.book + '/' + s.ch);
+          const para = sourceParas(sources[i].html).findIndex((p) => norm(p.text).includes(norm(s.quote)));
+          if (para < 0) continue;
+          out.set(key, { ids: [], names: [], did: x.did, quote: s.quote, book: s.book, ch: s.ch, label: s.label, pos: i * 1e4 + para, key, words: new Set(heavy(x.did + ' ' + s.quote).map(stemOf)) });
+        }
+        const k = out.get(key);
+        if (!k.ids.includes(e.id)) { k.ids.push(e.id); k.names.push(e.name); }
+      }
+    }
+    return [...out.values()];
+  }
+
+  // what nearly every story's paragraphs do and have: never what ties two deeds
+  const COMMON = new Set(['rode', 'ride', 'head', 'came', 'come', 'went', 'turn', 'look', 'back', 'gate', 'door', 'room', 'hand', 'eyes', 'eye', 'wate', 'road', 'nigh', 'morn', 'time', 'kept', 'keep', 'took', 'take', 'made', 'make', 'found', 'find', 'stood', 'stand', 'walk', 'told', 'tell', 'felt', 'feel', 'left', 'leave', 'wait', 'light', 'house', 'town', 'away', 'there', 'first', 'last', 'long', 'little', 'great', 'every', 'never', 'always', 'again'].map(stemOf));
+  // A distinctive word: in few of the shelf's paragraphs ("vortex"; not
+  // "hand", "room"). → stem → is it rare
+  function rarity(sources) {
+    const df = new Map();
+    let n = 0;
+    for (const src of sources) {
+      for (const p of sourceParas(src.html)) {
+        n++;
+        for (const w of new Set(heavy(p.text).map(stemOf))) df.set(w, (df.get(w) || 0) + 1);
+      }
+    }
+    const most = Math.max(5, Math.ceil(n * 0.03));
+    const rare = (w) => w.length >= 3 && !COMMON.has(w) && (df.get(w) || 0) <= most;
+    // in two paragraphs at most: the deed's own and the one that retells it
+    rare.only = (w) => rare(w) && (df.get(w) || 0) <= 2;
+    return rare;
+  }
+
   /* ---------- the gates on checking (docs/semantics/ACCURACY.md) ---------- */
 
   // A fact is checked only by what the text shows deterministically, or by
@@ -1284,69 +1523,68 @@
     });
     return out;
   }
-  // of the values the shelf shows for one trait, the one it establishes:
-  // the only one; or one said in two places or more, first, against others
-  // said once each (a slip the writer made once, after the fact was set).
-  // null: the shelf disagrees with itself; undefined: it shows none.
+  // Where a passage stands in reading order: the writer's own Notes and
+  // notebook pages come first (they are the writer's word, not the story's
+  // telling), then the books' chapters in shelf order, paragraph by paragraph.
+  const NOTE_AT = -1e9;
+  const isNote = (src) => !!(src && (src.notes || src.notebook));
+  // Of the values the shelf shows for one trait, the one it establishes:
+  // first said, first kept. The writer's notes before the prose; if the
+  // notes say two things, or say one thing and the prose first says
+  // another, the shelf disagrees with itself (null): the writer is asked.
+  // undefined: it shows none.
   function established(ev) {
     if (!ev || !ev.size) return undefined;
-    if (ev.size === 1) return [...ev.keys()][0];
-    const count = (ws) => new Set(ws.map((w) => w.chapter)).size;
-    const first = (ws) => Math.min(...ws.map((w) => w.order));
-    for (const [v, ws] of ev) {
-      const others = [...ev].filter(([o]) => o !== v);
-      if (count(ws) >= 2 && others.every(([, o]) => count(o) === 1 && first(o) > first(ws))) return v;
-    }
-    return null;
+    const first = (ws, note) => Math.min(...ws.filter((w) => isNote(w.src) === note).map((w) => w.order));
+    const notes = [...ev].filter(([, ws]) => Number.isFinite(first(ws, true))).map(([v]) => v);
+    let prose;
+    for (const [v, ws] of ev) if (Number.isFinite(first(ws, false)) && (prose === undefined || first(ws, false) < first(ev.get(prose), false))) prose = v;
+    if (notes.length > 1 || (notes.length === 1 && prose !== undefined && prose !== notes[0])) return null;
+    return notes.length ? notes[0] : prose;
   }
 
-  // Where each single-valued attribute of an entry stands after a read. The
-  // state of every fact that isn't the writer's is worked out afresh from
-  // its sources, the shelf's evidence and (later) the reader's answers, so
-  // a Canon read with looser gates is put right by the next read.
-  //   The writer's value stands; others wait as disagreeing.
-  //   A trait (sex, species, eyes, hair) is checked only where the shelf
-  //   establishes it; values it doesn't establish wait. If the shelf says
-  //   two things and neither is established, every value waits ("Your
-  //   sources disagree"): no checked fact, no slip, until the writer picks.
-  //   Anything else read with two values: both wait.
-  const evSource = (w) => ({ label: `${w.src.book}, ${w.src.label}`, quote: w.quote, book: w.src.bookId, ch: w.src.chId });
-  const sameSource = (a, b) => a.book === b.book && a.ch === b.ch && (norm(a.quote).includes(norm(b.quote)) || norm(b.quote).includes(norm(a.quote)));
-  function settle(e, evidence, holds = () => true) {
-    for (const f of e.facts) if (f.state === 'verified' || f.state === 'disagree') f.state = 'unverified';
-    for (const attr of Object.keys(ATTRS).filter((a) => ATTRS[a].single)) {
-      // (a relation the text doesn't tie, or a misspelt place, is no rival)
-      const these = e.facts.filter((f) => f.attr === attr && solid(f) && (f.state === 'yours' || holds(e, f)));
-      const mine = new Set(these.filter((f) => f.state === 'yours').map((f) => norm(f.value)));
+  // Where each attribute of an entry stands after a read (ACCURACY.md,
+  // "First said, first kept"). `gated` maps every fact that got through
+  // the gates (its quote, its value, its entity tied to the quote by rule
+  // or by the reader's double answer) to where it is said: [{ pos, note }].
+  //   The writer's value stands; a value from the text that agrees is
+  //   checked, one that differs is the slip the pass finds, not a fact.
+  //   Otherwise the first value said is checked, without asking: the
+  //   writer's notes first, then the books in reading order. A later value
+  //   that differs is a slip on its passage, not a question.
+  //   The writer's notes against the prose (or against each other) are the
+  //   one thing asked: every value waits as "Which is right?" (disagree),
+  //   no slip, until the writer picks.
+  //   An attribute that may change (owner, home, title) or hold several
+  //   values (kin) keeps every value that got through.
+  // → the facts to leave out (later values that differ)
+  function firstCome(e, gated) {
+    const later = new Set();
+    for (const attr of new Set(e.facts.map((f) => f.attr))) {
+      const these = e.facts.filter((f) => f.attr === attr && (f.state === 'yours' || gated.has(f)));
       const others = these.filter((f) => f.state !== 'yours');
-      if (!TIED[attr]) {
-        const vals = new Set([...mine, ...others.map((f) => norm(f.value))]);
-        if (vals.size > 1) for (const f of others) if (!mine.has(norm(f.value))) f.state = 'disagree';
+      if (!ATTRS[attr] || !ATTRS[attr].single || !ATTRS[attr].slips) { for (const f of others) f.state = 'verified'; continue; }
+      const mine = new Set(these.filter((f) => f.state === 'yours').map((f) => norm(f.value)));
+      if (mine.size) {
+        for (const f of others) if (mine.has(norm(f.value))) f.state = 'verified'; else later.add(f);
         continue;
       }
-      const ev = evidence.get(e.id + '/' + attr);
-      const win = established(ev);
-      const add = (value, state) => {
-        const ws = ev.get(value);
-        const n = normaliseFact(attr, value, ws[0].as) || { value, as: '' };
-        const f = { attr, value: n.value, as: n.as, state, sources: ws.slice(0, 3).map(evSource) };
-        e.facts.push(f);
-        return f;
-      };
-      for (const f of others) {
-        if (mine.size) f.state = mine.has(norm(f.value)) && win === norm(f.value) ? 'verified' : mine.has(norm(f.value)) ? 'unverified' : 'disagree';
-        else if (win) f.state = norm(f.value) === win ? 'verified' : 'disagree';
-        else if (win === null || new Set(others.map((x) => norm(x.value))).size > 1) f.state = 'disagree';
-        // checked by the shelf's own words: they are its source too
-        if (f.state === 'verified' && !f.sources.some((s) => live(s) && ev.get(win).some((w) => sameSource(s, evSource(w))))) f.sources.push(evSource(ev.get(win)[0]));
+      const at = (f, note) => Math.min(...gated.get(f).filter((w) => w.note === note).map((w) => w.pos));
+      const notes = new Set(others.filter((f) => Number.isFinite(at(f, true))).map((f) => norm(f.value)));
+      let prose = null;
+      for (const f of others) if (Number.isFinite(at(f, false)) && (!prose || at(f, false) < at(prose, false))) prose = f;
+      if (notes.size > 1 || (notes.size === 1 && prose && !notes.has(norm(prose.value)))) {
+        for (const f of others) f.state = 'disagree';
+        continue;
       }
-      if (mine.size || !others.length || !ev) continue;
-      // a reader's value against the shelf's: the shelf's is listed beside it
-      const has = (v) => others.some((f) => norm(f.value) === v);
-      if (win && !has(win)) add(win, 'verified');
-      if (win === null) for (const v of ev.keys()) if (!has(v)) add(v, 'disagree');
+      const win = notes.size ? [...notes][0] : prose && norm(prose.value);
+      for (const f of others) if (norm(f.value) === win) f.state = 'verified'; else later.add(f);
     }
+    return later;
   }
+
+  const evSource = (w) => ({ label: `${w.src.book}, ${w.src.label}`, quote: w.quote, book: w.src.bookId, ch: w.src.chId });
+  const sameSource = (a, b) => a.book === b.book && a.ch === b.ch && (norm(a.quote).includes(norm(b.quote)) || norm(b.quote).includes(norm(a.quote)));
 
   // Relations (owner, kin, spouse, where someone lives or was born) are
   // where small readers go most wrong: "Captain Varr knelt beside him" made
@@ -1527,7 +1765,16 @@
           .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
         const skipped = skip ? norm(skip) : null;
         const paraOk = skip || done ? (src, p) => !(done && done.has(p.hash)) && norm(p.text) !== skipped : null;
-        return checkSources({ sources, entries: await loadEntries(), notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk });
+        const entries = await loadEntries();
+        // the story's key points, for the reader to check against (STORY.md §5)
+        let told = {};
+        if (reader && typeof reader.contradicts === 'function' && entries.some((e) => e.story.length)) {
+          const shelf = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId))
+            .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
+          const rank = new Map(shelf.map((s, i) => [s.bookId + '/' + s.chId, i]));
+          told = { story: storyIndex(entries, shelf, rank), rank, rare: rarity(shelf.filter((s) => !isNote(s))) };
+        }
+        return checkSources({ sources, entries, notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk, ...told });
       },
 
       // Changing a fact across the series (PRODUCT §4.7), once the writer
@@ -1586,6 +1833,10 @@
         const out = meta.out || {};
         const old = (!again && (await io.cache())) || {};
         const cache = old.reader === reader.id && old.prompt === PROMPT ? old : { v: 1, reader: reader.id, prompt: PROMPT, proposals: {}, judged: {} };
+        // the story's key points: asked of a reader that can, kept apart (STORY.md)
+        const telling = typeof reader.events === 'function';
+        meta.story = meta.story || {};
+        if (telling && cache.storyPrompt !== STORY_PROMPT) Object.assign(cache, { storyPrompt: STORY_PROMPT, events: {} });
         const cacheWas = JSON.stringify(cache);
         const files = await parsed();
         const entries = [];
@@ -1603,32 +1854,42 @@
         // what there is to read: changed sources (or `only` the one), and in
         // them the paragraphs with cues the cache has no answer for
         const ctxKey = (paras, j) => textHash([reader.id, PROMPT, j ? paras[j - 1].text : '', paras[j].text].join('\n'));
+        const evKey = (paras, j) => textHash([reader.id, 'story', STORY_PROMPT, j ? paras[j - 1].text : '', paras[j].text].join('\n'));
+        // (the story is the books' chapters: notes and notebooks hold no events)
+        const storied = (src) => telling && !isNote(src);
         const todo = [];
         let left = 0;
         for (const src of sources) {
           const key = src.bookId + '/' + src.chId;
           const paras = sourceParas(src.html);
           texts.set(key, paras.map((p) => p.text).join('\n'));
-          if ((only && key !== only) || (!again && meta.read[key] === textHash(src.html))) continue;
-          todo.push({ src, key, paras });
+          if (only && key !== only) continue;
+          const h = textHash(src.html);
+          const facts = again || meta.read[key] !== h;
+          const story = storied(src) && (again || meta.story[key] !== h);
+          if (!facts && !story) continue;
+          todo.push({ src, key, paras, facts, story });
           const idx = mentionIndex(entries);
-          left += paras.filter((p, j) => cueful(p.text, idx) && !cache.proposals[ctxKey(paras, j)]).length;
+          left += paras.filter((p, j) => cueful(p.text, idx) && ((facts && !cache.proposals[ctxKey(paras, j)]) + (story && !cache.events[evKey(paras, j)]))).length;
         }
         const names = shelfNames([...texts.values()]);
         let calls = 0;
         let spent = 0;
         let stopped = false;
         const tell = (src, n) => onProgress && onProgress({ phase: 'read', book: src.book, label: src.label, n, of: todo.length, calls, left: Math.max(0, left - calls), ms: calls ? Math.round(spent / calls) : 0 });
-        for (const [n, { src, key, paras }] of todo.entries()) {
+        const told = new Map(); // a chapter read whole for its story → [{ who, did, quote, src }]
+        const lost = {};
+        for (const [n, { src, key, paras, facts, story }] of todo.entries()) {
           if (stop && stop()) { stopped = true; break; }
           tell(src, n + 1);
+          const events = [];
           for (let j = 0; j < paras.length && !stopped; j++) {
             const p = paras[j];
             const idx = mentionIndex(entries);
             if (!cueful(p.text, idx)) continue;
             const prev = j ? paras[j - 1].text : '';
             const ck = ctxKey(paras, j);
-            let props = cache.proposals[ck];
+            let props = facts ? cache.proposals[ck] : [];
             if (!props) {
               const near = new Set(mentions(prev + '\n' + p.text, idx).map((m) => m.id));
               const t0 = Date.now();
@@ -1644,9 +1905,41 @@
               tell(src, n + 1);
             }
             for (const prop of props || []) accept(entries, prop, src, p, prev, texts.get(key), names);
+            if (!story || stopped) continue;
+            // what happens here, once per paragraph and the one before it
+            const ek = evKey(paras, j);
+            let evs = cache.events[ek];
+            if (!evs) {
+              const near = new Set(mentions(prev + '\n' + p.text, idx).map((m) => m.id));
+              const t0 = Date.now();
+              try {
+                evs = await reader.events({ text: p.text, before: prev, known: entries.filter((e) => near.has(e.id)).map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases })) });
+              } catch (err) {
+                if (stop && stop()) { stopped = true; break; }
+                throw err;
+              }
+              spent += Date.now() - t0;
+              calls++;
+              cache.events[ek] = evs || [];
+              tell(src, n + 1);
+            }
+            for (const ev of evs || []) {
+              const g = gateEvent(entries.filter((e) => !e.locked), ev, p, prev, texts.get(key), names);
+              if (!g.who) { lost[ek + '|' + textHash(norm(String(ev && ev.did)))] = { did: ev && ev.did, quote: ev && ev.quote, why: g.why }; continue; }
+              for (const e of g.fresh) {
+                let id = slug(e.name);
+                for (let k = 2; entries.some((x) => x.id === id); k++) id = slug(e.name) + '-' + k;
+                e.id = id;
+                entries.push(e);
+              }
+              events.push({ ...g, src });
+            }
           }
-          if (!stopped) meta.read[key] = textHash(src.html);
+          if (stopped) continue;
+          if (facts) meta.read[key] = textHash(src.html);
+          if (story) { meta.story[key] = textHash(src.html); told.set(key, events); }
         }
+        if (telling) cache.lostEvents = lost;
         // places the shelf names plainly, misspellings aside
         for (const w of shelfPlaces([...texts.values()], names)) {
           if (findEntry(entries, w) || misspelt(w, entries.filter((e) => !e.locked))) continue;
@@ -1658,6 +1951,21 @@
         for (const e of entries) if (!e.locked && !before.has(e.id) && taken.has(e.id)) e.id += '-' + entries.length;
         for (let i = entries.length - 1; i >= 0; i--) if (entries[i].locked) entries.splice(i, 1);
 
+        // the story so far: a chapter read again has its Canon's notes made
+        // afresh; the writer's lines stay, and win over a note on the same passage
+        for (const e of entries) {
+          e.story = (e.story || []).filter((x) => x.state !== 'note' || !x.sources.some((s) => told.has(s.book + '/' + s.ch)));
+        }
+        for (const list of told.values()) {
+          for (const { who, did, quote, src } of list) {
+            const source = { label: `${src.book}, ${src.label}`, quote, book: src.bookId, ch: src.chId };
+            for (const e of who) {
+              if (!entries.includes(e)) continue;
+              if (e.story.some((x) => x.sources.some((s) => s.book === source.book && s.ch === source.ch && norm(s.quote) === norm(quote)))) continue;
+              e.story.push({ did, state: 'note', sources: [source] });
+            }
+          }
+        }
         // passages edited away, then where each value stands, then checking
         const paraOf = (s) => (texts.get(s.book + '/' + s.ch) || '').split('\n').find((t) => norm(t).includes(norm(s.quote))) || s.quote;
         for (const e of entries) {
@@ -1669,6 +1977,26 @@
             }
             if (f.state === 'verified' && !f.sources.some(live)) f.state = 'unverified';
           }
+          for (const x of e.story) {
+            for (const s of x.sources) {
+              if (s.written || !texts.has(s.book + '/' + s.ch)) continue;
+              if (gateQuote(s.quote, texts.get(s.book + '/' + s.ch))) delete s.changed;
+              else s.changed = true;
+            }
+          }
+        }
+        // in reading order: book, chapter, paragraph (a line with no source after the one before it)
+        {
+          const at = new Map(sources.map((x, i) => [x.bookId + '/' + x.chId, i]));
+          for (const e of entries) {
+            let last = -1;
+            const placed = e.story.map((x, i) => {
+              const s = x.sources.find((y) => !y.written && at.has(y.book + '/' + y.ch));
+              if (s) last = at.get(s.book + '/' + s.ch) * 1e4 + Math.max(0, texts.get(s.book + '/' + s.ch).split('\n').findIndex((t) => norm(t).includes(norm(s.quote))));
+              return { x, pos: last, i };
+            });
+            e.story = placed.sort((a, b) => a.pos - b.pos || a.i - b.i).map((y) => y.x);
+          }
         }
         // what the shelf itself shows of each trait, as the checker reads it
         // kin the shelf states outright, if no reading has it yet (nor the writer set it aside)
@@ -1679,29 +2007,62 @@
           e.facts.push({ attr: k.attr, value: k.value, as: k.as, state: 'unverified', sources: [{ label: `${k.src.book}, ${k.src.label}`, quote: k.quote, book: k.src.bookId, ch: k.src.chId }] });
         }
         const evidence = shelfEvidence(sources, entries.filter((e) => !e.locked), await io.notSlips());
-        const holds = (e, f) => !ATTRS[f.attr].ref || (!misspelt(f.value, entries) && f.sources.some((x) => live(x) && !x.said && !x.plan && relation(e, f, x.quote, paraOf(x), entries)));
-        for (const e of entries) settle(e, evidence, holds);
+        // where a passage stands in reading order (the writer's notes first)
+        const rank = new Map(sources.map((x, i) => [x.bookId + '/' + x.chId, i]));
+        const where = (s) => {
+          const i = rank.get(s.book + '/' + s.ch);
+          if (i === undefined) return null;
+          const para = (texts.get(s.book + '/' + s.ch) || '').split('\n').findIndex((t) => norm(t).includes(norm(s.quote)));
+          const note = isNote(sources[i]);
+          return { pos: (note ? NOTE_AT : 0) + i * 1e4 + Math.max(0, para), note };
+        };
+        // the shelf's own ties are values too, where no reading has them
+        for (const e of entries) {
+          for (const f of e.facts) if (f.state === 'verified' || f.state === 'disagree') f.state = 'unverified';
+          for (const attr of Object.keys(TIED)) {
+            const ev = evidence.get(e.id + '/' + attr);
+            // (beside a reading of the same trait: a tie alone, "Dunmore, Jory's
+            // younger sister", is no reason for a fact)
+            if (!ev || e.facts.some((f) => f.attr === attr && f.state === 'yours') || !e.facts.some((f) => f.attr === attr && solid(f))) continue;
+            for (const [value, ws] of ev) {
+              if (e.facts.some((f) => f.attr === attr && norm(f.value) === value && !talkOnly(f))) continue;
+              if (e.setAside.some((f) => f.attr === attr && norm(f.value) === value)) continue;
+              const n = normaliseFact(attr, value, ws[0].as) || { value, as: '' };
+              e.facts.push({ attr, value: n.value, as: n.as, state: 'unverified', sources: ws.slice(0, 3).map(evSource) });
+            }
+          }
+        }
 
-        // checking: what the text shows deterministically, else one plain
-        // question to the reader, asked the other way round as well
+        // the gates: what the text shows deterministically, else one plain
+        // question to the reader, asked the other way round as well. What
+        // gets through is placed in reading order; what doesn't is left out
+        // quietly (the cache keeps why), never asked of the writer.
+        const gated = new Map();
+        const pass = (f, ws) => { const at = ws.filter(Boolean); if (at.length) gated.set(f, at); };
+        const dropped = {};
         const check = [];
         for (const e of entries) {
           for (const f of e.facts) {
-            if (f.state !== 'unverified' || !solid(f)) continue; // speech and plans stay unchecked
+            if (f.state === 'yours' || !solid(f)) continue; // speech and plans stay as they are
             const firm = f.sources.filter((x) => live(x) && !x.said && !x.plan);
+            if (TIED[f.attr]) {
+              // a trait is checked only by the text: the shelf's own ties
+              // ("Bramble, the grey mare"), or its own quote tying the word to
+              // the entry. A pronoun, or a word the rules don't tie, is left out.
+              const ev = (evidence.get(e.id + '/' + f.attr) || new Map()).get(norm(f.value));
+              const ws = [...(ev || []).map((w) => ({ pos: (isNote(w.src) ? NOTE_AT : 0) + w.order * 1e4 + Math.max(0, sourceParas(w.src.html).findIndex((p) => norm(p.text).includes(norm(w.quote)))), note: isNote(w.src) })),
+                ...(ruleSupported(e, f, entries) ? firm.map(where) : [])];
+              pass(f, ws);
+              // checked by the shelf's own words: they are its source too
+              if (ev && !f.sources.some((s) => live(s) && ev.some((w) => sameSource(s, evSource(w))))) f.sources.push(evSource(ev[0]));
+              continue;
+            }
             if (ATTRS[f.attr].ref) {
               // a slip of the pen is no place; a relation needs both names and its word
               if (misspelt(f.value, entries)) continue;
               const how = firm.map((x) => relation(e, f, x.quote, paraOf(x), entries));
-              if (how.includes('rule')) { f.state = 'verified'; continue; }
+              if (how.includes('rule')) { pass(f, firm.filter((_, i) => how[i] === 'rule').map(where)); continue; }
               if (!how.includes('linked') || !reader.judgeRelations) continue;
-            } else if (TIED[f.attr]) {
-              // a trait is checked only by the text: the shelf (settle), or
-              // its own quote tying the word to the entry when the shelf
-              // shows no other value. A pronoun, or a word the rules don't
-              // tie, waits for the writer.
-              if (ruleSupported(e, f, entries)) f.state = 'verified';
-              continue;
             }
             const s = firm.find((x) => !ATTRS[f.attr].ref || relation(e, f, x.quote, paraOf(x), entries)) || firm[0];
             check.push({ e, f, s, jk: factKey(e, f) + '|' + textHash(norm(s.quote)) });
@@ -1720,8 +2081,21 @@
               throw err;
             }
           }
-          if (cache.judged[jk] === 'yes') f.state = 'verified';
+          if (cache.judged[jk] === 'yes') pass(f, [where(s)]);
         }
+        // first said, first kept; what didn't get through, and a later value
+        // that differs (the pass's slip), leave the entry
+        for (const e of entries) {
+          const later = firstCome(e, gated);
+          e.facts = e.facts.filter((f) => {
+            if (f.state === 'yours' || talkOnly(f) || (f.state !== 'unverified' && !later.has(f))) return true;
+            if (!later.has(f) && f.sources.some((s) => s.changed)) return true; // a passage edited away: kept, marked
+            const s = f.sources.find(live) || f.sources[0] || {};
+            dropped[factKey(e, f) + '|' + textHash(norm(s.quote || ''))] = { entry: e.name, attr: f.attr, value: f.value, quote: s.quote || '', why: later.has(f) ? 'later' : 'gate' };
+            return false;
+          });
+        }
+        cache.dropped = dropped;
 
         // written only where something changed: an idle read writes nothing
         let written = 0;
@@ -1735,7 +2109,8 @@
         return {
           entries: entries.length, facts: facts.length, written, calls, stopped,
           verified: facts.filter((f) => f.state === 'verified' || f.state === 'yours').length,
-          needs: facts.filter((f) => f.state === 'unverified' || f.state === 'disagree').length
+          // what waits for the writer: notes against the prose, and what's only said or planned
+          needs: facts.filter((f) => f.state === 'disagree' || (f.state === 'unverified' && talkOnly(f))).length
         };
       }
     };
@@ -1759,6 +2134,17 @@
       async judge({ claim }) { return (answers.judge || {})[norm([claim.entity, claim.attr, claim.value].join('|'))] || 'unclear'; },
       async refers({ sentence, span, entity }) {
         const hit = (answers.refers || []).find((r) => starts(sentence, r.sentence) && r.span === span && norm(r.entity) === norm(entity));
+        return hit ? hit.answer : 'no';
+      },
+      // the story's key points: [{ para, events: [{ who, did, where, quote }] }]
+      async events({ text }) {
+        this.calls++;
+        const hit = (answers.events || []).find((x) => starts(text, x.para));
+        return hit ? hit.events.map((x) => ({ ...x })) : [];
+      },
+      // [{ sentence (its first words), who, answer }]; no answer is no
+      async contradicts({ sentence, who }) {
+        const hit = (answers.contradicts || []).find((x) => starts(sentence, x.sentence) && (!x.who || norm(x.who) === norm(who)));
         return hit ? hit.answer : 'no';
       },
       async pick() { return null; },
@@ -1812,6 +2198,31 @@
     spouse: (e, v) => [`${e} is married to ${v}.`, `${e} is not married to ${v}.`]
   };
   const statements = (c) => (STATEMENTS[c.attr] || ((e, v) => [`This is true of ${e}: ${v}.`, `This is false of ${e}: ${v}.`]))(c.entity, c.value);
+  // the story's key points (STORY.md): who did what, in the writer's words
+  const STORY_SYSTEM = [
+    'You note the key things that happen in one paragraph of a novel, for an index of the story.',
+    'Report at most two events: something a named character (or one the paragraph calls he or she) does, or that happens to them. Leave out what is only said in dialogue, thought, planned, wished or asked.',
+    'For each event: w = who, as names (for he or she, the name it refers to), d = what happened in one short line of at most 12 words, past tense, starting with the name, using the paragraph\'s own words, p = where, if the paragraph says (else ""), q = the words of the paragraph that say it, copied exactly (at most 25 words).',
+    'No event: {"v":[]}.',
+    'Example. Paragraph: Moll Teague pushed the gate open and led the bay gelding into the yard. “Shut it,” Tom said.',
+    'Answer: {"v":[{"w":["Moll Teague"],"d":"Moll Teague led the bay gelding into the yard","p":"into the yard","q":"Moll Teague pushed the gate open and led the bay gelding into the yard"}]}'
+  ].join('\n');
+  const STORY_SCHEMA = {
+    type: 'object',
+    properties: {
+      v: {
+        type: 'array',
+        maxItems: 2,
+        items: {
+          type: 'object',
+          properties: { w: { type: 'array', maxItems: 3, items: { type: 'string' } }, d: { type: 'string' }, p: { type: 'string' }, q: { type: 'string' } },
+          required: ['w', 'd', 'p', 'q']
+        }
+      }
+    },
+    required: ['v']
+  };
+  const SAME_DEED_SYSTEM = 'You compare two passages of a novel. Passage A says a character did something. Answer yes only if passage B says, as true in the story, that someone else did that same thing. Answer no if B is about a different action, or B only remembers, mentions or watches A\'s character doing it, or someone in B only says or claims it. Answer unclear if you cannot tell.';
   const REFERS_SYSTEM = 'You read a paragraph of a novel and say who or what one word in one of its sentences refers to. Choose only from the options given. If the word means someone or something not in the options, or you cannot tell, say so.';
   const ELSE = 'someone or something else';
   const UNSURE = 'cannot tell';
@@ -1868,6 +2279,27 @@
         // another of the options, or someone else: no; "cannot tell" or no answer: unclear
         return !r || r.a === UNSURE ? 'unclear' : r.a === entity ? 'yes' : 'no';
       },
+      // 0–2 events of one paragraph; the gates (gateEvent) do the rest
+      async events({ text, known = [] }) {
+        this.calls++;
+        const names = known.map((k) => `${k.name} (${k.kind})`).join(', ');
+        const r = await safe({ system: STORY_SYSTEM, user: (names ? `Known names: ${names}\n\n` : '') + `Paragraph:\n${text}`, schema: STORY_SCHEMA, maxTokens: 220 }, null);
+        return ((r && r.v) || []).map((x) => ({ who: x.w || [], did: x.d, where: x.p, quote: x.q }));
+      },
+      // does B give A's deed to someone else? The quick reader isn't asked:
+      // the writer is (Worth a look)
+      async contradicts({ a, label, who, did, sentence }) {
+        if (tier === 'quick') return 'unasked';
+        // asked twice, the second the other way round: the same deed, given
+        // to someone else (yes), and not a different deed (no)
+        const user = (q) => `A (${label}): "${a}"\nIn A: ${did}.\n\nB: "${sentence}"\n\n${q}`;
+        const r = await safe({ system: SAME_DEED_SYSTEM, user: user(`Does B say that someone other than ${who} did what A says ${who} did?`), schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
+        const first = (r && r.a) || 'unclear';
+        if (first !== 'yes') return first;
+        const o = await safe({ system: SAME_DEED_SYSTEM, user: user(`Is B about a different action from the one in A (${did})?`), schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
+        return o && o.a === 'no' ? 'yes' : o && o.a === 'yes' ? 'no' : 'unclear';
+      },
+      tier,
       async pick() { return null; },
       abort() {}
     };
@@ -1881,6 +2313,7 @@
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
     newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader,
-    shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces
+    shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces,
+    gateEvent, storyIndex, rarity, STORY_SCHEMA
   };
 });
