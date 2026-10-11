@@ -80,6 +80,9 @@ contextBridge.exposeInMainWorld('neo', {
   canonPauseDownload: () => ipcRenderer.invoke('canon:pauseDownload'),
   canonTyping: () => ipcRenderer.send('canon:typing'),
   canonQuietState: (on, kept) => ipcRenderer.send('canon:quietState', on, kept),
+  // the Tutorial shelf (made, or found again), and the welcome's one showing
+  tutorialOpen: (afresh) => ipcRenderer.invoke('tutorial:open', afresh),
+  welcomeSeen: (set) => ipcRenderer.invoke('welcome:seen', set),
   onCanon: (cb) => ipcRenderer.on('canon', (_e, msg) => cb(msg)),
 
   poetryState: (on) => ipcRenderer.send('poetry:state', on),

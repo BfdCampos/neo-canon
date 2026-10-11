@@ -142,7 +142,8 @@
       "!node_modules/koffi/{src,vendor,doc}/**",
       "!node_modules/@node-llama-cpp/*cuda*/**",
       "!node_modules/node-llama-cpp/llama/gitRelease.bundle",
-      "!node_modules/node-llama-cpp/llama/llama.cpp/**"
+      "!node_modules/node-llama-cpp/llama/llama.cpp/**",
+      "tutorial/**/*"
     ],
     "toolsets": {
       "appimage": "1.0.3"
