@@ -832,6 +832,7 @@ function showFirstRun() {
     applyFonts();
     fr.hidden = true;
     renderShelves();
+    maybeWelcome(); // then, once on this computer, what Canon is
   };
 }
 
@@ -14180,7 +14181,7 @@ function bookShortcutSections() {
       [K('⌘⇧O', 'Ctrl+Shift+O'), tk('Cycle focus mode'), tk('Off → paragraph → sentence → off.')],
       [IS_MAC ? '⌥⌘↓' : ['Ctrl+Alt+↓', 'Ctrl+Page Down'], tk('Go to the next chapter')],
       [IS_MAC ? '⌥⌘↑' : ['Ctrl+Alt+↑', 'Ctrl+Page Up'], tk('Go to the previous chapter')],
-      [K('⌥⌘→', 'Ctrl+Alt+→'), tk('Go to the next tab'), book && CANON_ON && canonIdFor(book.id) ? tk('Manuscript, Notes, Outline, Canon, Darlings, then round again.') : tk('Manuscript, Notes, Outline, Darlings, then round again.')],
+      [K('⌥⌘→', 'Ctrl+Alt+→'), tk('Go to the next tab'), book && CANON_ON ? tk('Manuscript, Notes, Outline, Canon, Darlings, then round again.') : tk('Manuscript, Notes, Outline, Darlings, then round again.')],
       [K('⌥⌘←', 'Ctrl+Alt+←'), tk('Go to the previous tab')],
       [['F6', K('⌃Tab', 'Ctrl+Tab')], tk('Move between the page, the chapters, the notes and the bottom bar'), tk('Add Shift to go back. Esc returns to the page. On the shelf: the books, then the header.')],
       ...(IS_MAC ? [
@@ -16099,7 +16100,7 @@ window.neo.onMenu(async (msg) => {
   if ($('#keyboard-shortcuts') && msg.type !== 'help') return;
   // a window the menu opens (⌘, for Goals, say) never stacks on one that's
   // already open: pressing it again used to pile up overlays
-  const WINDOWS = ['stats', 'about', 'emailSettings', 'coverArt', 'reshelve', 'checkUpdate'];
+  const WINDOWS = ['stats', 'about', 'emailSettings', 'coverArt', 'reshelve', 'checkUpdate', 'welcome'];
   if (WINDOWS.includes(msg.type) && document.querySelector('.modal-backdrop:not([hidden])')) {
     if (msg.type === 'checkUpdate' && updateDialog) updateDialog.focus();
     return;
@@ -16108,6 +16109,8 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'goto') goOpen();
   if (msg.type === 'worldMap' && CANON_ON) { if (mapUp()) mapClose(); else mapOpen(); }
   if (msg.type === 'about') showAbout();
+  if (msg.type === 'welcome') showWelcome();
+  if (msg.type === 'tutorial') openTutorial(!!msg.afresh);
   if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'update') updateMessage(msg);
   if (msg.type === 'export') doExport(msg.format);
@@ -16673,11 +16676,12 @@ async function canonLoad(force) {
   return canon;
 }
 
-// the tab shows on the books of a shelf that keeps a Canon, nowhere else
+// the tab shows on every book: on a shelf without a Canon it says what
+// Canon is and offers to keep one (the owner's first test never found it)
 function canonTabUpdate() {
   const id = book && canonIdFor(book.id);
   const tab = $('.tab[data-tab="canon"]');
-  if (tab) tab.hidden = !id;
+  if (tab) tab.hidden = !CANON_ON || !book;
   if (!id || (canon && canon.id !== id)) { canon = null; canonShown = null; }
   // a notebook's pages left out of Canon wear their ring once it's known
   if (id && isNotebook()) canonLoad().then((c) => { if (c && currentTab !== 'canon') renderNav(); });
@@ -16910,6 +16914,13 @@ async function renderCanon() {
     view.id = 'canon-view';
     $('#aux-paper').appendChild(view);
   }
+  if (book && !canonIdFor(book.id) && currentTab === 'canon') {
+    renderNav();
+    view.innerHTML = '';
+    view.appendChild(canonInvite());
+    canonSideUpdate();
+    return;
+  }
   if (!(await canonLoad()) || currentTab !== 'canon') return;
   renderNav();
   view.innerHTML = '';
@@ -16924,6 +16935,35 @@ async function renderCanon() {
     return;
   }
   view.appendChild(canonEntryPage(rec.data));
+}
+
+// The Canon tab on a shelf that keeps none: what Canon is, the offer that
+// names the shelf (with its warning on a status shelf, and Move… there),
+// and the Tutorial for a writer who'd rather see it first
+function canonInvite() {
+  const box = document.createElement('div');
+  box.className = 'cn-setup cn-invite';
+  const say = (text, cls = 'cn-note') => { const p = document.createElement('p'); p.className = cls; p.textContent = text; box.appendChild(p); return p; };
+  say(t('Canon keeps the facts of your world (who is a mare, whose eyes are grey, how the town is spelt), each one tied to the line that says it. When a later line disagrees, it tells you quietly, once you stop typing. It never writes a word for you, and it runs on this computer.'));
+  const shelf = library.shelves.find((s) => s.bookIds.includes(book.id));
+  if (shelf) {
+    canonOffer(shelf, book).forEach((c, i) => {
+      const b = document.createElement('button');
+      b.className = i ? 'cn-btn cn-offer' : 'btn-gold cn-offer';
+      b.innerHTML = c.label; // (escaped by canonOffer, for optionModal)
+      b.onclick = () => canonOfferPick(c.value, shelf, book);
+      box.appendChild(b);
+      const d = say('', 'cn-note cn-fine');
+      d.innerHTML = c.desc;
+    });
+  }
+  const p = say(t('New to Canon?') + ' ', 'cn-note cn-tutorial');
+  const go = document.createElement('button');
+  go.className = 'cn-btn cn-inline';
+  go.textContent = t('Open the Tutorial');
+  go.onclick = () => openTutorial();
+  p.appendChild(go);
+  return box;
 }
 
 // ---- Read the Shelf (with a reader) ----
@@ -18302,7 +18342,8 @@ async function canonQuietCheck() {
   canonQuietT = null;
   if (!canonQuietOn() || !book || currentTab !== 'manuscript' || document.hidden || canonPassOn) return;
   const at = canonCaretPara();
-  if (!at || !(await canonLoad()) || !canon.reader.installed) return;
+  // (with no reader, the facts kept by hand still catch what's spelt out)
+  if (!at || !(await canonLoad())) return;
   const { chId } = at;
   // the chapter as it is now goes to disk first, so the read sees it
   if (saveTimers[chId]) { clearTimeout(saveTimers[chId]); saveTimers[chId] = null; await persistChapter(chId); }
@@ -18533,6 +18574,122 @@ if (MAP_ON) {
     }
   }, true);
   window.addEventListener('resize', () => { if (mapFull) mapFull.map.resize(); });
+}
+
+/* ================================================================== */
+/*  WELCOME AND THE TUTORIAL                                           */
+/*  Once on each computer, on the shelf at launch (never over a page,  */
+/*  never while typing), a short sheet says what Canon is and offers   */
+/*  the Tutorial and the reader; any answer, Esc included, is for good */
+/*  (settings.json). Help → Welcome to NEO Canon… shows it again.      */
+/*  Help → Open the Tutorial makes the Tutorial shelf from tutorial/   */
+/*  (main.js copies it), or opens the one already there with whatever  */
+/*  the writer changed. Afresh, the old one's books leave the shelves  */
+/*  whole: File → Reshelve a Book… brings them back.                   */
+/* ================================================================== */
+
+async function maybeWelcome() {
+  if (!CANON_ON || !window.neo.welcomeSeen || !library || !library.firstRunDone) return;
+  if (await window.neo.welcomeSeen(false)) return;
+  if (!$('#editor-view').hidden || document.querySelector('.modal-backdrop:not([hidden])')) return;
+  showWelcome();
+}
+
+let welcomeDl = null; // the sheet's download line, while it shows
+function showWelcome() {
+  if (!CANON_ON || $('#welcome')) return;
+  const bd = document.createElement('div');
+  bd.className = 'modal-backdrop';
+  bd.id = 'welcome';
+  bd.tabIndex = -1;
+  bd.innerHTML = `<div class="modal wl" role="dialog" aria-labelledby="wl-h">
+    <h2 id="wl-h"></h2><p class="wl-lead"></p><p class="wl-fine"></p>
+    <button class="fr-choice wl-tutorial"><strong></strong><span></span></button>
+    <button class="fr-choice wl-reader"><strong></strong><span></span></button>
+    <div class="wl-dl" hidden><div class="cn-bar"><i></i></div><p class="wl-dl-line"></p></div>
+    <div class="wl-foot"><button class="btn-quiet wl-later"></button></div></div>`;
+  const q = (sel) => bd.querySelector(sel);
+  q('#wl-h').textContent = t('Welcome to NEO Canon');
+  q('.wl-lead').textContent = t('Canon keeps your world’s facts, each one citing the passage it came from, and when a later line disagrees (a mare who is “he” in chapter two), it tells you quietly, once you stop typing. You write; it never writes for you, and it runs on this computer, offline.');
+  q('.wl-fine').textContent = t('Every shelf can keep a Canon. The Tutorial shows you how, with a short story to play in.');
+  q('.wl-tutorial strong').textContent = t('Open the Tutorial');
+  q('.wl-tutorial span').textContent = t('A short story with three slips to find, and eleven short lessons. About ten minutes.');
+  q('.wl-reader strong').textContent = t('Set Up the Reader');
+  q('.wl-reader span').textContent = t('Canon’s reader finds facts in your books for you. Everything else works without it.');
+  q('.wl-later').textContent = t('Later');
+  document.body.appendChild(bd);
+  const close = () => { window.neo.welcomeSeen(true); welcomeDl = null; bd.remove(); };
+  q('.wl-later').onclick = close;
+  bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  q('.wl-tutorial').onclick = () => { close(); openTutorial(); };
+  const reader = q('.wl-reader');
+  welcomeDl = (dl) => {
+    if (!dl || dl.state === 'idle') return;
+    q('.wl-dl').hidden = false;
+    reader.disabled = dl.state === 'downloading';
+    q('.cn-bar i').style.width = (dl.state === 'done' ? 100 : dl.total ? Math.round((dl.got / dl.total) * 100) : 0) + '%';
+    const of = { got: canonGB(dl.got || 0), total: canonGB(dl.total || 0) };
+    q('.wl-dl-line').textContent = dl.state === 'done' ? t('The reader is ready.')
+      : dl.state === 'paused' ? t('Paused at {got} of {total} GB', of)
+        : dl.state === 'error' ? (dl.error === 'damaged' ? t('The download arrived damaged. NEO threw it away.') : t('NEO can’t reach the download right now. Try again when you’re online — everything else keeps working.'))
+          : t('Downloading the reader · {got} of {total} GB', of) + ' · ' + t('You can close this and keep writing; the Canon tab shows how it’s going.');
+    q('.wl-later').textContent = t('Close');
+  };
+  window.neo.canonReaderStatus().then((r) => {
+    if (!bd.isConnected) return;
+    const best = r.recommend === 'short' ? null : r.recommend;
+    const tiers = CANON_TIERS();
+    if (r.installed) { reader.disabled = true; q('.wl-reader span').textContent = t('The reader is on this computer already.'); return; }
+    if (!best) { reader.disabled = true; q('.wl-reader span').textContent = t('This computer is short on memory for the reader. You can still keep a Canon by hand.'); return; }
+    q('.wl-reader span').textContent = t('{reader} · {size} GB — recommended for this computer', { reader: tiers[best].name, size: canonGB(r.catalogue[best].size) }) + '. ' +
+      t('One download, then it works offline. You can keep writing while it comes.');
+    reader.onclick = () => {
+      window.neo.welcomeSeen(true);
+      window.neo.canonDownload(best);
+      welcomeDl({ state: 'downloading', tier: best, got: 0, total: r.catalogue[best].size });
+    };
+    welcomeDl(r.download);
+  });
+  q('.wl-tutorial').focus();
+}
+if (CANON_ON) window.neo.onCanon((msg) => { if (msg.type === 'download' && welcomeDl) welcomeDl(msg); });
+
+async function openTutorial(afresh = false) {
+  if (!CANON_ON || !window.neo.tutorialOpen || !library) return;
+  const had = library.shelves.find((s) => Array.isArray(s.tutorial));
+  if (afresh && had) {
+    const go = await optionModal(escHtml(t('Start the Tutorial Afresh')), escHtml(t('A clean copy goes on the shelf. The one you have now is set aside with your changes in it: File → Reshelve a Book… brings its books back.')),
+      [{ label: escHtml(t('Start Afresh')), value: 'go' }]);
+    if (go !== 'go') return;
+  }
+  let r;
+  try {
+    r = await window.neo.tutorialOpen(!!afresh);
+  } catch (err) {
+    window.neo.logError('tutorial: ' + (err && err.message || err));
+    toast(t('NEO couldn’t make the Tutorial'));
+    return;
+  }
+  let shelf = library.shelves.find((s) => s.id === r.shelfId);
+  if (r.made) {
+    shelf = { id: r.shelfId, name: t('Tutorial'), bookIds: r.bookIds.slice(), canonId: r.canonId, tutorial: r.bookIds.slice(), authorId: currentAuthor().id };
+    const old = r.old && library.shelves.find((s) => s.id === r.old);
+    if (old) {
+      // set aside, never thrown away: its books leave the shelves whole, and
+      // a book of the writer's own on it goes to their first shelf
+      library.shelves.splice(library.shelves.indexOf(old), 1, shelf);
+      const own = old.bookIds.filter((id) => !old.tutorial.includes(id));
+      if (own.length) (shelvesFor(currentAuthor().id).find((s) => s !== shelf) || library.shelves[0]).bookIds.push(...own);
+    } else library.shelves.push(shelf);
+    await writeLibrary(library);
+    canonQuietMenu();
+    toast(old ? t('A fresh Tutorial is on the shelf. The old one is set aside: File → Reshelve a Book… brings its books back.')
+      : t('The Tutorial is on your shelves: a short story, and the Start Here notebook.'));
+  }
+  if (!shelf) return;
+  const start = (shelf.tutorial || []).find((id) => shelf.bookIds.includes(id)) || shelf.bookIds[0];
+  if (book) flushAllSaves();
+  if (start) await openBook(start);
 }
 
 /* ================================================================== */
@@ -18791,4 +18948,5 @@ loadLibrary().then(() => {
   applyVim();
   focusLevel = FOCUS_LEVELS.includes(library.focus) ? library.focus : 'off';
   applyFocus();
+  setTimeout(maybeWelcome, 600); // (after a book reopened by a reload, which it then leaves alone)
 });

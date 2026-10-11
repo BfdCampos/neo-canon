@@ -1,0 +1,27 @@
+{
+  "id": "@LESSONS@",
+  "title": "Start Here",
+  "subtitle": "Eleven short lessons",
+  "series": "",
+  "author": "NEO Canon",
+  "wordGoal": 0,
+  "created": "2026-10-10T09:00:00.000Z",
+  "modified": "2026-10-10T09:00:00.000Z",
+  "format": "notebook",
+  "chapterOrder": ["l01", "l02", "l03", "l04", "l05", "l06", "l07", "l08", "l09", "l10", "l11"],
+  "chapterTitles": {
+    "l01": "1 · Writing in NEO",
+    "l02": "2 · What Canon Is",
+    "l03": "3 · The Canon Tab",
+    "l04": "4 · The Continuity Pass",
+    "l05": "5 · Quiet Checks",
+    "l06": "6 · Change a Fact Everywhere",
+    "l07": "7 · Links and Backlinks",
+    "l08": "8 · Go to Anything",
+    "l09": "9 · The World Map",
+    "l10": "10 · The Reader",
+    "l11": "11 · Your Own World"
+  },
+  "lastPosition": { "chapterId": "l01", "pIdx": 0, "off": 0, "scroll": 0 },
+  "tabNames": { "notes": "Notes", "outline": "Outline" }
+}
