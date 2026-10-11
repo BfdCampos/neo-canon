@@ -326,6 +326,8 @@ test('the reader, always findable: Reader ready · CPU at the top of an entry; H
   assert.deepEqual(await js(`[...document.querySelectorAll('#canon-reader .fr-choice.sel strong')].map((b) => b.textContent)`), ['Automatic', (tier === 'careful' ? 'Careful' : 'Quick') + ' reader · 0.1 GB']);
   assert.match(await js(`document.querySelector('#canon-reader').textContent`), /Now: CPU\./);
   assert.match(await js(`document.querySelector('#canon-reader .rs-speed').textContent`), /^Measured here: the reader reads about [\d,]+ words a minute\.$/);
+  await js(`document.querySelector('#canon-reader .rs-more').open = true`);
+  await tick(150);
   await shot('canon-reader-settings.png');
   // CPU only is kept in settings.json, and Automatic takes it away again
   await js(`[...document.querySelectorAll('#canon-reader .fr-choice')].find((b) => b.textContent.startsWith('CPU only')).click()`);
@@ -340,7 +342,16 @@ test('the reader, always findable: Reader ready · CPU at the top of an entry; H
   await until(`!!document.querySelector('#canon-reader')`);
   await js(`document.querySelector('#canon-reader .rs-close').click()`);
   await until(`!document.querySelector('#canon-reader')`);
+  // a reader that couldn't start here: said in one line, Try Again and Reader settings, never a dead end
+  await js(`canon.reader.failed = { tier: canon.reader.installed }; canonReaderRedraw()`);
+  await until(`/^The reader couldn’t start on this computer\. Try AgainReader settings$/.test(document.querySelector('#canon-view .cn-reader-line').textContent)`);
   await js(`canonShown = null; renderCanon()`);
+  await until(`!!document.querySelector('#canon-view .cn-failed')`);
+  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-failed button')].map((b) => b.textContent)`), ['Try Again', 'Reader settings']);
+  await tick(200);
+  await shot('canon-reader-failed.png');
+  await js(`document.querySelector('#canon-view .cn-failed button').click()`);
+  await until(`!canon.reader.failed && !!document.querySelector('#canon-view .cn-read')`);
 });
 
 const chapterFiles = () => ['c1', 'c2', 'c3'].map((c) => fs.readFileSync(path.join(LIB, SALT, 'chapters', c + '.html'), 'utf8'));
@@ -1209,6 +1220,8 @@ part('tutorial', 'lesson 3: Get the Reader, its button in the page starts the do
   await js(`[...document.querySelectorAll('#canon-view .cn-reader-line button')].find((b) => b.textContent === 'Pause').click()`);
   await until(`/^The reader’s download is paused at \\d+% · Resume/.test(document.querySelector('#canon-view .cn-reader-line')?.textContent)`);
   assert.equal(await js(`canonRdr.installed`), null);
+  // the Tutorial's Canon isn't read when the reader arrives: its lessons say when
+  assert.equal(await js(`canonIsTutorial() && !canonAutoRead()`), true);
 });
 
 part('tutorial', 'lessons 4 and 5, no reader: Juniper\'s source opens Chapter 1 lit; Hesketh\'s Story so far; ⌘\' finds the three slips, two fixed, one Not a slip', async () => {
@@ -1268,8 +1281,11 @@ part('tutorial', 'lessons 7 and 8, no reader: Juniper made a stallion through a 
   assert.ok(await js(`canonReview.items.some((x) => x.span === 'her' && x.to === 'his')`));
   await js(`[...[...document.querySelectorAll('#canon-side .cs-review')][0].querySelectorAll('button')].find((b) => b.textContent === 'Apply').click()`);
   await until(`canonReview.items[0].state === 'applied'`);
-  await js(`document.execCommand('undo')`);
+  // ⌘Z from the Canon tab: the words go back, and the card says so again
+  await js(`switchTab('canon')`);
+  await js(`structuralUndo()`);
   await until(`canonReview.items[0].state === 'todo'`);
+  if (await js(`currentTab !== 'manuscript'`)) await js(`switchTab('manuscript')`);
   await js(`[...document.querySelectorAll('#canon-side button')].find((b) => b.textContent === 'Stop Reviewing').click()`);
   await until(`!canonReview`);
   await js(`switchTab('canon')`);

@@ -358,7 +358,7 @@ window: side pane "Review Changes · N passages in M books"
 
 Each row pins `resolve/<commit sha>/<file>`, byte size and sha256 (Hugging Face shows the LFS sha256). Qwen2.5-3B is excluded (research licence). Sizes in copy come from the catalogue, not the strings in PRODUCT.md (5.2/2.4 GB were placeholders).
 
-Recommendation (`readerPick`): a GPU with ≥ 6 GB of its own, or Apple silicon with ≥ 16 GB → careful; otherwise from `os.totalmem()`: ≥ 16 GB → careful; ≥ 8 GB → quick; below → "short on memory". The GPU is found by the worker's `probe` (node-llama-cpp `gpu: 'auto'`), kept in `settings.json` `readerDevice`.
+Recommendation (`readerPick`): a GPU with ≥ 6 GB of its own, or Apple silicon with ≥ 16 GB → careful; on the processor alone ≥ 8 GB → quick (the careful reader's CPU buffer is one ~2.5 GB allocation, which Chromium's PartitionAlloc refuses in a utilityProcess: the worker exits with code 5, SIGILL under ELECTRON_RUN_AS_NODE; plain Node's glibc malloc is fine, `strace` shows the 2,539,569,152-byte anonymous mmap); below 8 GB → "short on memory". The GPU is found by the worker's `probe` (node-llama-cpp `gpu: 'auto'`), kept in `settings.json` `readerDevice`.
 
 ### 5.2 Download
 
