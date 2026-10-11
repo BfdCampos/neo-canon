@@ -180,5 +180,8 @@
   },
   "allowScripts": {
     "electron@33.4.11": true
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }

@@ -54,6 +54,8 @@ NEO Canon is built on [NEO](https://github.com/hughhowey/neo) by Hugh Howey, a d
 
 ## Try it in two minutes
 
+Needs Node.js 20.19 or newer (22 LTS recommended).
+
 ```
 npm install && npm start
 ```
@@ -152,7 +154,7 @@ NEO Canon speaks English, French, Spanish, Portuguese, German, Italian, Dutch, P
 
 ## Development
 
-Requires [Node.js](https://nodejs.org).
+Requires [Node.js](https://nodejs.org) 20.19 or newer (22 LTS recommended; `nvm use` reads `.nvmrc`). Older Node stops with `ERR_REQUIRE_ESM` while installing Electron.
 
 ```
 git clone https://github.com/bfdcampos/neo-canon.git
