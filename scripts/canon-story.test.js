@@ -91,6 +91,8 @@ test('a key point through the gates: verbatim, the who named or meant by a prono
   const two = 'John came in. Mara stood. He reached through the vortex at once.';
   assert.equal(ok({ who: ['John'], did: 'John reached through the vortex', quote: 'He reached through the vortex at once' }, two, [john, mara]), 'who');
   assert.equal(ok({ who: ['Mara'], did: 'Mara reached through the vortex', quote: 'He reached through the vortex at once' }, two, [john, mara]), 'who');
+  // a memory is no deed of the story's now
+  assert.equal(ok({ who: ['John'], did: 'John reached into the vortex', quote: 'Dave remembered John reaching into the vortex' }, 'Dave remembered John reaching into the vortex.', [john, Canon.newEntry('Dave', 'person')]), 'memory');
   // a plan or a question is no event
   assert.equal(ok({ who: ['John'], did: 'John reached through the vortex', quote: 'Maybe John reached through the vortex' }, 'Maybe John reached through the vortex.'), 'plan');
   // a new name the paragraph writes becomes an entry; a pronoun or a lower-case word never does
@@ -187,8 +189,12 @@ test('only an earlier key point counts; unclear or the quick reader is worth a l
 
 test('the local reader asks for events and for the same deed in plain words', async () => {
   const asked = [];
-  const reader = Canon.localReader({ id: 'c', tier: 'careful', ask: async (m) => { asked.push(m); return m.schema === Canon.STORY_SCHEMA ? { v: [{ w: ['John'], d: 'John reached through a red vortex', p: '', q: REACHED }] } : { a: 'yes' }; } });
+  const reader = Canon.localReader({ id: 'c', tier: 'careful', ask: async (m) => { asked.push(m); return m.schema === Canon.STORY_SCHEMA ? { v: [{ w: ['John'], d: 'John reached through a red vortex', p: '', q: REACHED }] } : { a: /different action/.test(m.user) ? 'no' : 'yes' }; } });
   assert.deepEqual(await reader.events({ text: OWNER, known: [{ name: 'John', kind: 'person' }] }), [{ who: ['John'], did: 'John reached through a red vortex', where: '', quote: REACHED }]);
   assert.equal(await reader.contradicts({ a: REACHED, label: 'The Door, Ch 1', who: 'John', did: 'John reached through a red vortex', sentence: SWAP, paragraph: SWAP }), 'yes');
   assert.match(asked[1].user, /Does B say that someone other than John did what A says John did\?/);
+  // and the other way round: a reader that says yes to both is saying yes to anything
+  assert.match(asked[2].user, /Is B about a different action from the one in A/);
+  const yes = Canon.localReader({ id: 'c', tier: 'careful', ask: async () => ({ a: 'yes' }) });
+  assert.equal(await yes.contradicts({ a: REACHED, label: 'x', who: 'John', did: 'x', sentence: SWAP, paragraph: SWAP }), 'no');
 });

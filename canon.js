@@ -1045,7 +1045,8 @@
     const every = mentions(p.text, idx).filter((m) => !talk.some(([a, b]) => m.start < b && m.end > a));
     const names = new Set([...byId.values()].flatMap((e) => [e.name, ...e.aliases]).flatMap(wordsOf).map(stemOf));
     for (const s of sentences(p.text)) {
-      if (PLAN.test(s.text)) continue;
+      // a plan, or what someone says, believes or is told: not the story's word
+      if (PLAN.test(s.text) || reportedSpans(p.text).some(([a, b]) => a < s.end && b > s.start)) continue;
       // the narrator's words only: what someone says or is said to have done is talk
       const plain = s.text.split('').map((ch, k) => talk.some(([a, b]) => s.start + k >= a && s.start + k < b) ? ' ' : ch).join('');
       const own = new Set(heavy(plain).map(stemOf).filter((w) => rare(w) && !names.has(w)));
@@ -1315,6 +1316,7 @@
   const LIGHT = new Set([...STOP, 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'as', 'it', 'its', 'who', 'what', 'but', 'not', 'one', 'out', 'off', 'all', 'any', 'our', 'did', 'got', 'how', 'just', 'then', 'than', 'there', 'here', 'also', 'very', 'some', 'been', 'being', 'have', 'would', 'could', 'should', 'will', 'they', 'them', 'him', 'she', 'you', 'your', 'are', 'is', 'be', 'no', 'so', 'up', 'down', 'over', 'back', 'away', 'again', 'once', 'when', 'while', 'where', 'which', 'whose', 'only', 'even', 'still', 'more', 'most', 'much', 'many', 'such', 'own', 'other', 'another', 'each', 'every', 'something', 'someone', 'nothing', 'thing', 'things']);
   const stemOf = (w) => w.replace(/['’]s$/, '').replace(/(?:ing|ed|es|s)$/, '').slice(0, 5);
   const heavy = (text) => wordsOf(text).map((w) => w.replace(/['’]s$/, '')).filter((w) => w.length >= 3 && !LIGHT.has(w) && !PRONOUNS[w]);
+  const MEMORY = /(?<![\p{L}])(?:remembered|remembers|recalled|recalls|recalling|remembering|dreamed|dreamt|dreams|imagined|imagines|pictured|wondered|thought of|thinking of)(?![\p{L}])/iu;
   const TALK_WORDS = /^(?:said|says|say|asked|asks|told|tells|called|calls|replied|answered|whispered|shouted|cried|muttered|heard|hears|thought|thinks|wondered)$/;
   const PLACE_WORDS = /^(?:in|at|on|by|near|under|inside|outside|beside|behind|across|through|into|onto|over|beneath|below|above|along|around|from)\s/i;
 
@@ -1354,6 +1356,8 @@
     const qb = src.map[qat + norm(quote).length - 1] + 1;
     const outside = para.text.slice(qa, qb).split('').map((ch, k) => talk.some(([a, b]) => qa + k >= a && qa + k < b) ? ' ' : ch).join('');
     if (!heavy(outside).some((w) => !TALK_WORDS.test(w) && !/^\p{Lu}/u.test((outside.match(new RegExp(`(?<![\\p{L}])${w}`, 'iu')) || [''])[0]))) return { why: 'said' };
+    // a memory, a dream, a thought is no deed of the story's now
+    if (MEMORY.test(para.text.slice(Math.max(0, qa - 40), qb))) return { why: 'memory' };
     let did = one(ev.did).trim().replace(/[.;:,!?]+$/, '');
     if (!did || /["“”«»]/.test(did)) return { why: 'did' };
     // the sentences that hold the quote: the words a line may use
@@ -1375,7 +1379,8 @@
         e = findEntry(entries, n) || newEntry(n, 'person');
         if (!entries.includes(e)) fresh.push(e);
       }
-      if (e.locked) return { why: 'who' };
+      // someone who acts: a person, a creature, a group (not a place or a thing)
+      if (e.locked || !['person', 'creature', 'group', 'other'].includes(e.kind)) return { why: 'who' };
       if (!who.includes(e)) who.push(e);
     }
     // each named in the quote, or the one its first pronoun means
@@ -2277,8 +2282,14 @@
       // the writer is (Worth a look)
       async contradicts({ a, label, who, did, sentence, paragraph }) {
         if (tier === 'quick') return 'unasked';
-        const r = await safe({ system: SAME_DEED_SYSTEM, user: `A (${label}): "${a}"\nIn A: ${did}.\n\nB: "${sentence}"\nThe paragraph B is in:\n${paragraph}\n\nDoes B say that someone other than ${who} did what A says ${who} did?`, schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
-        return (r && r.a) || 'unclear';
+        // asked twice, the second the other way round: the same deed, given
+        // to someone else (yes), and not a different deed (no)
+        const user = (q) => `A (${label}): "${a}"\nIn A: ${did}.\n\nB: "${sentence}"\n\n${q}`;
+        const r = await safe({ system: SAME_DEED_SYSTEM, user: user(`Does B say that someone other than ${who} did what A says ${who} did?`), schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
+        const first = (r && r.a) || 'unclear';
+        if (first !== 'yes') return first;
+        const o = await safe({ system: SAME_DEED_SYSTEM, user: user(`Is B about a different action from the one in A (${did})?`), schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
+        return o && o.a === 'no' ? 'yes' : o && o.a === 'yes' ? 'no' : 'unclear';
       },
       tier,
       async pick() { return null; },
