@@ -30,7 +30,7 @@ app.commandLine.appendSwitch('blink-settings', 'smartInsertDeleteEnabled=false')
 // npm run fresh (NEO_FRESH=1, never when packaged): a new, empty profile and
 // library in a temporary folder on every launch, as on a computer that has
 // never seen NEO, while the reader already downloaded here is reused.
-const FRESH = !app.isPackaged && process.env.NEO_FRESH === '1'
+const FRESH = !app.isPackaged && process.env?.NEO_FRESH === '1'
   ? (() => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-fresh-'));
       const models = path.join(app.getPath('userData'), 'models');
