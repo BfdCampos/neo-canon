@@ -33,6 +33,8 @@ The owner's rule: *accuracy comes before speed.* A wrong fact marked checked is 
 
    This came from the owner's own paragraph, where "his blue eyes" was three sentences after "John" and no rule offered it at all. Asked, Careful answered *John*.
 
+   Re-scored from the memo files with rule 9, both readers on both fixtures read exactly as in the table below: 100% precision, the same slips found, 0 false slips and 0 Worth a look. With no reader, each fixture's two weak slips are its Worth a look items, and no decoy is.
+
 Two deterministic readings are added as well:
 - Kin that the shelf states outright between two entries ("Oren's younger sister") is added by `kinEvidence`. It then goes through rule 3 like any other reading.
 - Places that the shelf names three or more times after a place preposition are added by `shelfPlaces`. They become entries, so that their misspellings are caught even when the reader never named the place.
