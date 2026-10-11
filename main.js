@@ -27,6 +27,17 @@ const { Buffer } = require('buffer');
 // macOS Chromium's "smart delete" also removes whitespace around a deleted
 // selection, and that pass can duplicate characters. Deletes stay literal.
 app.commandLine.appendSwitch('blink-settings', 'smartInsertDeleteEnabled=false');
+// npm run fresh (NEO_FRESH=1, never when packaged): a new, empty profile and
+// library in a temporary folder on every launch, as on a computer that has
+// never seen NEO, while the reader already downloaded here is reused.
+const FRESH = !app.isPackaged && process.env?.NEO_FRESH === '1'
+  ? (() => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-fresh-'));
+      const models = path.join(app.getPath('userData'), 'models');
+      app.setPath('userData', path.join(dir, 'profile'));
+      return { library: path.join(dir, 'NEO Library'), models };
+    })()
+  : null;
 // Linux: Chromium hears the system's voices (espeak, Piper, RHVoice…) only
 // through speech-dispatcher, and only when asked to. Without it Read Aloud
 // finds no voice at all (#287).
@@ -2462,7 +2473,7 @@ function canonReaders() {
   // a test file that isn't there (or doesn't read) is no reason for Canon to break
   try { return JSON.parse(fs.readFileSync(process.env.NEO_CANON_READERS, 'utf8')); } catch (err) { logError('NEO_CANON_READERS', err); return READERS; }
 }
-const modelsDir = () => path.join(app.getPath('userData'), 'models');
+const modelsDir = () => (FRESH ? FRESH.models : path.join(app.getPath('userData'), 'models'));
 // the reader on this computer: the one chosen in Reader settings if it's
 // here, else the careful one if both are
 function canonInstalled() {
@@ -3733,6 +3744,7 @@ app.whenReady().then(() => {
       // …unless the writer chose their own folder (File → Library Folder…)
       const chosen = readSettings().libraryDir;
       if (chosen) LIBRARY_DIR = awaitChosenLibrary(chosen);
+      if (FRESH) LIBRARY_DIR = FRESH.library;
       LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
     } catch (err) {
       logError('paths', err);
