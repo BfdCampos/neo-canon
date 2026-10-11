@@ -17751,7 +17751,7 @@ function canonPassOff() {
   canonPassOn = false;
   canonPassRun++;
   canonSlips = [];
-  if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-slip');
+  if (window.CSS && CSS.highlights) { CSS.highlights.delete('neo-slip'); CSS.highlights.delete('neo-slip-ask'); }
   canonPopClose();
   canonSideUpdate();
 }
@@ -17760,6 +17760,7 @@ async function canonPassRunNow() {
   const run = ++canonPassRun;
   canonSlips = [];
   CSS.highlights.delete('neo-slip');
+  CSS.highlights.delete('neo-slip-ask');
   canonPopClose();
   if (!(await canonLoad())) { canonPassOff(); return; }
   canonProgress = t('Checking…');
@@ -17777,7 +17778,8 @@ async function canonPassRunNow() {
   if (run !== canonPassRun || !canonPassOn) return;
   canonPassFacts = res.facts;
   canonProgress = '';
-  canonSlips = res.slips;
+  // (the slips, and those only worth a look: `ask`, a fainter mark)
+  canonSlips = res.slips.concat(res.asks || []).sort((a, b) => a.seq - b.seq);
   canonPaint();
   // started from another tab (or the title page): the page shows the first slip
   const first = canonSlips.find((x) => x.range);
@@ -17822,11 +17824,13 @@ function canonPlace(s) {
 // ⌘Z brings the words back, and with them the slip.
 function canonPaint() {
   const hl = new Highlight();
+  const ask = new Highlight();
   for (const s of canonSlips) {
     if (!s.range || s.range.toString() !== s.span) s.range = canonPlace(s);
-    if (s.range) hl.add(s.range);
+    if (s.range) (s.ask ? ask : hl).add(s.range);
   }
   CSS.highlights.set('neo-slip', hl);
+  CSS.highlights.set('neo-slip-ask', ask);
   canonSideUpdate();
 }
 const canonShownSlips = () => canonSlips.filter((s) => !book || s.bookId !== book.id || s.range);
@@ -17870,10 +17874,17 @@ function canonSideUpdate(tab = currentTab) {
   }
   box.appendChild(scope);
   if (canonProgress) box.appendChild(el('div', 'cs-note', canonProgress));
-  else if (!shown.length) box.appendChild(el('div', 'cs-note', t('No slips found against {facts}.', { facts: t('{n} facts', { n: canonPassFacts }) })));
+  else if (!shown.some((s) => !s.ask)) {
+    // never a plain "no slips" while something is worth a look
+    const asks = shown.filter((s) => s.ask).length;
+    const facts = t('{n} facts', { n: canonPassFacts });
+    box.appendChild(el('div', 'cs-note', asks ? t('No slips found against {facts} · {asks}', { facts, asks: t('{n} worth a look', { n: asks }) }) : t('No slips found against {facts}.', { facts })));
+  }
   if (canon && !canon.reader.installed) box.appendChild(el('div', 'cs-note', t('Without Canon’s reader, only the plainest slips are checked.')));
-  for (const s of shown) {
-    const item = el('button', 'cs-slip');
+  const asked = shown.filter((s) => s.ask);
+  for (const s of shown.filter((x) => !x.ask).concat(asked)) {
+    if (s === asked[0]) box.appendChild(el('div', 'cs-ask-head', t('Worth a look')));
+    const item = el('button', s.ask ? 'cs-slip cs-ask' : 'cs-slip');
     const where = s.bookId === book.id ? s.label : `${(s.book || '')} · ${s.label}`;
     item.append(el('strong', '', s.name), el('span', 'cs-where', ' · ' + where + ' · '), el('q', '', canonSnippet(s)));
     item.onclick = () => canonGoTo(s);
@@ -17951,6 +17962,7 @@ function canonPopOpen(s, x, y) {
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; pop.appendChild(n); return n; };
   const rec = canon && canon.entries.get(s.entry);
   s.entryKind = rec && rec.data ? rec.data.kind : '';
+  if (s.ask) { canonAskPop(s, pop, el); canonPopPlace(s, pop, x, y); return; }
   el('div', 'cp-claim', canonClaim(s));
   const where = s.sources.map((x) => x.label);
   if (s.more) where.push(t('{n} more', { n: s.more }));
@@ -17988,6 +18000,22 @@ function canonPopOpen(s, x, y) {
     });
   }
   btn(t('Not a slip'), () => canonNotSlip(s));
+  canonPopPlace(s, pop, x, y);
+}
+// Worth a look: Canon can't tell whom the word means, so it asks. Each
+// answer but the change is remembered against the sentence, like Not a slip.
+function canonAskPop(s, pop, el) {
+  const v = { ref: s.ref || s.span, name: s.name, word: s.as || s.value };
+  el('div', 'cp-claim', t('Is “{ref}” {name}?', v));
+  el('div', 'cp-where', s.attr === 'eyes' ? t('Canon has {name}’s eyes as {word}.', v) : s.attr === 'hair' ? t('Canon has {name}’s hair as {word}.', v) : canonClaim(s));
+  if (s.sources[0]) el('q', 'cp-quote', s.sources[0].quote);
+  const row = el('div', 'cp-row');
+  const btn = (label, fn, cls = '') => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; row.appendChild(b); return b; };
+  if (s.to) btn(t('Yes — make it {word}', { word: s.to }), () => { if (canonApply(s)) toast(t('Changed. {key} brings it back.', { key: K('⌘Z', 'Ctrl+Z') })); }, 'cp-main');
+  btn(t('Yes, but leave it'), () => canonNotSlip(s, 'yes'));
+  btn(t('No, someone else'), () => canonNotSlip(s, 'no'));
+}
+function canonPopPlace(s, pop, x, y) {
   document.body.appendChild(pop);
   const w = pop.offsetWidth;
   const h = pop.offsetHeight;
@@ -18197,12 +18225,13 @@ function canonApply(s) {
   return true;
 }
 
-async function canonNotSlip(s) {
-  const record = { fact: s.fact, sentence: s.sentenceHash, span: s.span, text: s.sentence.slice(0, 120), at: new Date().toISOString() };
+// (`coref`, a Worth a look answered: 'yes', it is them but leave it; 'no', someone else)
+async function canonNotSlip(s, coref) {
+  const record = { fact: s.fact, sentence: s.sentenceHash, span: s.span, text: s.sentence.slice(0, 120), at: new Date().toISOString(), ...(coref ? { coref, ref: s.ref || s.span } : {}) };
   try { await window.neo.canonNotSlip(canon.id, record); } catch { toast(t('NEO couldn’t save that')); return; }
   canon.notSlips.push(record);
   canonDrop(s);
-  toast(t('Got it. Canon won’t flag this line again.'));
+  toast(coref ? t('Got it. Canon won’t ask about this line again.') : t('Got it. Canon won’t flag this line again.'));
 }
 
 // which slip, if any, is under the pointer or holds the caret
@@ -18331,7 +18360,7 @@ async function canonQuietCheck() {
   // P0 #8: a key since the question means the writer is writing again
   if (canonLastKey > asked || !book || !canon || currentTab !== 'manuscript' || canonPassOn) return;
   const fresh = new Set(res.checked);
-  canonSlips = canonSlips.filter((s) => !(s.quiet && s.chId === chId && fresh.has(s.para))).concat(res.slips.map((s) => ({ ...s, quiet: true })));
+  canonSlips = canonSlips.filter((s) => !(s.quiet && s.chId === chId && fresh.has(s.para))).concat(res.slips.concat(res.asks || []).map((s) => ({ ...s, quiet: true })));
   canonPaint();
 }
 if (CANON_ON) {

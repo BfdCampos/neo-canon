@@ -172,6 +172,56 @@ test('by hand: a value outside the lexicon, two values at once, a name already t
   await until(`!canon.entries.has('ash') && !canon.entries.has('odd')`);
 });
 
+// the owner's report: John's eyes are green in Notes; three sentences after
+// his name, "his blue eyes". With no reader, Canon asks rather than staying quiet.
+test('no reader: "his blue eyes" after John is worth a look; Yes makes it green as one undoable edit', async () => {
+  const OWNER = '“Hello” John said. But there was no answer. He reached his hand through the swirling red vortex in front of him, as pages and random items flew around his room. Just as he fixed his blue eyes on the chaos, he perceived something—someone… Faintly he heard back.';
+  await js(`canonEdit('john', () => { const e = Canon.newEntry('John', 'person'); e.facts.push(Canon.handFact('Eyes: green')); return e; })`);
+  await until(`!!canon.entries.get('john')`);
+  await js(`switchTab('manuscript')`);
+  const body = `document.querySelector('.chapter[data-id="c1"] .chapter-body')`;
+  const was = await js(`${body}.innerHTML`);
+  await js(`(() => { const b = ${body}; const p = document.createElement('p'); p.textContent = ${JSON.stringify(OWNER)}; b.appendChild(p); b.dispatchEvent(new Event('input')); p.scrollIntoView({ block: 'center' }); })()`);
+  await until(`chapterHTML.c1.includes('vortex')`);
+  await js(`toggleContinuity()`);
+  await until(`canonProgress === '' && canonSlips.some((s) => s.entry === 'john')`);
+  const john = `canonSlips.find((s) => s.entry === 'john')`;
+  assert.deepEqual(await js(`[${john}.ask, ${john}.span, ${john}.ref, ${john}.range.toString()]`), [true, 'blue', 'his', 'blue']);
+  assert.equal(await js(`[...CSS.highlights.get('neo-slip-ask')].map((r) => r.toString()).join()`), 'blue');
+  assert.equal(await js(`[...CSS.highlights.get('neo-slip')].some((r) => r.toString() === 'blue')`), false);
+  // listed apart, under its own heading, and the pane never says plainly "no slips"
+  assert.equal(await js(`document.querySelector('#canon-side .cs-ask-head').textContent`), 'Worth a look');
+  assert.match(await js(`document.querySelector('#canon-side .cs-slip.cs-ask').textContent`), /^John · .* · .*his blue eyes on the/);
+  const note = await js(`document.querySelector('#canon-side .cs-note').textContent`);
+  assert.ok(!/^No slips found against [^·]*\.$/.test(note), note);
+  await js(`${john}.range.startContainer.parentElement.scrollIntoView({ block: 'center' })`);
+  await tick(300);
+  await js(`(() => { const r = ${john}.range.getBoundingClientRect(); canonPopOpen(${john}, r.left, r.bottom + 6); })()`);
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-claim').textContent`), 'Is “his” John?');
+  assert.equal(await js(`document.querySelector('.canon-pop .cp-where').textContent`), 'Canon has John’s eyes as green.');
+  assert.deepEqual(await js(`[...document.querySelectorAll('.canon-pop button')].map((b) => b.textContent)`), ['Yes — make it green', 'Yes, but leave it', 'No, someone else']);
+  await shot('canon-worth-a-look.png');
+  await js(`document.querySelector('.canon-pop .cp-main').click()`);
+  const para = `[...${body}.querySelectorAll('p')].find((p) => p.textContent.includes('vortex')).textContent`;
+  assert.match(await js(para), /fixed his green eyes/);
+  await until(`!canonSlips.some((s) => s.entry === 'john' && s.range)`);
+  await js(`document.execCommand('undo')`);
+  assert.match(await js(para), /fixed his blue eyes/);
+  await until(`[...CSS.highlights.get('neo-slip-ask')].some((r) => r.toString() === 'blue')`);
+  // nothing of it in the chapter, and none of it left behind for the tests after
+  assert.ok(!/slip|canon/i.test(await js(`captureBody(${body})`)));
+  await js(`toggleContinuity()`);
+  assert.equal(await js(`CSS.highlights.has('neo-slip-ask')`), false);
+  await js(`(() => { const b = ${body}; b.innerHTML = ${JSON.stringify(was)}; b.dispatchEvent(new Event('input')); })()`);
+  await until(`!chapterHTML.c1.includes('vortex')`);
+  await js(`flushAllSaves()`);
+  for (let i = 0; i < 40 && fs.readFileSync(path.join(LIB, SALT, 'chapters', 'c1.html'), 'utf8').includes('vortex'); i++) await tick(100);
+  fs.rmSync(path.join(LIB, CANON, 'entries', 'john.md'));
+  await js(`canonShown = null; canonRefreshNow()`);
+  await until(`!canon.entries.has('john')`);
+  await js(`switchTab('canon')`);
+});
+
 let tier;
 test('no reader on this computer: the Canon tab offers one button to get it', async () => {
   await js(`canonShown = null; renderCanon()`);

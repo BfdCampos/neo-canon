@@ -25,6 +25,16 @@ The owner's rule: *accuracy comes before speed.* A wrong fact marked checked is 
 7. **States are recomputed on every read.** Each fact that isn't the writer's is worked out afresh from its sources, the evidence and the cached answers. A Canon that was read under the old, looser gates is corrected by its next read.
 8. **The quick reader is asked less.** It is never asked about relations, and never asked who "he" or "she" means. In both cases it answered with whichever name it was offered.
 
+9. **Whose "his blue eyes"? By the paragraph, and asked when in doubt** (`referent`). In a sentence that names no one, "his/her/their <colour> eyes|hair" belongs to the one person (or creature) the paragraph named before it. Nothing else may come between: no other entry, no capitalised name (a sentence's first word must be one the dictionary knows), no "the stranger", "a soldier", "his brother" or "the mare", and no pronoun of the other sex.
+   - Strong only when the entry's sex agrees with the pronoun, within three sentences, with no speech between.
+   - Otherwise weak. A weak candidate goes to the reader, asked about the pronoun ("his"), not the colour. *Yes* makes it a slip; another name or *someone else* drops it.
+   - *Cannot tell*, the quick reader (never asked about pronouns), or no reader at all: it is **Worth a look**. It is listed apart, under a fainter mark, and the popover asks "Is “his” John? Canon has John’s eyes as green." The writer's *Yes, but leave it* or *No, someone else* is kept in `not-slips.json` (with `coref`) against the sentence. A Worth a look is never a slip and never counted as one.
+   - A lone "She" after "John came in." is asked of the reader only, never of the writer: it is nearly always someone else.
+
+   This came from the owner's own paragraph, where "his blue eyes" was three sentences after "John" and no rule offered it at all. Asked, Careful answered *John*.
+
+   Re-scored from the memo files with rule 9, both readers on both fixtures read exactly as in the table below: 100% precision, the same slips found, 0 false slips and 0 Worth a look. With no reader, each fixture's two weak slips are its Worth a look items, and no decoy is.
+
 Two deterministic readings are added as well:
 - Kin that the shelf states outright between two entries ("Oren's younger sister") is added by `kinEvidence`. It then goes through rule 3 like any other reading.
 - Places that the shelf names three or more times after a place preposition are added by `shelfPlaces`. They become entries, so that their misspellings are caught even when the reader never named the place.
