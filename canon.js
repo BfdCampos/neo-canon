@@ -718,16 +718,64 @@
     return d[a.length][b.length];
   }
 
+  // Words that bring someone (or some creature) else in: after John, "the
+  // stranger turned. His blue eyes…" are the stranger's
+  const OTHER_ONES = new Set(['stranger', 'man', 'men', 'woman', 'women', 'boy', 'girl', 'child', 'children', 'kid', 'baby', 'rider', 'soldier', 'guard', 'figure', 'person', 'people', 'someone', 'somebody', 'anyone', 'everyone', 'nobody', 'others', 'crowd', 'lad', 'lass', 'youth', 'knight', 'officer', 'sailor', 'driver', 'doctor', 'nurse', 'priest', 'merchant', 'trader', 'traveller', 'traveler', 'servant', 'friend', 'voice', 'king', 'queen', 'lord', 'lady', 'captain', 'master', 'mistress']);
+  const otherOne = (lw) => OTHER_ONES.has(lw) || !!SEX_WORDS[lw] || !!SPECIES[lw] || !!KIN_NOUNS[lw]; // (KIN_NOUNS: further down)
+
+  // Whom "his" or "her" in a sentence that names no one means, by the
+  // paragraph: the one person (or creature) named before it, with no other
+  // entry, capitalised name or "the stranger" between. Strong only within
+  // three sentences and with no speech between, and never past a pronoun of
+  // the other sex (`sex`, the asked pronoun's); `initials` are the
+  // sentence-opening words between, which the dictionary must know (in
+  // "John left. Mara turned. His…", Mara is a name).
+  function referent(text, pos, si, ctx, sex) {
+    const { every, pwords, sents, world, speech } = ctx;
+    const personish = (m) => { const k = world.get(m.id); return k && (k.sex || k.e.kind === 'person' || k.e.kind === 'creature'); };
+    const free = (m) => !speech.some(([a, b]) => m.start < b && m.end > a);
+    const before = every.filter((m) => m.end <= pos);
+    const ids = [...new Set(before.filter((m) => free(m) && personish(m)).map((m) => m.id))];
+    if (ids.length !== 1) return null;
+    const last = before.filter((m) => m.id === ids[0] && free(m)).pop();
+    if (every.some((m) => m.id !== ids[0] && m.start >= last.start && m.start < pos)) return null;
+    const initials = [];
+    for (const w of pwords) {
+      if (w.start < last.end || w.end > pos) continue;
+      if (otherOne(w.lw)) return null;
+      // "John came in. She…" before "his": two people are about
+      if (PRONOUNS[w.lw] && sex && PRONOUNS[w.lw] !== sex) return null;
+      if (!/^\p{Lu}/u.test(w.w) || w.w === 'I' || PRONOUNS[w.lw]) continue;
+      if (!w.initial) return null;
+      initials.push(w.w.replace(/['’]s$/, ''));
+    }
+    const at = sents.findIndex((s) => last.start >= s.start && last.start < s.end);
+    const talk = speech.some(([a, b]) => a < pos && b > last.end);
+    return { id: ids[0], k: world.get(ids[0]), weak: si - at > 3 || talk, initials, from: last.start };
+  }
+
   // Candidate slips in one paragraph. Strong ones stand on their own; weak
-  // ones are kept only if the reader agrees the word means that entry.
-  // Each: { kind, strength, id, attr, fact, start, end, to, si }.
+  // ones are kept only if the reader agrees the word means that entry, and
+  // are otherwise asked of the writer ("Worth a look").
+  // Each: { kind, strength, id, attr, fact, start, end, to, si, ref?, initials? }.
   function paraCandidates(text, idx, world, names) {
     const speech = talkSpans(text);
     const free = (a, b) => !speech.some(([s, e]) => a < e && b > s);
-    const all = mentions(text, idx).filter((m) => free(m.start, m.end));
+    const every = mentions(text, idx);
+    const all = every.filter((m) => free(m.start, m.end));
     const sents = sentences(text);
     const out = [];
     const sexed = (m) => world.get(m.id) && world.get(m.id).sex;
+    // every word of the paragraph; `initial` opens a sentence or a quote
+    const pwords = [];
+    sents.forEach((s, si) => {
+      for (const m of s.text.matchAll(WORD)) {
+        const start = s.start + m.index;
+        const lead = text.slice(s.start, start);
+        pwords.push({ w: m[0], lw: m[0].toLowerCase().replace(/['’]s$/, ''), start, end: start + m[0].length, si, initial: !/[\p{L}\p{N}]/u.test(lead) || /[“"‘«„—–:(]\s*$/u.test(lead) });
+      }
+    });
+    const ctx = { every, pwords, sents, world, speech };
     sents.forEach((s, si) => {
       const inS = all.filter((m) => m.start >= s.start && m.end <= s.end);
       const words = [];
@@ -804,6 +852,15 @@
         const k = prev.length === 1 && world.get(prev[0]);
         if (k && PRONOUNS[first.lw] !== k.sex.value) add({ kind: 'pronoun', strength: 'weak', id: k.e.id, attr: 'sex', fact: k.sex, start: first.start, end: first.end, to: swapPronoun(first.w, pronounAt(words, 0, text)) });
       }
+      // the first he/she/his/her of a sentence naming no one, against the
+      // one sexed entry named earlier in the paragraph (weak only: the
+      // reader, or nobody, decides)
+      const pi = inS.length ? -1 : words.findIndex((w) => PRONOUNS[w.lw] && w.lw !== 'hers');
+      if (pi >= 0 && !out.some((c) => c.start === words[pi].start)) {
+        const w = words[pi];
+        const r = referent(text, w.start, si, ctx, PRONOUNS[w.lw]);
+        if (r && r.k.sex && PRONOUNS[w.lw] !== r.k.sex.value) add({ kind: 'pronoun', strength: 'weak', id: r.id, attr: 'sex', fact: r.k.sex, start: w.start, end: w.end, to: swapPronoun(w.w, pronounAt(words, pi, text)), initials: r.initials });
+      }
 
       words.forEach((w, i) => {
         // the stallion, when the horse in the last few sentences is a mare (weak)
@@ -832,6 +889,17 @@
           const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head;
           const k = owner && world.get(owner.id);
           if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, k[attr].as || k[attr].value) });
+          // or, in a sentence naming no one, "his blue eyes" of the one person
+          // the paragraph named before: strong when the entry's sex agrees,
+          // close by; weak when its sex isn't known, or it's "their"
+          else if (c && !inS.length && det && ['his', 'her', 'their'].includes(det.lw)) {
+            const r = referent(text, det.start, si, ctx, PRONOUNS[det.lw]);
+            const f = r && r.k[attr];
+            const agree = r && r.k.sex && det.lw !== 'their' ? PRONOUNS[det.lw] === r.k.sex.value : null;
+            if (f && agree !== false && COLOURS[c.lw] !== f.value) {
+              add({ kind: 'colour', strength: agree && !r.weak ? 'strong' : 'weak', id: r.id, attr, fact: f, start: c.start, end: c.end, to: keepCase(c.w, f.as || f.value), ref: { start: det.start, end: det.end }, initials: r.initials });
+            }
+          }
         }
         // born in a place that isn't the one in Canon
         if (w.lw === 'born' && words[i + 1] && ['in', 'at'].includes(words[i + 1].lw)) {
@@ -883,31 +951,48 @@
       }
       // a word the dictionary knows (Corwyn, Bramblee are not words; "Brambles" is) is no slip of the pen
       const odd = [...new Set(found.filter((x) => x.c.kind === 'name').map((x) => x.c.word))];
-      const known = odd.length && knownWords ? await knownWords(odd) : {};
+      // (and a sentence's first word between "John" and "his" must be a word, not a name)
+      const lower = [...new Set(found.flatMap((x) => (x.c.initials || []).map((w) => w.toLowerCase())))];
+      const known = (odd.length || lower.length) && knownWords ? await knownWords([...odd, ...lower]) : {};
       for (const { c, p, s } of found) {
         if (c.kind === 'name' && (!knownWords || known[c.word] !== false)) continue;
+        if ((c.initials || []).some((w) => known[w.toLowerCase()] === false)) continue;
         const e = byId.get(c.id);
         const key = c.fact ? factKey(e, c.fact) : `${e.id}/name`;
         const sentenceHash = textHash(norm(s.text));
         if (dismissed.has(key + '|' + sentenceHash)) continue;
         const span = p.text.slice(c.start, c.end);
+        // the word whose meaning is in doubt: "his", for "his blue eyes"
+        const ref = c.ref ? p.text.slice(c.ref.start, c.ref.end) : span;
+        let ask = false;
         if (c.strength === 'weak') {
-          if (!reader) continue;
+          // the reader says yes (a slip), no (dropped) or can't tell; with
+          // no reader, or one not asked this ("he", for the quick reader),
+          // the writer is asked instead: Worth a look. Not a lone pronoun
+          // with no reader, though: "John came in. She…" is nearly always
+          // someone else, and asking each time would be noise.
           const others = [...new Set(mentions(p.text, idx).map((m) => m.id))].filter((id) => id !== e.id).map((id) => byId.get(id).name);
-          if (await reader.refers({ sentence: s.text, span, entity: e.name, paragraph: p.text, others }) !== 'yes') continue;
+          const said = reader ? await reader.refers({ sentence: s.text, span: ref, entity: e.name, paragraph: p.text, others }) : 'unasked';
+          if (said === 'no') continue;
+          if (said !== 'yes') {
+            if (said !== 'unclear' && c.kind === 'pronoun') continue;
+            ask = true;
+          }
         }
         const srcs = c.fact ? c.fact.sources.filter((x) => !x.written) : [];
         slips.push({
           seq: all.length + slips.length, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: p.hash, sentence: s.text, sat: s.start, sentenceHash, at: c.start, span, to: c.to || null,
           kind: c.kind, strength: c.strength, entry: e.id, name: e.name, attr: c.attr, value: c.fact ? c.fact.value : e.name, as: c.fact ? c.fact.as : '',
           fact: key, sources: srcs.slice(0, 2).map((x) => ({ label: x.label, quote: x.quote })), more: Math.max(0, srcs.length - 2),
-          written: !!(c.fact && c.fact.sources.some((x) => x.written))
+          written: !!(c.fact && c.fact.sources.some((x) => x.written)),
+          ...(ask ? { ask: true, ref } : {})
         });
       }
       all.push(...slips);
       if (onSource) onSource(src, slips, ++n, sources.length);
     }
-    return { slips: all, facts };
+    // the slips, and apart from them the ones worth a look (`ask`)
+    return { slips: all.filter((x) => !x.ask), asks: all.filter((x) => x.ask), facts };
   }
 
   /* ---------- reading ---------- */
@@ -1776,11 +1861,12 @@
       async refers({ sentence, span, entity, paragraph, others = [] }) {
         // the quick reader picks the one name it is offered for "He" or
         // "She", whoever the sentence means (ACCURACY.md): not asked
-        if (tier === 'quick' && PRONOUNS[norm(span)]) return 'unclear';
+        if (tier === 'quick' && PRONOUNS[norm(span)]) return 'unasked';
         // (in name order: the one asked about isn't always first)
         const options = [...new Set([entity, ...others.slice(0, 4)])].sort((a, b) => a.localeCompare(b)).concat(ELSE, UNSURE);
         const r = await safe({ system: REFERS_SYSTEM, user: `Paragraph:\n${paragraph}\n\nSentence: "${sentence}"\nIn this sentence, who or what does the word "${span}" refer to?\nOptions: ${options.join('; ')}`, schema: { type: 'object', properties: { a: { enum: options } }, required: ['a'] }, maxTokens: 24 }, null);
-        return r && r.a === entity ? 'yes' : 'unclear';
+        // another of the options, or someone else: no; "cannot tell" or no answer: unclear
+        return !r || r.a === UNSURE ? 'unclear' : r.a === entity ? 'yes' : 'no';
       },
       async pick() { return null; },
       abort() {}

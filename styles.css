@@ -2176,6 +2176,11 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
   text-decoration: underline dotted #b39250; text-decoration-thickness: 2px; text-underline-offset: 3px;
   text-decoration-skip-ink: none;
 }
+/* Worth a look: Canon can't tell whose word it is, so the mark is fainter */
+::highlight(neo-slip-ask) {
+  text-decoration: underline dotted rgba(179, 146, 80, 0.55); text-decoration-thickness: 1px; text-underline-offset: 4px;
+  text-decoration-skip-ink: none;
+}
 .canon-pop {
   position: fixed; z-index: 320; width: 360px; padding: 14px 16px 12px;
   background: #262626; border: 1px solid #3a3a3a; border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,0.5);
@@ -2214,6 +2219,8 @@ body.light .canon-pop button.cp-main { color: #8a6a1c; border-color: #b39250; }
   color: #ccc; padding: 7px 8px; font-size: 12.5px; line-height: 1.4;
 }
 #canon-side .cs-slip:hover { background: #282828; border-left-color: #b39250; }
+#canon-side .cs-ask-head { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); padding: 12px 4px 4px; }
+#canon-side .cs-slip.cs-ask { color: #999; }
 #canon-side .cs-count { white-space: nowrap; }
 #canon-side .cs-where { color: #777; }
 #canon-side q { font-family: var(--body-font); font-style: italic; color: #aaa; }
@@ -2425,6 +2432,7 @@ body.light #canon-side { color: #4a463f; }
 body.light #canon-side .cs-need, body.light #canon-side .cs-review { border-bottom-color: #e6e2da; }
 body.light #canon-side .cs-need strong { color: #2b2926; }
 body.light #canon-side .cs-slip { color: #2b2926; }
+body.light #canon-side .cs-slip.cs-ask { color: #6e695f; }
 body.light .cn-note, body.light .cn-more { color: #6e695f; }
 body.light #canon-side .cs-slip:hover { background: #e8e5de; }
 body.light #canon-side .cs-where, body.light #canon-side .cs-note { color: #6e695f; }

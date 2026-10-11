@@ -256,7 +256,9 @@ test('the local reader: verified only on yes to the claim and no to its opposite
   asked.length = 0;
   const pick = (name) => reader(() => ({ a: name }));
   const q = { sentence: 'He spat into the shallows.', span: 'He', entity: 'Bramble', paragraph: 'There was a horse-trader watching Bramble. He spat into the shallows.', others: ['Tamsin Hale'] };
-  assert.equal(await pick('someone or something else').refers(q), 'unclear');
+  assert.equal(await pick('someone or something else').refers(q), 'no');
+  assert.equal(await pick('Tamsin Hale').refers(q), 'no');
+  assert.equal(await pick('cannot tell').refers(q), 'unclear');
   assert.equal(await pick('Bramble').refers(q), 'yes');
   assert.match(asked[0], /Options: Bramble; Tamsin Hale; someone or something else; cannot tell/);
   // the quick reader is never asked about relations
@@ -281,7 +283,11 @@ test('the held-out shelf (canon-heldout), kept by hand: its five slips, the one 
   assert.deepEqual(slips.map((s) => ({ chapter: s.chId, sentence: s.sentence, span: s.span, to: s.to, entry: s.entry, attr: s.attr, strength: s.strength })), expected.slips);
   for (const d of expected.decoys) assert.ok(!slips.some((s) => s.sentence === d), d);
   // with no reader, the three strong ones
-  assert.equal((await Canon.checkSources({ sources, entries, knownWords })).slips.length, 3);
+  const alone = await Canon.checkSources({ sources, entries, knownWords });
+  assert.equal(alone.slips.length, 3);
+  // and the two weak ones only worth a look, no decoy among them
+  assert.deepEqual(alone.asks.map((s) => s.span), ['elder', 'bull']);
+  for (const d of expected.decoys) assert.ok(!alone.asks.some((s) => s.sentence === d), d);
 });
 
 test('names: one person under one name, no entry for a pronoun or a common word, a place entry only for a name written twice', async () => {
@@ -327,7 +333,7 @@ test('a value the text doesn\'t tie is no rival: "Tamsin rode her" doesn\'t unse
 test('the quick reader is never asked who "he" or "she" means', async () => {
   let asked = 0;
   const quick = Canon.localReader({ id: 'q', tier: 'quick', ask: async () => { asked++; return { a: 'Bramble' }; } });
-  assert.equal(await quick.refers({ sentence: 'He spat.', span: 'He', entity: 'Bramble', paragraph: 'He spat.' }), 'unclear');
+  assert.equal(await quick.refers({ sentence: 'He spat.', span: 'He', entity: 'Bramble', paragraph: 'He spat.' }), 'unasked');
   assert.equal(asked, 0);
   assert.equal(await quick.refers({ sentence: 'She led the stallion.', span: 'stallion', entity: 'Bramble', paragraph: 'x' }), 'yes');
 });
