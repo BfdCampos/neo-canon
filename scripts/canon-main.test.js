@@ -173,4 +173,27 @@ describe('canon files', { concurrency: 1 }, () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // Which reader suits this computer: the graphics card first, then memory
+  test('the reader recommended from the hardware: a 6 GB GPU or Apple silicon with 16 GB → careful; else by memory', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-pick-'));
+    try {
+      const call = loadMain(dir);
+      const pick = (o) => vm.runInContext(`readerPick(${JSON.stringify(o)})`, call.context);
+      assert.equal(pick({ totalGB: 8, platform: 'win32', arch: 'x64', vramGB: 12 }), 'careful');
+      assert.equal(pick({ totalGB: 8, platform: 'linux', arch: 'x64', vramGB: 6 }), 'careful');
+      assert.equal(pick({ totalGB: 8, platform: 'linux', arch: 'x64', vramGB: 4 }), 'quick');
+      assert.equal(pick({ totalGB: 16, platform: 'darwin', arch: 'arm64' }), 'careful');
+      assert.equal(pick({ totalGB: 8, platform: 'darwin', arch: 'arm64' }), 'quick');
+      assert.equal(pick({ totalGB: 32, platform: 'linux', arch: 'x64' }), 'careful');
+      assert.equal(pick({ totalGB: 6, platform: 'linux', arch: 'x64' }), 'short');
+      assert.equal(pick({ totalGB: 6, platform: 'linux', arch: 'x64', vramGB: 8 }), 'careful');
+      // Reader settings: the hardware and the reader chosen are kept in settings.json
+      const r = call('canon:readerSettings', { hardware: 'cpu' });
+      assert.equal(r.hardware, 'cpu');
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).readerHardware, 'cpu');
+      assert.equal(call('canon:readerSettings', { hardware: 'auto' }).hardware, 'auto');
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).readerHardware, undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
 });

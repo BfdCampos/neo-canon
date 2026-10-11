@@ -2450,16 +2450,49 @@ function canonReaders() {
   try { return JSON.parse(fs.readFileSync(process.env.NEO_CANON_READERS, 'utf8')); } catch (err) { logError('NEO_CANON_READERS', err); return READERS; }
 }
 const modelsDir = () => path.join(app.getPath('userData'), 'models');
-// the reader on this computer: the careful one if both are
+// the reader on this computer: the one chosen in Reader settings if it's
+// here, else the careful one if both are
 function canonInstalled() {
   const all = canonReaders();
-  return ['careful', 'quick'].find((tier) => all[tier] && fileSize(path.join(modelsDir(), all[tier].file)) === all[tier].size) || null;
+  const here = (tier) => all[tier] && fileSize(path.join(modelsDir(), all[tier].file)) === all[tier].size;
+  const chosen = readSettings().readerChoice;
+  if (here(chosen)) return chosen;
+  return ['careful', 'quick'].find(here) || null;
 }
 const fileSize = (file) => { try { return fs.statSync(file).size; } catch { return -1; } };
-// picked from memory: 16 GB and up the careful reader, 8 GB the quick one
+// Which reader suits this computer. A graphics card with 6 GB of its own
+// memory, or Apple silicon with 16 GB (shared by the GPU), runs the careful
+// one well; otherwise memory decides: 16 GB the careful reader, 8 GB the
+// quick one, less is short.
+function readerPick({ totalGB, platform, arch, vramGB = 0 }) {
+  if (vramGB >= 6) return 'careful';
+  if (platform === 'darwin' && arch === 'arm64' && totalGB >= 15) return 'careful';
+  return totalGB >= 15 ? 'careful' : totalGB >= 7.5 ? 'quick' : 'short';
+}
 function canonRecommend() {
-  const gb = os.totalmem() / 2 ** 30;
-  return gb >= 15 ? 'careful' : gb >= 7.5 ? 'quick' : 'short';
+  const dev = readSettings().readerDevice;
+  return readerPick({ totalGB: os.totalmem() / 2 ** 30, platform: process.platform, arch: process.arch, vramGB: dev && dev.gpu ? (dev.vram || 0) / 2 ** 30 : 0 });
+}
+// What the reader runs on, kept in settings.json once known: found by a
+// probe the first time the reader's status is asked for (never at launch),
+// and again by every load. A fall back to the processor is logged.
+function canonDeviceKeep(hw) {
+  if (!hw) return;
+  if (hw.fallback) logError('canon reader', new Error('fell back to the processor: ' + hw.fallback));
+  const dev = { gpu: hw.gpu || false, names: (hw.names || []).slice(0, 4), vram: hw.vram || 0 };
+  const s = readSettings();
+  if (JSON.stringify(s.readerDevice) === JSON.stringify(dev)) return;
+  s.readerDevice = dev;
+  writeSettings(s);
+  canonBroadcast({ type: 'hardware', ...canonReaderStatus() });
+}
+let canonProbing = false;
+function canonProbe() {
+  if (canonProbing || (!app.isPackaged && process.env.NEO_CANON_FAKE)) return;
+  canonProbing = true;
+  canonWorker({ type: 'probe', cpu: readSettings().readerHardware === 'cpu' })
+    .then((r) => { if (r.ok) canonDeviceKeep(r.result); else logError('canon reader probe', new Error(r.error)); })
+    .finally(() => { canonProbing = false; });
 }
 
 // The download: our own, on Electron's net.fetch (the system's proxy and
@@ -2610,8 +2643,9 @@ async function canonAsk(msg, urgent = false) {
   const file = tier && path.join(modelsDir(), canonReaders()[tier].file);
   if (!file) throw Object.assign(new Error('no reader'), { code: 'gone' });
   if (canonLoaded !== file) {
-    const r = await canonWorker({ type: 'load', chat: file, threads: Math.max(1, os.cpus().length - 2) });
+    const r = await canonWorker({ type: 'load', chat: file, threads: Math.max(1, os.cpus().length - 2), cpu: readSettings().readerHardware === 'cpu' });
     if (!r.ok) { logError('canon reader', new Error(r.error)); throw Object.assign(new Error(r.error), { code: 'gone' }); }
+    canonDeviceKeep(r.result);
     canonLoaded = file;
   }
   // (a pass the writer started isn't stopped by their typing)
@@ -2697,15 +2731,43 @@ function canonReader({ urgent = false } = {}) {
 }
 function canonReaderStatus() {
   const all = canonReaders();
+  const s = readSettings();
+  const fake = !app.isPackaged && process.env.NEO_CANON_FAKE;
   return {
     installed: canonInstalled(),
     recommend: canonRecommend(),
     catalogue: Object.fromEntries(Object.entries(all).map(([tier, r]) => [tier, { size: r.size, licence: r.licence }])),
     download: canonDlState(),
+    hardware: s.readerHardware === 'cpu' ? 'cpu' : 'auto',
+    device: fake ? { gpu: false, names: [], vram: 0 } : s.readerDevice || null,
     quietMs: !app.isPackaged && +process.env.NEO_CANON_QUIET_MS ? +process.env.NEO_CANON_QUIET_MS : null
   };
 }
-ipcMain.handle('canon:readerStatus', () => canonReaderStatus());
+ipcMain.handle('canon:readerStatus', () => {
+  const r = canonReaderStatus();
+  if (!r.device) canonProbe();
+  return r;
+});
+// Reader settings: the hardware (Automatic, or CPU only) and which reader.
+// A change of hardware starts the reader afresh on it; a reader that isn't
+// here yet is downloaded.
+ipcMain.handle('canon:readerSettings', (_e, change = {}) => {
+  const s = readSettings();
+  if (change.hardware === 'cpu' || change.hardware === 'auto') {
+    const was = s.readerHardware === 'cpu' ? 'cpu' : 'auto';
+    if (change.hardware === 'cpu') s.readerHardware = 'cpu'; else delete s.readerHardware;
+    if (was !== change.hardware) {
+      delete s.readerDevice;
+      if (canonChild) { try { canonChild.kill(); } catch { /* gone already */ } }
+    }
+  }
+  if (change.choice && canonReaders()[change.choice]) s.readerChoice = change.choice;
+  writeSettings(s);
+  if (change.choice && canonInstalled() !== change.choice) canonDownload(change.choice);
+  const r = canonReaderStatus();
+  if (!r.device) canonProbe();
+  return r;
+});
 
 // ---------------------------------------------------------------------------
 // The Tutorial (Help → Open the Tutorial): a shelf that keeps a Canon, with
@@ -3249,6 +3311,7 @@ function buildMenu() {
         },
         { type: 'separator' },
         { label: t('Welcome to NEO Canon…'), click: () => sendToWindow({ type: 'welcome' }) },
+        { label: t('Canon Reader…'), click: () => sendToWindow({ type: 'reader' }) },
         { label: t('Open the Tutorial'), click: () => sendToWindow({ type: 'tutorial' }) },
         { label: t('Start the Tutorial Afresh…'), click: () => sendToWindow({ type: 'tutorial', afresh: true }) },
         { type: 'separator' },
