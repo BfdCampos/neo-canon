@@ -199,14 +199,14 @@ async function evalFixture(name, reader, tier) {
     const summary = await engine.readShelf();
     const readMs = reader.stats.modelMs - before;
     const t1 = reader.stats.modelMs;
-    const { slips } = await engine.check({ scope: 'shelf' });
+    const { slips, asks = [] } = await engine.check({ scope: 'shelf' });
     const checkMs = reader.stats.modelMs - t1;
     const entries = io.entries().map((x) => Canon.parseEntry(x.text));
     if (flag('dump')) for (const x of io.entries()) console.error(x.text);
     // P0 #6: every quote verbatim
     const texts = new Map(shelfSources(lib).map((s) => [s.bookId + '/' + s.chId, Canon.sourceParas(s.html).map((p) => p.text).join('\n')]));
     const misquoted = entries.flatMap((e) => e.facts.flatMap((f) => f.sources.filter((s) => !s.written && !(texts.get(s.book + '/' + s.ch) || '').includes(s.quote)).map((s) => `${e.name}: "${s.quote}"`)));
-    return { fixture: name, model: tier, summary, readModelS: Math.round(readMs / 1000), checkModelS: Math.round(checkMs / 1000), wallS: Math.round((Date.now() - t0) / 1000), misquoted, ...score(expected, entries, slips) };
+    return { fixture: name, model: tier, summary, readModelS: Math.round(readMs / 1000), checkModelS: Math.round(checkMs / 1000), wallS: Math.round((Date.now() - t0) / 1000), misquoted, worthALook: asks.map((x) => `${x.name}: ${x.sentence}`), ...score(expected, entries, slips) };
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

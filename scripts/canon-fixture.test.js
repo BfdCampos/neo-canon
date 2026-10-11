@@ -55,10 +55,12 @@ function handKept() {
 const notSlips = () => JSON.parse(fs.readFileSync(path.join(FIXTURE, 'library', CANON, 'not-slips.json'), 'utf8'));
 const pick = (s) => ({ chapter: s.chId, sentence: s.sentence, span: s.span, to: s.to, entry: s.entry, attr: s.attr, strength: s.strength });
 
-test('Continuity Pass, kept by hand with no reader: the three strong slips in The Salt Crown', async () => {
+test('Continuity Pass, kept by hand with no reader: the three strong slips in The Salt Crown, the two weak ones worth a look', async () => {
   const sources = shelfSources(path.join(FIXTURE, 'library')).filter((s) => s.bookId === SALT && !s.notes);
-  const { slips } = await Canon.checkSources({ sources, entries: handKept(), notSlips: notSlips(), knownWords });
+  const { slips, asks } = await Canon.checkSources({ sources, entries: handKept(), notSlips: notSlips(), knownWords });
   assert.deepEqual(slips.map(pick), EXPECTED.slips.filter((s) => s.strength === 'strong'));
+  // the two weak ones, which the reader would confirm, are worth a look; no decoy is
+  assert.deepEqual(asks.map(pick), EXPECTED.slips.filter((s) => s.strength === 'weak'));
 });
 
 test('Continuity Pass with the reader: exactly the five seeded slips, no decoy', async () => {
