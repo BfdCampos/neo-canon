@@ -52,6 +52,14 @@ NEO Canon is built on [NEO](https://github.com/hughhowey/neo) by Hugh Howey, a d
 - **Offline first.** The reader runs on your machine. Nothing is sent anywhere.
 - **Plain files.** Canon is Markdown and JSON in your library folder.
 
+## Try it in two minutes
+
+```
+npm install && npm start
+```
+
+On first launch NEO Canon asks your name and a font, then shows a short welcome. Press **Open the Tutorial**: a *Tutorial* shelf appears that already keeps a Canon, with a short story (*Across the Saltings*, a courier and her mare crossing a salt marsh) and a *Start Here* notebook of eleven short lessons. Open the story and press ⌘' (Ctrl+' on Windows and Linux): Canon finds the three slips planted in it, with no download. Help → Open the Tutorial brings it back at any time, and Help → Start the Tutorial Afresh sets your copy aside and lays out a clean one.
+
 ## Download
 
 Get the latest installer from the **[Releases page](../../releases)**:
