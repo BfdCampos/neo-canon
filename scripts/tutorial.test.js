@@ -156,7 +156,7 @@ describe('the Tutorial', { concurrency: 1 }, () => {
       ];
       const { slips, facts } = await engine.check({ bookId: story });
       assert.deepEqual(slips.map(pick), seeded);
-      assert.equal(facts, 7); // the seven checked traits (an unchecked owner raises none)
+      assert.equal(facts, 7); // the seven checked traits (Hesketh's "mule", only said, raises none)
       // the whole shelf: the lessons are left out, so nothing more
       assert.deepEqual((await engine.check({ bookId: story, scope: 'shelf' })).slips.map(pick), seeded);
       // the decoys stay clean: Ballast's mane, a mule in Hesketh's mouth, the pewter sky, eyes that sting
@@ -191,7 +191,11 @@ describe('the Tutorial', { concurrency: 1 }, () => {
       }
     }
     assert.equal(verified, 7);
-    // the one question for Needs You (lesson 10)
-    assert.deepEqual(waiting, ['juniper/owner: Wren Calloway · unverified']);
+    // the one question for Needs You (lesson 10): what Hesketh says, never a fact of the story's
+    assert.deepEqual(waiting, ['juniper/species: mule · unverified']);
+    assert.equal(entries.find((e) => e.id === 'juniper').facts.find((f) => f.value === 'mule').sources[0].said, 'Hesketh');
+    // and the Story so far lessons 3 and 10 point to: Canon's notes, each quote the story's own
+    assert.deepEqual(entries.find((e) => e.id === 'hesketh').story.map((x) => x.state), ['note', 'note']);
+    for (const e of entries) for (const x of e.story) for (const s of x.sources) assert.ok(Canon.gateQuote(s.quote, Canon.sourceParas(chapter(s.ch)).map((p) => p.text).join('\n')), s.quote);
   });
 });
