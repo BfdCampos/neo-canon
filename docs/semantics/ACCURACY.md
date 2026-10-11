@@ -9,10 +9,7 @@ The owner's rule: *accuracy comes before speed.* A wrong fact marked checked is 
    - the reader answers *yes* to a plain statement and *no* to its negation (`localReader.judge`).
 
    Any other answer, *unsure* included, leaves the fact unchecked. Unchecked facts never raise slips.
-2. **Traits (sex, species, eyes, hair) are checked only by the text.** `shelfEvidence` scans the whole shelf for passages that tie a word to an entry: "Bramble, the grey mare", "Captain Varr's eyes were the grey of wet slate", or a note such as "Ilsa: grey eyes". It skips pronouns, speech, questions, maybes and lines the writer has dismissed. `established` then decides:
-   - If there is one value, that value stands.
-   - If one value appears in two or more chapters, first, and every other value appears once, the first value stands.
-   - Otherwise the shelf disagrees with itself. Every value then waits in Needs You as "Your sources disagree": nothing is checked and no slip is raised. A slip sentence that comes *before* the canonical one therefore can never win.
+2. **Traits (sex, species, eyes, hair) are checked only by the text.** `shelfEvidence` scans the whole shelf for passages that tie a word to an entry: "Bramble, the grey mare", "Captain Varr's eyes were the grey of wet slate", "John has green eyes", or a note such as "Ilsa: grey eyes". It skips pronouns, speech, questions, maybes and lines the writer has dismissed. A reading whose own quote ties the word to the entry the same way counts too. `established` and `firstCome` then decide, by rule 10.
 3. **Relations (owner, kin, spouse, home, birthplace) need both names and a relation word in the quote's sentence** (`relation`).
    - `'rule'`: the words also say which way round, and the fact is checked. Examples: "Tamsin Hale, Oren's younger sister"; "Teodor Brisk, Ansel's father"; "Hector, Teodor's black bull"; "belonged to Mara"; "lived in"; "born in".
    - `'linked'`: only the careful reader may be asked about the fact.
@@ -34,6 +31,17 @@ The owner's rule: *accuracy comes before speed.* A wrong fact marked checked is 
    This came from the owner's own paragraph, where "his blue eyes" was three sentences after "John" and no rule offered it at all. Asked, Careful answered *John*.
 
    Re-scored from the memo files with rule 9, both readers on both fixtures read exactly as in the table below: 100% precision, the same slips found, 0 false slips and 0 Worth a look. With no reader, each fixture's two weak slips are its Worth a look items, and no decoy is.
+
+10. **First said, first kept** (`firstCome`; the owner: "It was THE FIRST thing I wrote about him… assume that's true… only catch my attention on conflicts"). Rules 1–9 are the gates. What gets through them is checked **without asking**:
+   - Of the values for one attribute, the first said in reading order stands. The writer's Notes and notebook pages come first, as the writer's own word; then the books in shelf order, chapter by chapter, paragraph by paragraph.
+   - A later value that differs is not a fact and not a question: it is the slip the pass finds on that passage.
+   - The writer's notes against the prose's first value (or two notes against each other) is the one thing asked: every value waits as *Which is right?* in Needs You, and no slip is raised until the writer picks.
+   - A proposal that fails a gate is left out quietly; the device's cache keeps it with the reason (`dropped`). It never becomes a Needs You question.
+   - Attributes that change (owner, home, title, state) and kin keep every value that got through.
+
+   A slip *before* the canonical sentence could now win, so pronouns still never establish a trait (rule 2): the Lantern Coast's "Clover lowered his head", which comes before "Clover, the red cow", establishes nothing, and Clover stays a cow.
+
+11. **Story so far** (STORY.md). The reader's key points pass their own gates (`gateEvent`): the quote verbatim, ≤ 30 words, outside speech, reported speech and plans; each who named in the quote or meant by its first pronoun by rule 9 (strong only); no capitalised word the paragraph doesn't hold, and every other content word of the line sharing a stem with the quote's sentence. A later sentence that gives an earlier key point's deed to someone else is a slip only on the careful reader's *yes* to "Does B say that someone other than John did what A says John did?"; *unclear*, or the Quick reader (never asked), is Worth a look; no reader, nothing. A sentence that names the doer too ("Dave remembered John…") is a slip only on *yes*, never Worth a look.
 
 Two deterministic readings are added as well:
 - Kin that the shelf states outright between two entries ("Oren's younger sister") is added by `kinEvidence`. It then goes through rule 3 like any other reading.
@@ -83,6 +91,24 @@ Notes on the runs:
 - **Missed by both readers:** "She slid the halter off the **bull**". Both answered "someone or something else" when asked whom "bull" meant. That is a safe miss.
 - **Quick and pronouns:** before rule 8, Quick confirmed "He spat into the shallows" as Bramble and "He was young…" as Mara, even though Mara is a woman. Careful answered "someone or something else" both times.
 - **Run-to-run variation:** across our cold Quick runs, slip recall on the Ashfall Road varied (4/5 to 5/5), depending on which entries the reader named. Precision and false slips did not vary.
+
+## First said, first kept, and Story so far (Careful, re-scored from the memo; new answers asked)
+
+Re-scored with rules 10 and 11, the Careful reader on both fixtures. The Ashfall Road now holds the actor swap ("He still wore the belt that Ilsa had bound round the stump at the ford", after Tamsin bound it) and three decoys: the same belt cut into a strap, a memory naming Tamsin, a lie in dialogue.
+
+| Reader | Shelf | Checked | Wrong | Fact recall | Slips found | False slips | Needs You | Key points kept | Model time |
+|---|---|---|---|---|---|---|---|---|---|
+| Careful | Ashfall Road | 8 | 0 | 8/13 | **6/6** (the swap too) | **0** | 3 (2 said, 1 plan) | 14 | 1180 s |
+| Careful | Lantern Coast | 14 | 0 | 14/17 | 4/5 | **0** | 2 (both said) | 10 | 926 s |
+
+Before rules 10 and 11 the same answers left 7 and 8 questions in Needs You, most of them a later value against the first ("Ilsa Varr · Eyes: brown"). Every key-point quote was verbatim. Read time roughly doubled: each story paragraph is asked once more, for its key points.
+
+The first run of the deed question, asked once and with B's whole paragraph, gave 3 and 4 false slips ("Teodor Brisk … kept the farm" against "Mara kept the light"): Careful said yes when two passages shared a word. With two distinctive words (or one found nowhere else), B's sentence alone, and the question asked both ways round, there are none.
+
+**The owner's text, with the real Careful reader** (Notes: "John has green eyes and likes to read old books."; Ch 1 the owner's paragraph; Ch 2 four sentences):
+- Needs You: empty. Eyes: green, checked from the Notes without asking; the reader's "blue" (from "his blue eyes") got through no gate and was left out.
+- Story so far: *John reached his hand through the swirling red vortex* (Ch 1); for Dave, *Dave found the room in ruins*, *Dave touched the red vortex*, *Dave kicked the vortex shut*. Its *John reached into the vortex*, read from "Dave remembered John reaching into the vortex", was left out as a memory.
+- Slips: "his **blue** eyes" (Careful: "his" is John) and "It was **Dave** who touched the red vortex that night" (Dave → John). Not flagged: "Dave kicked the vortex shut" (never asked), "Dave remembered John reaching into the vortex" (asked: no), "It was Dave who had reached into the vortex, he told himself, not John" (what he tells himself), "Dave came in … and found the room in ruins".
 
 ## The recommendation
 

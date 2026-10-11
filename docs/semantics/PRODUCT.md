@@ -19,7 +19,7 @@ George R.R. Martin changed a horse's sex between books and a fan had to tell him
 - **No prose generation.** No "continue", "rewrite", "describe", "brainstorm", "expand".
 - **No autocomplete**, inline suggestions, or ghost text from the model.
 - **No chat that writes.** There is no chat box. The writer cannot ask Canon to produce text.
-- **No summaries written by the model** into entries. An entry holds facts with quotes; prose about a character is the writer's own.
+- **No summaries written by the model** into entries. An entry holds facts with quotes, and **Story so far**: one short line per key point ("John reached through a red vortex in his room"), each with its verbatim quote and labelled *Canon's note*, an index like a chapter's line on an index card (STORY.md). Prose about a character is the writer's own; nothing the reader writes ever goes into a book.
 - **No marks while typing.** No live squiggles, no toasts, no badges that change under the caret.
 - **No silent edits.** Canon never changes a manuscript word without the writer confirming that exact change.
 - **No cross-world sharing** in the MVP. Each Canon belongs to one shelf.
@@ -58,11 +58,11 @@ The only text the model may propose for the manuscript is a **minimal substituti
 
 ### New surfaces, and why each earns its place
 
-1. **Canon tab** (Manuscript / Notes / Outline / **Canon** / Darlings). Shown on every book (a user test showed that a tab hidden until opt-in was never found). On a shelf without a Canon it says what Canon is in two sentences and offers one button, **Keep a Canon for “{shelf}”** (with the status-shelf warning and **Move…**), and a link to **Open the Tutorial**. Without a tab, hand-editing — a core entry point — has nowhere to live. It reuses the existing layout: left nav pane lists entries, the page shows one entry, the right-hand pane holds the review queue.
+1. **Canon tab** (Manuscript / Notes / Outline / **Canon** / Darlings). An entry's page holds its facts, its **Story so far** (STORY.md) and *In my words*. Shown on every book (a user test showed that a tab hidden until opt-in was never found). On a shelf without a Canon it says what Canon is in two sentences and offers one button, **Keep a Canon for “{shelf}”** (with the status-shelf warning and **Move…**), and a link to **Open the Tutorial**. Without a tab, hand-editing — a core entry point — has nowhere to live. It reuses the existing layout: left nav pane lists entries, the page shows one entry, the right-hand pane holds the review queue.
 2. **Slip marks + popover** on the page. The whole point; built on the CSS Highlight API like spellcheck, never saved into chapter HTML.
 3. **Continuity results in the right-hand pane** during a pass, the same pane Find already uses.
 4. **The reader's setup page**, shown inside the Canon tab. The only thing shown at launch is the **welcome** (once per computer, on the shelf, never over a page): what Canon is, **Open the Tutorial**, **Set Up the Reader** (the recommended reader and its size; the download shows in the sheet and the Canon tab) and **Later**. Any answer, Esc included, is for good; Help → Welcome to NEO Canon… shows it again.
-5. **The Tutorial shelf** (Help → Open the Tutorial): a shelf that keeps a Canon, holding *Across the Saltings* (three seeded slips: Juniper the mare called “his”, Wren’s grey eyes turned brown, Marrowby spelt Marowby; and decoys) and the *Start Here* notebook (eleven lessons, left out of Canon). Its entries ship pre-built, every checked fact verified by rule from a quote in the story, so every lesson works without the reader; one unchecked fact waits in Needs You. Opened again, it is the same shelf with the writer's changes; **Start the Tutorial Afresh…** takes the old one's books off the shelves whole (File → Reshelve a Book… brings them back). The files are `tutorial/` in the app, copied by `tutorial:open`.
+5. **The Tutorial shelf** (Help → Open the Tutorial): a shelf that keeps a Canon, holding *Across the Saltings* (three seeded slips: Juniper the mare called “his”, Wren’s grey eyes turned brown, Marrowby spelt Marowby; and decoys) and the *Start Here* notebook (eleven lessons, left out of Canon). Its entries ship pre-built, every checked fact verified by rule from a quote in the story, so every lesson works without the reader; Needs You holds one question, what Hesketh says of Juniper ("more mule than horse"), and Wren and Hesketh have a few lines of Story so far. Opened again, it is the same shelf with the writer's changes; **Start the Tutorial Afresh…** takes the old one's books off the shelves whole (File → Reshelve a Book… brings them back). The files are `tutorial/` in the app, copied by `tutorial:open`.
 
 No new window, toolbar, sidebar, status-bar widget or notification beyond the one-time welcome.
 
@@ -135,7 +135,7 @@ All strings go through `t()`. Menu items are new entries in existing menus.
 
 1. Canon tab with no entries: "**Read the Shelf** — Canon will read 3 books and 1 notebook (112,400 words). On this computer that takes about 40 minutes. You can keep writing; Canon steps aside whenever you type." [ **Read the Shelf** ]
 2. Progress (Canon tab only): "Reading *Ember and Thorn* · chapter 7 of 22" then "Checking 214 facts · 96 done". The reader **pauses within a second of any keystroke** and resumes after 10 s of quiet, so typing never stutters.
-3. Done: "Canon found 38 entries and 214 facts. 181 checked out; 33 need you." The **33** are listed in the right-hand pane under **Needs You** (see §5).
+3. Done: "Canon found 38 entries and 214 facts. 209 checked out; 5 need you." The first thing the books or notes say of anyone is kept without asking (§5, *First said, first kept*); the **5** are the writer's notes disagreeing with the story and what characters only say, listed under **Needs You**. The reader also keeps each entry's **Story so far** (STORY.md).
 4. Afterwards Canon stays current on its own: when the writer pauses (§4.8), changed chapters (by `textHash`) are re-read. There is no "rebuild" button in normal use; Settings has **Read Everything Again** for after a reader upgrade.
 
 ### 4.3 Writing notes that feed the world
@@ -143,7 +143,7 @@ All strings go through `t()`. Menu items are new entries in existing menus.
 1. New Notebook "Field Notes" on the shelf; page "Horses": *"Bramble — mare, eleven, bad-tempered with strangers."*
 2. After the next pause the page is read. The Canon entry **Bramble** gains `Sex: female (mare)` with source "Field Notes, Horses".
 3. A book's **Notes** tab feeds Canon the same way; its source label is "*Ember and Thorn*, Notes".
-4. Notes and prose disagree (notes say grey eyes, Chapter 6 says brown)? That's a slip on whichever passage is checked, and in the entry both sources show under the fact with "**Your sources disagree**". Canon never picks a winner silently.
+4. Notes and prose disagree (notes say grey eyes, Chapter 1 first says brown)? Needs You asks "**Ilsa Varr · Eyes: which is right?**" with both passages and one button per value; until then neither raises a slip. Canon never picks a winner silently. If the prose first agrees with the notes and only a later chapter says brown, that later line is simply a slip.
 
 ### 4.4 Editing an entry by hand
 
@@ -226,22 +226,34 @@ All strings go through `t()`. Menu items are new entries in existing menus.
 
 | State | Mark (beside the fact) | Meaning | Can raise slips? |
 |---|---|---|---|
-| **unverified** | hollow dot ○ | Quote found, Checking not yet run or unclear | No |
-| **verified** | filled dot ● | Checking agreed with the quote | Yes |
+| **unverified** | hollow dot ○ | Only said or planned, or its passage has changed | No |
+| **verified** | filled dot ● | Through the gates, and the first value said | Yes |
 | **yours** | small pen nib | Written or confirmed by the writer | Yes, and wins over the rest |
-| **sources disagree** | split dot ◐ | Two sources state different values | Raises a slip on the newer passage only after the writer picks |
+| **sources disagree** | split dot ◐ | The writer's notes and the story say different things | Raises a slip on the newer passage only after the writer picks |
 
 No percentages, no "confidence 0.83". Hover the dot: "Checked against *Ember and Thorn*, Ch 2" / "Not checked yet" / "You wrote this".
 
-### Needs You (the Verify queue)
+### First said, first kept
 
-Right-hand pane on the Canon tab. Lists unverified facts and disagreements, one at a time, with the quote:
+The owner, after writing "John has green eyes" in Notes and being asked to confirm it: "It was THE FIRST thing I wrote about him… assume that's true. It should only catch my attention on conflicts, first come first serve."
 
-> **Ilsa Varr · Eyes: grey?**
+- A proposal that gets through the gates (quote verbatim, value word in it, the entity tied to it by rule or by the reader's double answer) is **checked without asking**. Of the values for one attribute, the first said in reading order is kept; the writer's Notes and notebook pages count first, as the writer's own word.
+- A later passage that says otherwise is a **slip** on that passage, never a question.
+- A proposal that fails a gate is left out quietly (the cache keeps why). It is never turned into a question.
+
+### Needs You
+
+Right-hand pane on the Canon tab. Only what Canon cannot settle itself:
+
+> **Ilsa Varr · Eyes: which is right?**
+> *Field Notes*, House Varr: "Ilsa: brown eyes"
 > *Ember and Thorn*, Ch 1: "Captain Varr's eyes were the grey of wet slate."
-> [ **That's right** ] [ **Not right** ] [ **Skip** ]
+> [ **brown** ] [ **grey** ] [ **Skip** ]
 
-"Not right" moves the fact to *Set aside* and teaches Canon not to propose it again from that quote. The queue is optional; ignoring it only means fewer slips.
+- *Which is right?*: the writer's notes against the story (or two notes against each other). The value picked becomes the writer's; the other goes to *Set aside*, and the slips follow.
+- What a character only says, or a plan: "The horse-trader says Bramble is a gelding" [It's true] [Only what's said] [Skip].
+
+The queue is optional; ignoring it only means fewer slips.
 
 ### What the MVP flags (deliberately narrow)
 
@@ -318,7 +330,7 @@ A shelf named **The Ashfall Road** keeping a Canon, holding two short books and 
 
 **Book 2 — *The Salt Crown*** (3 chapters)
 - Ch 1: **[slip P0]** "Bramble tossed his head and pulled at the reins." **[slip P0]** "Ilsa's brown eyes narrowed."
-- Ch 2: **[slip P0]** "Tamsin, the elder of the two Hales, …" **[slip P0]** "the road back to Corwyck".
+- Ch 2: **[slip P0]** "Tamsin, the elder of the two Hales, …" **[slip P0]** "the road back to Corwyck". **[slip, with the reader]** "He still wore the belt that Ilsa had bound round the stump at the ford" (Book 1 Ch 3: *Tamsin* bound the stump with her own belt; STORY.md).
 - Ch 3: **[slip P0]** "Tamsin swung down from the stallion" where context makes the horse Bramble.
 
 **Notebook — *Field Notes*** (3 pages)
@@ -334,5 +346,8 @@ A shelf named **The Ashfall Road** keeping a Canon, holding two short books and 
 4. "The sky went the grey of a mare's flank" — a simile, no entity.
 5. The "Maybe" page's green eyes and Corwick birthplace (left out of Canon).
 6. A slip pre-dismissed in `not-slips.json` ("Ilsa's eyes looked almost brown in the firelight", Book 2 Ch 3).
+7. "Oren cut the old belt into a strap for his shield" — the same belt, another deed.
+8. "Oren remembered Tamsin binding the stump with her belt" — memory, the doer named.
+9. "“Ilsa bound it, not my sister,” he told the riders" — a lie in dialogue.
 
 **Expected results.** Read the Shelf yields entries for Ilsa Varr, Tamsin Hale, Oren Hale, Bramble, Rook and Corwick (Saltmere optional), each fact cited with a verbatim quote. The Continuity Pass on *The Salt Crown* flags exactly the five P0 slips, no decoys. Choosing **Bramble is now a stallion…** lists the Book 1 Ch 2 "grey mare" line and the Field Notes line for review, and leaves the Book 2 lines alone (they already agree). "Bramble is in foal" is stored as *unverified* at most, never verified.

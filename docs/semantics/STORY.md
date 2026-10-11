@@ -33,7 +33,7 @@ For each changed paragraph that names someone (the same `cueful` test as facts),
 
 Gates, all deterministic; an event failing any is dropped quietly (logged in the cache, never asked):
 
-1. **Quote**: verbatim in the chapter (`gateQuote`), ≤ 30 words, not inside speech or reported speech, not a plan or question.
+1. **Quote**: verbatim in the chapter (`gateQuote`), ≤ 30 words, not inside speech or reported speech, not a plan or question, not a memory or dream ("Dave remembered John reaching into the vortex").
 2. **Who**: every name is an entry (or becomes one by the usual name rules: capitalised, written that way in the paragraph, not a pronoun, not a misspelling). Each must be named in the quote, or be what a pronoun in the quote means by the paragraph rule of `referent()` (strong only: the one person named before, close by, the pronoun's sex not against the entry's).
 3. **No invented words**: every capitalised word of the line is in the paragraph or is a who's name; every other content word shares its stem with a word of the quote ("reached", "vortex", "room"). A line that needs a word the writer didn't write is dropped.
 4. **Length**: ≤ 14 words. The *where*, if grounded in the quote and not already in the line, is added to it.
@@ -58,11 +58,11 @@ In the entry's Markdown, between Facts and Set aside:
 
 ## 5. The contradiction check (with the Continuity Pass and quiet checks)
 
-For each sentence checked, not in speech, reported speech or a plan:
+For each sentence checked, not in speech, a plan, or a sentence with reported speech or belief ("he told himself"):
 
-1. **Retrieve** the stored events from *earlier* in reading order that share a distinctive word with it: a content word of four letters or more, not a name, and rare on the shelf (in at most 8 paragraphs, or 5% of them on a long shelf). "vortex" is; "hand", "room", "door" are on most shelves. A lexical index, built from the files on each pass; no embeddings (measured: the owner's case and the fixture decoys need none).
+1. **Retrieve** the stored events from *earlier* in reading order that share distinctive words with it: content words that are not names, not the stuff of every page ("room", "hand", "door", "rode"), and in few of the shelf's paragraphs (at most 5, or 3% of a long shelf). Two such words shared, or one found in no other paragraph. "red" and "vortex" are; "Dave kicked the vortex shut", sharing only a "vortex" the shelf says often, is never asked. A lexical index, built from the files on each pass; no embeddings (measured: the owner's case and both fixtures need none).
 2. **Credit**: the sentence names an entry (outside speech) that is not among the event's who.
-3. **Ask** the reader one question with both passages: *Does B say that someone other than John did what A says John did?* — yes / no / unclear.
+3. **Ask** the reader with A's passage and B's sentence alone (with the paragraph it read the swap into its neighbours): *Does B say that someone other than John did what A says John did?*, and on a yes, the other way round, *Is B about a different action?* Only yes then no is a yes.
    - **yes** → a slip, on the name.
    - **unclear**, or the Quick reader → Worth a look.
    - **no** → nothing. With no reader → nothing (events come from the reader).
