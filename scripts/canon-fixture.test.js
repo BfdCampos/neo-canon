@@ -72,7 +72,7 @@ test('Continuity Pass with the reader: exactly the five seeded slips, no decoy',
     reader: Canon.fakeReader(ANSWERS), onSource: (src, found, n, of) => seen.push([src.chId, found.length, n, of]) });
   assert.deepEqual(slips.map(pick), TRAIT_SLIPS);
   assert.deepEqual(seen, [['c1', 2, 1, 3], ['c2', 2, 2, 3], ['c3', 1, 3, 3]]);
-  assert.equal(facts, 9); // the ones that can raise slips: no titles, owners or states
+  assert.equal(facts, 10); // the ones that can raise slips: no titles, owners or states
   for (const decoy of EXPECTED.decoys) assert.ok(!slips.some((s) => s.sentence === decoy), decoy);
   // each mark sits on its word in the writer's own text
   for (const s of slips) {
@@ -146,9 +146,10 @@ test('Read the Shelf gives the expected entries and facts, each quote the writer
     const texts = new Map(shelfSources(lib).map((s) => [s.bookId + '/' + s.chId, Canon.sourceParas(s.html).map((p) => p.text).join('\n')]));
     for (const e of got) for (const f of e.facts) for (const s of f.sources) assert.ok(texts.get(s.book + '/' + s.ch).includes(s.quote), s.quote);
     assert.equal(got.find((e) => e.id === 'bramble').facts.find((f) => f.attr === 'sex' && f.value === 'male').sources[0].said, 'the horse-trader');
-    // (the trader's gelding and the foal question wait for the writer; Oren's
-    // "He" and Bramble's "Tamsin rode her" got through no gate, so they're left out)
-    assert.deepEqual(summary, { entries: 7, facts: 15, written: 7, calls: summary.calls, stopped: false, verified: 13, needs: 2 });
+    // (the trader's gelding and the foal question wait for the writer;
+    // Bramble's "Tamsin rode her" got through no gate, so it's left out. Oren
+    // is male by the narration's own he, in three sentences and against none)
+    assert.deepEqual(summary, { entries: 7, facts: 16, written: 7, calls: summary.calls, stopped: false, verified: 14, needs: 2 });
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

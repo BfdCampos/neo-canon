@@ -122,15 +122,69 @@
   }
 
   // Spans of speech: inside quotation marks of any style, or a line opened
-  // by a dash (dialogue set the European way).
-  function speechSpans(text) {
+  // by a dash (dialogue set the European way). A mark's side is read from
+  // what is around it, not only its shape, so straight quotes, curly ones
+  // mixed with straight, and a curly mark typed the wrong way round all
+  // pair up. A quotation left open runs to the paragraph's end only when
+  // the paragraph opens with it (a speech that goes on into the next one);
+  // anywhere else an unpaired mark is no speech at all, so one stray mark
+  // can't make the rest of a paragraph dialogue. A short quoted term with
+  // no saying verb by it (born into "Fleets.") is a word, not speech.
+  const OPEN_BEFORE = /[\s([{—–\-/]/u;
+  const SPEECH_VERB = /(?<![\p{L}\p{M}])(?:said|says|say|asked|asks|ask|told|tells|replied|replies|answered|answers|instructed|instructs|shouted|shouts|cried|cries|called|calls|whispered|whispers|muttered|mutters|murmured|murmurs|yelled|yells|screamed|screams|exclaimed|added|adds|continued|began|repeated|warned|ordered|commanded|demanded|insisted|explained|announced|declared|snapped|hissed|growled|laughed|sighed|pleaded|begged|agreed|offered|suggested|interrupted|protested|mumbled|stammered|breathed|sang|called out|went on)(?![\p{L}\p{M}])/iu;
+  function quotePairs(text, marks, opens, closes, apostrophe) {
     const spans = [];
-    const re = /“[^”]*(?:”|$)|"[^"]*(?:"|$)|«[^»]*(?:»|$)|„[^“”]*(?:[“”]|$)|(?<![\p{L}\p{N}])‘(?:[^’]|’(?=\p{L}))*(?:’|$)|(?<![\p{L}\p{N}])'(?=\p{L})(?:[^']|'(?=\p{L}))*'(?!\p{L})/gu;
-    let m;
-    while ((m = re.exec(text))) { spans.push([m.index, m.index + m[0].length]); if (!m[0].length) re.lastIndex++; }
+    let open = -1;
+    for (const i of marks) {
+      const c = text[i];
+      const before = i ? text[i - 1] : '';
+      const after = text[i + 1] || '';
+      // an apostrophe inside or at the end of a word (don't, the dogs' bowls)
+      if (apostrophe && c !== opens[0] && /[\p{L}\p{N}]/u.test(before) && (/[\p{L}\p{N}]/u.test(after) || open < 0)) continue;
+      const leftOpen = (!before || OPEN_BEFORE.test(before) || opens.includes(before)) && after && !/\s/.test(after);
+      const rightClose = before && !/\s/.test(before) && (!after || /[\s.,;:!?)\]}—–…'"’”»-]/u.test(after));
+      let role;
+      // guillemets and low marks only ever face one way
+      if ('«‹„‚'.includes(c)) role = 'open';
+      else if ('»›'.includes(c)) role = 'close';
+      else if (leftOpen && !rightClose) role = 'open';
+      else if (rightClose && !leftOpen) role = 'close';
+      else if (opens.includes(c) && !closes.includes(c)) role = 'open';
+      else if (closes.includes(c) && !opens.includes(c)) role = 'close';
+      else role = open < 0 ? 'open' : 'close';
+      if (role === 'open') {
+        // one already open and this one could close it: it closes
+        if (open >= 0 && rightClose) { spans.push([open, i + 1]); open = -1; } else open = i;
+      } else if (open >= 0) { spans.push([open, i + 1]); open = -1; }
+    }
+    if (open >= 0 && !text.slice(0, open).trim()) spans.push([open, text.length]);
+    return spans;
+  }
+  function speechSpans(text) {
+    const at = (re) => [...text.matchAll(re)].map((m) => m.index);
+    const spans = [
+      ...quotePairs(text, at(/["“”„«»]/gu), '“„«"', '”»"', false),
+      ...quotePairs(text, at(/['‘’‚‹›]/gu), '‘‚‹\'', '’›\'', true)
+    ].filter(([a, b]) => {
+      // a term in quotation marks, not a speech: three words or fewer, not
+      // the paragraph's opening, and no saying verb in its sentence
+      const inner = text.slice(a + 1, b - 1);
+      const words = (inner.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
+      if (words > 3 || !text.slice(0, a).trim()) return true;
+      const s = sentences(text).filter((x) => x.end > a && x.start < b);
+      const from = s.length ? s[0].start : a;
+      // a quotation that is its sentence, or follows a colon, is spoken
+      const lead = text.slice(from, a).trim();
+      if (!lead || /:$/.test(lead)) return true;
+      const to = s.length ? s[s.length - 1].end : b;
+      // (the next sentence too, for "Run!" she shouted. split at the mark)
+      const next = sentences(text).find((x) => x.start >= to);
+      const around = text.slice(from, a) + ' ' + text.slice(b, Math.max(to, next && /^\s*[\p{Ll}]/u.test(text.slice(to, next.end)) ? next.end : to));
+      return SPEECH_VERB.test(around);
+    });
     const dash = /^\s*[—–]\s*[^—–]*/.exec(text);
     if (dash) spans.push([0, dash[0].length]);
-    return spans;
+    return spans.sort((x, y) => x[0] - y[0]);
   }
   const inSpans = (spans, a, b) => spans.some(([s, e]) => a >= s && b <= e);
 
@@ -574,10 +628,16 @@
     }
     // a Canon's note whose words aren't the ones Canon wrote: the writer's now
     for (const x of e.story) if (x.state === 'note' && !x.sources.some((src) => src.note === noteMark(x.did))) x.state = 'yours';
+    // the same fact twice is one (`merged`: how many, for the file to heal)
+    const [facts, merged] = dedupFacts(e.facts);
+    e.facts = facts;
+    Object.defineProperty(e, 'merged', { value: merged, enumerable: false });
     return e;
   }
 
   function serialiseEntry(e) {
+    // never the same fact twice in the file
+    const once = dedupFacts(e.facts.map((f) => ({ ...f, sources: f.sources.map((x) => ({ ...x })), notes: f.notes && f.notes.slice() })))[0];
     const factLines = (facts) => facts.flatMap((f) => [
       `- ${one(labelOf(f))}: ${one(f.value)}${f.as ? ` (${one(f.as)})` : ''} · ${f.state}`,
       ...f.sources.map((s) => s.written ? '  - Written in Canon'
@@ -592,7 +652,7 @@
     const alias = (a) => (a.includes(',') ? `"${one(a)}"` : one(a));
     const lines = ['---', `id: ${e.id}`, `name: ${one(e.name)}`, `kind: ${e.kind}`, `aliases: [${e.aliases.map(alias).join(', ')}]`,
       ...e.extra.map(([k, v]) => `${k}: ${one(v)}`), '---', `# ${one(e.name)}`, '', ...(lead.top || []), ...((lead.top || []).length ? [''] : []),
-      '## Facts', ...(lead.facts || []), ...factLines(e.facts)];
+      '## Facts', ...(lead.facts || []), ...factLines(once)];
     if ((e.story || []).length || (lead.story || []).length) lines.push('', '## Story so far', ...(lead.story || []), ...storyLines(e.story || []));
     if (e.setAside.length || (lead.aside || []).length) lines.push('', '## Set aside', ...(lead.aside || []), ...factLines(e.setAside));
     lines.push('', '## In my words');
@@ -604,17 +664,57 @@
   // the entry's Set aside (nothing is deleted); Restore brings it back theirs.
   function confirmFact(e, i) {
     let f = e.facts[i];
-    // what a character says, made true by the writer: the writer's fact,
-    // written in Canon; the line stays what it was, theirs (UX-REVIEW #5, #6)
+    if (!f) return;
+    // what a character says (or a plan), made true by the writer: the
+    // writer's fact now, citing the passage it came from. A fact of the
+    // same value already there takes the passage instead, so It's true
+    // twice is one fact, never two.
     if (talkOnly(f)) {
-      f = { attr: f.attr, label: f.label, value: f.value, as: f.as, state: 'yours', sources: [{ written: true }] };
-      e.facts.push(f);
-    } else {
-      f.state = 'yours';
-      for (const s of f.sources) delete s.changed;
+      const had = e.facts.find((x) => x !== f && sameFact(x, f) && !talkOnly(x));
+      e.facts.splice(i, 1);
+      if (had) {
+        for (const s of f.sources) if (!had.sources.some((x) => sameSrc(x, s))) had.sources.push(s);
+        if (!had.as && f.as) had.as = f.as;
+        f = had;
+      } else e.facts.splice(i, 0, f);
     }
+    f.state = 'yours';
+    for (const s of f.sources) delete s.changed;
     // the other values (checked or not) step aside
     for (const o of e.facts.filter((x) => x !== f && x.attr === f.attr && x.state !== 'yours' && norm(x.value) !== norm(f.value) && ATTRS[f.attr] && ATTRS[f.attr].single)) setAsideFact(e, e.facts.indexOf(o), false);
+  }
+  const sameFact = (x, y) => x.attr === y.attr && norm(x.value) === norm(y.value) && (x.attr !== 'other' || norm(x.label || '') === norm(y.label || ''));
+  const sameSrc = (a, b) => a.written || b.written ? !!(a.written && b.written) : a.book === b.book && a.ch === b.ch && norm(a.quote) === norm(b.quote);
+  // One fact for one value. Facts of the same attribute and value (what
+  // the story says apart from what someone only says) are one, with every
+  // source of each; nothing is lost but the repetition. An entry written
+  // by an older Canon, whose It's true added a sourceless fact of the
+  // writer's on every press, heals here: the copies are one, and the line
+  // they confirmed joins it as its passage. → [facts, how many merged]
+  function dedupFacts(facts) {
+    const out = [];
+    const copies = new Map();
+    const RANK = { yours: 4, verified: 3, disagree: 2, unverified: 1 };
+    for (const f of facts) {
+      const had = out.find((x) => sameFact(x, f) && talkOnly(x) === talkOnly(f) && (!x.as || !f.as || norm(x.as) === norm(f.as)));
+      if (!had) { out.push(f); continue; }
+      copies.set(had, (copies.get(had) || 0) + 1);
+      if ((RANK[f.state] || 0) > (RANK[had.state] || 0)) had.state = f.state;
+      if (!had.as && f.as) had.as = f.as;
+      for (const s of f.sources) if (!had.sources.some((x) => sameSrc(x, s))) had.sources.push(s);
+      for (const n of f.notes || []) if (!(had.notes || []).includes(n)) (had.notes = had.notes || []).push(n);
+    }
+    let merged = [...copies.values()].reduce((a, b) => a + b, 0);
+    for (const [f] of copies) {
+      if (f.state !== 'yours' || !f.sources.every((s) => s.written)) continue;
+      const talk = out.find((x) => x !== f && sameFact(x, f) && talkOnly(x));
+      if (!talk) continue;
+      for (const s of talk.sources) if (!f.sources.some((x) => sameSrc(x, s))) f.sources.push(s);
+      for (const n of talk.notes || []) if (!(f.notes || []).includes(n)) (f.notes = f.notes || []).push(n);
+      out.splice(out.indexOf(talk), 1);
+      merged++;
+    }
+    return [out, merged];
   }
   function setAsideFact(e, i, notRight) {
     const [f] = e.facts.splice(i, 1);
@@ -1289,6 +1389,10 @@
     if (where.plan) source.plan = true;
     const same = (a, b) => a.attr === b.attr && norm(a.value) === norm(b.value) && (a.attr !== 'other' || a.label === b.label);
     if (e.setAside.some((x) => x.state === 'not right' && same(x, f) && x.sources.some((s) => norm(s.quote) === norm(quote)))) return drop();
+    // what someone says, once the writer decided it: It's true made it a
+    // fact citing this passage; Only what's said set it aside with it
+    if ((source.said || source.plan) && (e.facts.some((x) => same(x, f) && !talkOnly(x) && x.sources.some((s) => sameSrc(s, source)))
+      || e.setAside.some((x) => same(x, f) && x.sources.some((s) => !s.written && norm(s.quote) === norm(quote))))) return drop();
     // what someone says, or a plan, is never a source of the story's own
     // fact, nor joins one: the trader's "that's a gelding" stays his
     const had = e.facts.find((x) => same(x, f) && talkOnly(x) === !!(source.said || source.plan));
@@ -1523,6 +1627,44 @@
     });
     return out;
   }
+  // What the narration calls each person or creature: the she or he that
+  // the slip checker's own rules tie to them (Pio … her bed; a sentence
+  // naming no one, after one that names Pio alone: referent()). Never what
+  // anyone says. → Map id → Map 'female'|'male' → [{ pos, note, quote, src, key }],
+  // one per sentence, in reading order.
+  function pronounEvidence(sources, entries) {
+    const idx = mentionIndex(entries);
+    const world = new Map(entries.map((x) => [x.id, { e: x, rel: [], ...(x.kind === 'person' || x.kind === 'creature' ? { sex: NO_VALUE } : {}) }]));
+    const out = new Map();
+    sources.forEach((src, order) => {
+      sourceParas(src.html).forEach((p, pi) => {
+        const sents = sentences(p.text);
+        for (const c of paraCandidates(p.text, idx, world, [])) {
+          if (c.kind !== 'pronoun' || c.attr !== 'sex' || !world.get(c.id).sex) continue;
+          const value = PRONOUNS[p.text.slice(c.start, c.end).toLowerCase()];
+          if (!value) continue;
+          const s = sents[c.si];
+          if (PLAN.test(s.text)) continue;
+          const key = `${src.bookId}/${src.chId}/${pi}/${c.si}`;
+          if (!out.has(c.id)) out.set(c.id, new Map());
+          const m = out.get(c.id);
+          if (!m.has(value)) m.set(value, []);
+          if (m.get(value).some((w) => w.key === key)) continue;
+          m.get(value).push({ key, pos: (isNote(src) ? NOTE_AT : 0) + order * 1e4 + pi, note: isNote(src), quote: s.text.split(/\s+/).length > 30 ? s.text.split(/\s+/).slice(0, 30).join(' ') : s.text, src });
+        }
+      });
+    });
+    return out;
+  }
+  // The sex the narration gives someone: the same pronoun in two sentences
+  // or more, and the other in none. (A pronoun alone checks nothing; two
+  // that agree, with none against, are the story's word.)
+  function pronounSex(ev) {
+    if (!ev || ev.size !== 1) return null;
+    const [[value, ws]] = [...ev];
+    return ws.length >= 2 ? { value, ws } : null;
+  }
+
   // Where a passage stands in reading order: the writer's own Notes and
   // notebook pages come first (they are the writer's word, not the story's
   // telling), then the books' chapters in shelf order, paragraph by paragraph.
@@ -1976,6 +2118,9 @@
               if (s.written || !texts.has(s.book + '/' + s.ch)) continue;
               if (gateQuote(s.quote, texts.get(s.book + '/' + s.ch))) delete s.changed;
               else s.changed = true;
+              // narration an older reading took for dialogue (one stray
+              // quotation mark) is narration again
+              if (s.said && !s.changed && !quoteIn(s.quote, paraOf(s)).said) delete s.said;
             }
             if (f.state === 'verified' && !f.sources.some(live)) f.state = 'unverified';
           }
@@ -2085,6 +2230,23 @@
           }
           if (cache.judged[jk] === 'yes') pass(f, [where(s)]);
         }
+        // the narration's she or he, where nothing else gives a sex: two
+        // sentences or more that agree, none against, no other value read
+        // from the story, and not one the writer set aside
+        const pron = pronounEvidence(sources, entries.filter((e) => !e.locked));
+        for (const e of entries) {
+          const got = pronounSex(pron.get(e.id));
+          if (!got) continue;
+          const { value, ws } = got;
+          const sexFacts = e.facts.filter((f) => f.attr === 'sex' && !talkOnly(f));
+          if (sexFacts.some((f) => f.state === 'yours' || (gated.has(f) && norm(f.value) !== value))) continue;
+          if ([...(evidence.get(e.id + '/sex') || new Map()).keys()].some((v) => v !== value)) continue;
+          if (e.setAside.some((f) => f.attr === 'sex' && norm(f.value) === value)) continue;
+          let f = sexFacts.find((x) => norm(x.value) === value);
+          if (!f) { f = { attr: 'sex', value, as: '', state: 'unverified', sources: [] }; e.facts.push(f); }
+          for (const w of ws.slice(0, 3)) if (!f.sources.some((x) => !x.written && sameSource(x, evSource(w)))) f.sources.push(evSource(w));
+          gated.set(f, [...(gated.get(f) || []), ...ws.map((w) => ({ pos: w.pos, note: w.note }))]);
+        }
         // first said, first kept; what didn't get through, and a later value
         // that differs (the pass's slip), leave the entry
         for (const e of entries) {
@@ -2112,7 +2274,9 @@
           entries: entries.length, facts: facts.length, written, calls, stopped,
           verified: facts.filter((f) => f.state === 'verified' || f.state === 'yours').length,
           // what waits for the writer: notes against the prose, and what's only said or planned
-          needs: facts.filter((f) => f.state === 'disagree' || (f.state === 'unverified' && talkOnly(f))).length
+          // (a line whose value the facts already hold asks nothing)
+          needs: entries.flatMap((e) => e.facts.filter((f) => f.state === 'disagree' || (f.state === 'unverified' && talkOnly(f)
+            && !e.facts.some((x) => x !== f && sameFact(x, f) && !talkOnly(x) && (x.state === 'yours' || x.state === 'verified'))))).length
         };
       }
     };
@@ -2313,7 +2477,8 @@
     inSpans, nameParts, WORD, replaceInHtml,
     parseLinks, resolveName, entryLinks, linkGraph, backlinks, paraEntries, snippetAround, worldIndex, mentionPassages, searchPassages,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
-    newEntry, parseEntry, serialiseEntry, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
+    pronounEvidence, pronounSex, quoteIn,
+    newEntry, parseEntry, serialiseEntry, dedupFacts, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader,
     shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces,
     gateEvent, storyIndex, rarity, STORY_SCHEMA

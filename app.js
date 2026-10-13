@@ -17455,24 +17455,38 @@ if (CANON_ON) {
 // kept); a later word against it is a slip, not a question. What waits:
 // the writer's notes against the prose ("Which is right?", every value
 // with its passage), and what a character only says or a plan.
-const canonSkipped = new Set();
+// Skip is remembered with the Canon (canon.json `skipped`), so a question
+// put off stays off on every reload and every read
+const canonSkippedSet = () => new Set((canon && canon.meta && canon.meta.skipped) || []);
+async function canonSkip(key) {
+  if (!canon) return;
+  const skipped = [...new Set([...((canon.meta && canon.meta.skipped) || []), key])];
+  canon.meta.skipped = skipped;
+  canonSideUpdate();
+  try { await window.neo.canonSaveMeta(canon.id, { skipped }); } catch (err) { window.neo.logError && window.neo.logError(String(err && err.stack || err)); }
+}
 const canonHeard = (f) => f.state === 'unverified' && f.sources.some((x) => !x.written) && f.sources.every((x) => x.written || x.said || x.plan);
+// what someone only says, when the story (or the writer) already holds the
+// same value as a fact: nothing to ask, and no second line on the page
+const canonSettled = (e, f) => e.facts.some((x) => x !== f && x.attr === f.attr && Canon.norm(x.value) === Canon.norm(f.value)
+  && (x.state === 'yours' || x.state === 'verified') && !canonHeard(x));
 function canonNeeds() {
   if (!canon) return [];
   const out = [];
+  const skipped = canonSkippedSet();
   for (const x of canonSorted()) {
     if (!x.data) continue;
     const which = new Map();
     for (const f of x.data.facts) {
       if (f.state === 'disagree') {
         const key = x.id + '|' + f.attr;
-        if (canonSkipped.has(key)) continue;
+        if (skipped.has(key)) continue;
         if (!which.has(key)) { which.set(key, { e: x.data, f, key, all: [] }); out.push(which.get(key)); }
         which.get(key).all.push(f);
         continue;
       }
       const key = x.id + '|' + f.attr + '|' + f.value;
-      if (canonHeard(f) && !canonSkipped.has(key)) out.push({ e: x.data, f, key });
+      if (canonHeard(f) && !skipped.has(key) && !canonSettled(x.data, f)) out.push({ e: x.data, f, key });
     }
   }
   return out;
@@ -17481,7 +17495,19 @@ function canonNeedsList(box, el) {
   const needs = canonNeeds();
   box.appendChild(el('div', 'cs-title', t('Needs You') + (needs.length ? ' · ' + fmtNum(needs.length) : '')));
   if (!needs.length) { box.appendChild(el('div', 'cs-note', t('Nothing waiting. Canon asks only when your notes and your story disagree, or about what someone only says.'))); return; }
-  const at = (d, f) => d.facts.findIndex((x) => x.attr === f.attr && x.value === f.value);
+  // the fact as it is in the entry now: what someone says before a fact of
+  // the same value, and none once it's settled (a second press does nothing)
+  const at = (d, f) => {
+    const same = (x) => x.attr === f.attr && x.value === f.value;
+    return canonHeard(f) ? d.facts.findIndex((x) => same(x) && canonHeard(x)) : d.facts.findIndex(same);
+  };
+  // one answer per card: its buttons wait while it's saved
+  const once = (row, fn) => async () => {
+    if (row.dataset.busy) return;
+    row.dataset.busy = '1';
+    for (const b of row.querySelectorAll('button')) b.disabled = true;
+    try { await fn(); } finally { if (row.isConnected) { delete row.dataset.busy; for (const b of row.querySelectorAll('button')) b.disabled = false; } }
+  };
   for (const { e, f, key, all } of needs) {
     const item = el('div', 'cs-need');
     if (all) {
@@ -17498,11 +17524,11 @@ function canonNeedsList(box, el) {
           item.appendChild(src);
         }
         const b = el('button', '', canonValue(g));
-        b.onclick = () => canonEdit(e.id, (d) => { const i = at(d, g); if (i >= 0) Canon.confirmFact(d, i); });
+        b.onclick = once(row, () => canonEdit(e.id, (d) => { const i = at(d, g); if (i >= 0) Canon.confirmFact(d, i); }));
         row.appendChild(b);
       }
       const skip = el('button', '', t('Skip'));
-      skip.onclick = () => { canonSkipped.add(key); canonSideUpdate(); };
+      skip.onclick = once(row, () => canonSkip(key));
       row.appendChild(skip);
       item.appendChild(row);
       box.appendChild(item);
@@ -17528,7 +17554,7 @@ function canonNeedsList(box, el) {
       item.appendChild(src);
     }
     const row = el('div', 'cs-row');
-    const act = (label, fn) => { const b = el('button', '', label); b.onclick = fn; row.appendChild(b); };
+    const act = (label, fn) => { const b = el('button', '', label); b.onclick = once(row, fn); row.appendChild(b); };
     const yes = () => canonEdit(e.id, (d) => { const i = at(d, f); if (i >= 0) Canon.confirmFact(d, i); });
     if (heard) {
       act(plan ? t('It’s happened') : t('It’s true'), yes);
@@ -17543,7 +17569,7 @@ function canonNeedsList(box, el) {
       act(t('That’s right'), yes);
       act(t('Not right'), () => canonEdit(e.id, (d) => { const i = at(d, f); if (i >= 0) Canon.setAsideFact(d, i, true); }));
     }
-    act(t('Skip'), () => { canonSkipped.add(key); canonSideUpdate(); });
+    act(t('Skip'), () => canonSkip(key));
     item.appendChild(row);
     box.appendChild(item);
   }
@@ -17743,7 +17769,8 @@ function canonEntryPage(e) {
   // what only a speaker or a plan says sits below the facts, never among them
   const heard = (f) => f.state !== 'yours' && f.sources.some((x) => !x.written) && f.sources.every((x) => x.written || x.said || x.plan);
   const firm = e.facts.map((f, i) => [f, i]).filter(([f]) => !heard(f));
-  const others = e.facts.map((f, i) => [f, i]).filter(([f]) => heard(f));
+  // (what someone says that the facts already hold is no second line)
+  const others = e.facts.map((f, i) => [f, i]).filter(([f]) => heard(f) && !canonSettled(e, f));
   page.appendChild(el('h3', 'cn-h', t('Facts')));
   page.appendChild(factList(firm.map(([f]) => f), false, firm.map(([, i]) => i)));
   const add = el('button', 'cn-add', '+ ' + t('Add a fact'));
