@@ -1,0 +1,234 @@
+{
+  "about": "A story editor's answer sheet for the dev set (The Weighhouse: Under the Line, Ch 1 and Ch 2). What a careful human editor would put in the story bible after reading both chapters. Scored by scripts/canon-score.js; docs/semantics/READING.md. Every quote is verbatim in the chapter named. weight: must / should / nice. hard: a trait the deterministic slip rules own (sex, eyes, hair colour, species). said: true only in speech, never a fact of the world. also: other quotes that support the same fact equally well. traps: claims a reader is likely to make that the text does not support; a produced fact matching one is wrong.",
+  "set": "dev",
+  "shelf": "The Weighhouse",
+  "book": "book-under-the-line-wh1",
+  "chapters": { "c1": "Ch 1", "c2": "Ch 2" },
+  "entities": [
+    {
+      "id": "hesper", "name": "Hesper", "kind": "person", "aliases": ["Forty-one", "41"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "Hesper was fifteen and the tallest girl in her year", "ch": "c1", "weight": "must", "hard": true, "alt": ["girl", "woman"] },
+        { "attr": "age", "value": "fifteen", "quote": "Hesper was fifteen and the tallest girl in her year", "ch": "c1", "weight": "must", "alt": ["15", "15 years old"] },
+        { "attr": "appearance.height", "value": "tallest girl in her year, too tall", "quote": "Hesper was fifteen and the tallest girl in her year, too tall, the warden said", "ch": "c1", "weight": "must", "alt": ["tall", "tallest girl"] },
+        { "attr": "appearance.hair", "value": "fair", "quote": "Her hair was cropped close to the skull and fair as wet straw", "ch": "c1", "weight": "must", "hard": true, "alt": ["fair as wet straw", "blonde", "straw-coloured", "straw"] },
+        { "attr": "appearance.hair", "value": "cropped close to the skull", "quote": "Her hair was cropped close to the skull", "ch": "c1", "weight": "should", "alt": ["cropped", "short", "close-cropped"] },
+        { "attr": "origin", "value": "born inside the Weighhouse, on the third floor, in the room with the green tiles", "quote": "Hesper had been born on the third floor, in the room with the green tiles", "ch": "c1", "weight": "must", "alt": ["born on the third floor", "born inside", "room with the green tiles"] },
+        { "attr": "membership", "value": "one of the Spared", "quote": "The “Spared” were the ones born inside. Hesper had been born on the third floor", "ch": "c1", "weight": "must", "also": ["Hesper had been born on the third floor, in the room with the green tiles", "Hesper's was 41"], "alt": ["Spared"] },
+        { "attr": "appearance.mark", "value": "the number 41 inked on the inside of her left wrist", "quote": "They got a number inked on the inside of the left wrist the week they were born. Hesper's was 41.", "ch": "c1", "weight": "must", "also": ["Hesper's was 41"], "alt": ["41", "number 41", "tally 41", "inked number"] },
+        { "attr": "history", "value": "has never been further than the outer gate", "quote": "she had never once been further than the outer gate", "ch": "c1", "weight": "must", "alt": ["never left", "never beyond the outer gate"] },
+        { "attr": "relationship.friend", "value": "Coll", "quote": "Coll was the nearest thing she had to a friend", "ch": "c1", "weight": "must", "alt": ["friend Coll", "closest friend"] },
+        { "attr": "state", "value": "losing weight; under the red line twice", "quote": "She was only getting less.", "ch": "c1", "weight": "must", "also": ["She had felt it in the way her smock hung"], "alt": ["getting thinner", "losing weight", "underweight", "under twice", "getting less"] },
+        { "attr": "habit", "value": "keeps her hands still", "quote": "She kept her hands still.", "ch": "c1", "weight": "should", "alt": ["hands still", "doesn't fidget"] },
+        { "attr": "history", "value": "learned that hands which fidget get written down", "quote": "She had learned a long time ago that hands which fidgeted got written down.", "ch": "c1", "weight": "nice", "alt": ["fidgeting gets written down"] },
+        { "attr": "location.home", "value": "sleeps in the Long Room", "quote": "That night, after lamps, she lay on her back and listened to the Long Room breathe.", "ch": "c1", "weight": "should", "also": ["She stood at the foot of her bed with her arms at her sides and waited."], "alt": ["Long Room", "bed in the Long Room", "lives in the Long Room"] },
+        { "attr": "state", "value": "never hungry there, because of the gift", "quote": "She was never hungry here; the gift saw to that.", "ch": "c1", "weight": "should", "alt": ["never hungry", "not hungry"] },
+        { "attr": "personality", "value": "observant; counts things", "quote": "The wheels squealed on every third turn. Hesper had counted.", "ch": "c1", "weight": "nice", "alt": ["observant", "counts", "watchful", "noticing"] },
+        { "attr": "habit", "value": "never looks at the ledger", "quote": "Hesper did not look at the ledger.", "ch": "c1", "weight": "nice", "alt": ["does not look at the ledger"] },
+        { "attr": "history", "value": "has seen the mountain perhaps twenty times; thinks it looks like a tooth", "quote": "Hesper had seen the mountain perhaps twenty times. She thought it looked like a tooth.", "ch": "c1", "weight": "nice", "alt": ["seen the mountain", "mountain like a tooth", "twenty times"] },
+        { "attr": "routine", "value": "stands near the back of the line, behind Coll", "quote": "They lined up by height, which put Hesper near the back, behind Coll.", "ch": "c1", "weight": "nice", "alt": ["near the back", "behind Coll"] }
+      ],
+      "traps": [
+        { "attr": "appearance.hair", "value": "black", "why": "Ch 2's slip; Coll's hair is black" },
+        { "attr": "origin", "value": "from the valley", "why": "Coll and the valley children are; Hesper is Spared" },
+        { "attr": "state", "value": "crying", "why": "the girl from the valley across the aisle was crying" },
+        { "attr": "appearance.height", "value": "short", "why": "Coll is a head shorter; she is the tallest girl" }
+      ]
+    },
+    {
+      "id": "coll", "name": "Coll", "kind": "person", "aliases": [], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "male", "quote": "He was a head shorter than she was", "ch": "c1", "weight": "should", "hard": true, "alt": ["boy", "man"] },
+        { "attr": "appearance.height", "value": "a head shorter than Hesper", "quote": "He was a head shorter than she was", "ch": "c1", "weight": "must", "alt": ["short", "shorter", "a head shorter"] },
+        { "attr": "appearance.hair", "value": "black, sticks up at the crown", "quote": "had black hair that stuck up at the crown however much water he put on it", "ch": "c1", "weight": "must", "hard": true, "also": ["His black hair was flat for once; he had slept on it wet."], "alt": ["black"] },
+        { "attr": "membership", "value": "not one of the Spared", "quote": "He was not one of the Spared.", "ch": "c1", "weight": "must", "alt": ["not Spared"] },
+        { "attr": "origin", "value": "came up from the valley in a cart two winters ago, with a label on a string round his neck", "quote": "He had come up from the valley in a cart two winters ago, with a label on a string round his neck", "ch": "c1", "weight": "must", "also": ["Coll, who had come from there"], "alt": ["from the valley", "valley", "came in a cart", "two winters ago"] },
+        { "attr": "manner.speech", "value": "still talks like the valley when he forgets himself", "quote": "he still talked like the valley when he forgot himself", "ch": "c1", "weight": "should", "alt": ["valley accent", "talks like the valley"] },
+        { "attr": "relationship.friend", "value": "Hesper", "quote": "Coll was the nearest thing she had to a friend", "ch": "c1", "weight": "must", "alt": ["friend of Hesper", "Hesper's friend"] },
+        { "attr": "history", "value": "was sick on the gift for three months", "quote": "Coll had been sick on it for three.", "ch": "c1", "weight": "should", "alt": ["sick on the gift", "three months"] },
+        { "attr": "personality", "value": "breaks the rules for others: sat on her bed, saved bread from supper", "quote": "Coll sat down beside her, though it was against the rules to sit on another's bed.", "ch": "c1", "weight": "should", "also": ["must have been saved from supper, which was also against the rules"], "alt": ["rule-breaker", "breaks rules", "kind", "loyal", "against the rules"] },
+        { "attr": "routine", "value": "stands in front of Hesper in the line", "quote": "which put Hesper near the back, behind Coll", "ch": "c1", "weight": "nice", "alt": ["ahead of Hesper"] },
+        { "attr": "opinion", "value": "says the valley is only a town with a mill and too many dogs", "quote": "Coll, who had come from there, said it was only a town with a mill and too many dogs.", "ch": "c1", "weight": "nice", "said": true, "alt": ["town with a mill"] }
+      ],
+      "traps": [
+        { "attr": "membership", "value": "one of the Spared", "why": "he is not" },
+        { "attr": "appearance.height", "value": "taller than Hesper", "why": "he is a head shorter" },
+        { "attr": "appearance.hair", "value": "fair", "why": "Hesper's" }
+      ]
+    },
+    {
+      "id": "anselm", "name": "Anselm", "kind": "person", "aliases": ["the weigher", "weigher", "Brother Ink"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "occupation", "value": "the weigher: weighs the children each dawn on the scale", "quote": "Behind her came the weigher, pushing the scale on its little iron wheels.", "ch": "c1", "weight": "must", "also": ["The weigher worked down the line."], "alt": ["weigher", "weighs the children", "weighs novices"] },
+        { "attr": "sex", "value": "male", "quote": "He was an old man, thin as a rake", "ch": "c1", "weight": "must", "hard": true, "alt": ["man"] },
+        { "attr": "age", "value": "old", "quote": "He was an old man, thin as a rake", "ch": "c1", "weight": "must", "alt": ["old man", "elderly"] },
+        { "attr": "appearance.build", "value": "thin as a rake", "quote": "He was an old man, thin as a rake", "ch": "c1", "weight": "must", "alt": ["thin", "skinny"] },
+        { "attr": "appearance.other", "value": "spectacles mended at one hinge with thread", "quote": "with spectacles mended at one hinge with thread", "ch": "c1", "weight": "must", "also": ["He looked at her over his mended spectacles for a long moment."], "alt": ["spectacles", "glasses", "mended spectacles"] },
+        { "attr": "appearance.clothing", "value": "ink on his cuffs that never washes out", "quote": "ink on his cuffs that never washed out", "ch": "c1", "weight": "should", "alt": ["ink-stained cuffs", "inky cuffs", "ink on his cuffs"] },
+        { "attr": "habit", "value": "hums while he works, the same three hymns in the same order", "quote": "He hummed while he worked, the same three hymns in the same order", "ch": "c1", "weight": "must", "also": ["Behind them the weigher stood in the doorway with his ledger under his arm, humming."], "alt": ["hums hymns", "hums", "three hymns"] },
+        { "attr": "habit", "value": "writes every number in a ledger with a green pen", "quote": "he wrote every number in a ledger with a green pen", "ch": "c1", "weight": "must", "also": ["He wrote something in green.", "Then he wrote in the ledger, in green, and said nothing at all"], "alt": ["green pen", "ledger", "writes in green"] },
+        { "attr": "name", "value": "nicknamed Brother Ink by the children, behind his back", "quote": "The children called him Brother Ink behind his back.", "ch": "c1", "weight": "should", "alt": ["Brother Ink", "nickname"] },
+        { "attr": "name", "value": "Anselm", "quote": "His name, Hesper had once heard the warden say, was Anselm.", "ch": "c1", "weight": "should", "alt": ["named Anselm"] },
+        { "attr": "role", "value": "pricks each child's thumb for a drop of blood on a glass slide, gently", "quote": "The weigher took her right thumb between his finger and thumb, and he did it so gently that she hardly felt the needle.", "ch": "c1", "weight": "should", "also": ["He touched a glass slide to it and laid the slide in a wooden tray, in the slot marked with her number."], "alt": ["takes blood", "pricks thumbs", "blood samples", "needle"] },
+        { "attr": "personality", "value": "gentle", "quote": "he did it so gently that she hardly felt the needle", "ch": "c1", "weight": "nice", "alt": ["gentle", "kind"] },
+        { "attr": "possession", "value": "the ledger, carried under his arm", "quote": "the weigher stood in the doorway with his ledger under his arm", "ch": "c1", "weight": "nice", "alt": ["ledger"] }
+      ],
+      "traps": [
+        { "attr": "occupation", "value": "warden", "why": "the warden is the woman with the keys" },
+        { "attr": "personality", "value": "cruel", "why": "nothing says so; he is gentle with the needle" }
+      ]
+    },
+    {
+      "id": "the-warden", "name": "the warden", "kind": "person", "aliases": ["warden"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "She was a narrow woman in a grey coat buttoned to the throat", "ch": "c1", "weight": "must", "hard": true, "alt": ["woman"] },
+        { "attr": "appearance.build", "value": "narrow", "quote": "She was a narrow woman", "ch": "c1", "weight": "must", "alt": ["thin", "narrow woman"] },
+        { "attr": "appearance.clothing", "value": "grey coat buttoned to the throat", "quote": "in a grey coat buttoned to the throat", "ch": "c1", "weight": "must", "alt": ["grey coat"] },
+        { "attr": "possession", "value": "a ring of keys at her hip that she never looks at", "quote": "she carried a ring of keys at her hip that she never once looked at", "ch": "c1", "weight": "should", "alt": ["keys", "ring of keys"] },
+        { "attr": "role", "value": "in charge of the Long Room: calls the line, pours the gift and watches it drunk, claps to dismiss", "quote": "The warden poured it from a steel jug into a tin cup, and you drank it standing up while she watched.", "ch": "c1", "weight": "should", "also": ["“Line,” said the warden.", "When the line was done the warden clapped once, and they could sit."], "alt": ["pours the gift", "supervises", "in charge", "warden"] },
+        { "attr": "personality", "value": "watchful; her watching feels like a hand on the back of your neck", "quote": "She had a way of watching that felt like a hand on the back of your neck.", "ch": "c1", "weight": "should", "alt": ["watchful", "watches", "stern"] },
+        { "attr": "habit", "value": "wipes the cup's rim with a cloth that smells of camphor", "quote": "The warden took it without a word and wiped the rim with a cloth that smelled of camphor.", "ch": "c1", "weight": "nice", "alt": ["camphor", "wipes the rim"] },
+        { "attr": "opinion", "value": "thinks Hesper too tall", "quote": "too tall, the warden said, as if it were a habit she could be talked out of", "ch": "c1", "weight": "nice", "said": true, "alt": ["too tall"] }
+      ],
+      "traps": [
+        { "attr": "name", "value": "Anselm", "why": "Anselm is the weigher's name, which she said" },
+        { "attr": "relationship", "value": "gave Hesper the crust", "why": "Coll did; Ch 2's slip says the warden" }
+      ]
+    },
+    {
+      "id": "the-weighhouse", "name": "the Weighhouse", "kind": "place", "aliases": ["Weighhouse"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "rule", "value": "a child who falls below the red line three dawns running goes down to the valley and does not come back up", "quote": "a child who falls below the red line three dawns running goes down to the valley, and does not come back up", "ch": "c1", "weight": "must", "alt": ["red line", "three dawns", "below the red line", "sent to the valley"] },
+        { "attr": "description", "value": "the rule is written above the door in brass letters", "quote": "The rule of the Weighhouse was written above the door in brass letters", "ch": "c1", "weight": "should", "alt": ["brass letters", "above the door"] },
+        { "attr": "routine", "value": "the bell rings six times at dawn", "quote": "The bell went six times, the way it always did", "ch": "c1", "weight": "must", "also": ["The bell went six times."], "alt": ["six bells", "bell six times", "bell at dawn"] },
+        { "attr": "routine", "value": "the children are weighed every dawn, before anything else: no slippers, nothing", "quote": "Nobody was allowed slippers before the weighing. Nobody was allowed anything before the weighing.", "ch": "c1", "weight": "must", "alt": ["weighed every morning", "weighing first", "nothing before the weighing", "daily weighing"] },
+        { "attr": "routine", "value": "the children line up by height to be weighed", "quote": "They lined up by height", "ch": "c1", "weight": "must", "alt": ["line up by height", "by height"] },
+        { "attr": "routine", "value": "each morning the children drink the gift", "quote": "the Spared had been drinking it every morning of their lives", "ch": "c1", "weight": "must", "also": ["The warden poured it from a steel jug into a tin cup, and you drank it standing up while she watched."], "alt": ["the gift", "drink the gift", "every morning"] },
+        { "attr": "routine", "value": "each child's thumb is pricked and a drop of blood laid on a glass slide in a numbered tray", "quote": "He touched a glass slide to it and laid the slide in a wooden tray, in the slot marked with her number.", "ch": "c1", "weight": "must", "also": ["The weigher took her right thumb between his finger and thumb"], "alt": ["thumb prick", "blood", "glass slide", "blood sample"] },
+        { "attr": "routine", "value": "after the weighing, lessons; after lessons, an hour in the yard walking in circles, two by two, without talking", "quote": "After the weighing came lessons, and after lessons came the yard", "ch": "c1", "weight": "must", "also": ["where the novices walked in circles for an hour, two by two, without talking"], "alt": ["lessons", "the yard", "walk in circles", "two by two"] },
+        { "attr": "membership", "value": "children born inside are the Spared; the others come up from the valley in carts, with labels", "quote": "The “Spared” were the ones born inside.", "ch": "c1", "weight": "should", "also": ["He had come up from the valley in a cart two winters ago, with a label on a string round his neck"], "alt": ["Spared", "valley children", "born inside"] },
+        { "attr": "residents", "value": "the children are called novices", "quote": "where the novices walked in circles for an hour", "ch": "c1", "weight": "should", "alt": ["novices"] },
+        { "attr": "location", "value": "above the valley, below a mountain", "quote": "goes down to the valley, and does not come back up", "ch": "c1", "weight": "should", "also": ["on clear days the tip of the mountain"], "alt": ["above the valley", "mountain", "up from the valley"] },
+        { "attr": "location.part", "value": "the Long Room, the yard, the third floor's room with the green tiles, the outer gate, the infirmary", "quote": "Hesper had been born on the third floor, in the room with the green tiles", "ch": "c1", "weight": "nice", "also": ["she had never once been further than the outer gate", "On the way out to the yard they passed the infirmary"], "alt": ["Long Room", "yard", "outer gate", "infirmary", "third floor"] },
+        { "attr": "routine", "value": "lights out is called lamps; nothing to be eaten before it", "quote": "“Eat it after lamps,” he said.", "ch": "c1", "weight": "nice", "also": ["That night, after lamps"], "alt": ["after lamps", "lamps"] },
+        { "attr": "routine", "value": "on feast days the bell rings twelve times", "quote": "On feast days it went twelve", "ch": "c2", "weight": "nice", "alt": ["twelve", "feast days"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "a hospital", "why": "never called one" },
+        { "attr": "rule", "value": "children who fail are killed", "why": "nobody says what happens in the valley" }
+      ]
+    },
+    {
+      "id": "the-long-room", "name": "the Long Room", "kind": "place", "aliases": ["Long Room"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "description", "value": "forty beds in two rows", "quote": "Forty beds ran down the Long Room in two rows", "ch": "c1", "weight": "must", "alt": ["forty beds", "two rows"] },
+        { "attr": "description", "value": "no windows", "quote": "and not one window between the lot", "ch": "c1", "weight": "must", "also": ["Forty children breathing in a room with no windows"], "alt": ["windowless", "no window", "not one window"] },
+        { "attr": "description", "value": "a stone floor, cold enough to ache", "quote": "The floor of the Long Room was stone, and the stone was cold enough to ache.", "ch": "c1", "weight": "must", "alt": ["stone floor", "cold floor", "cold"] },
+        { "attr": "description", "value": "lit by a strip of yellow lamps along the ceiling that hum when they are cold", "quote": "The light came from a strip of yellow lamps along the ceiling that hummed when they were cold.", "ch": "c1", "weight": "must", "alt": ["yellow lamps", "lamps hum", "humming lamps"] },
+        { "attr": "atmosphere", "value": "smells of lye, and of something sweeter, like apples left too long in a drawer", "quote": "The air smelled of lye, and of something sweeter underneath, like apples left too long in a drawer.", "ch": "c1", "weight": "must", "alt": ["lye", "apples", "smells of lye"] },
+        { "attr": "description", "value": "its door unlocks only from the outside", "quote": "At the far end of the room the door unlocked from the outside. It always unlocked from the outside.", "ch": "c1", "weight": "must", "alt": ["locked from outside", "door unlocks from the outside"] },
+        { "attr": "residents", "value": "forty children, girls and boys, sleep there", "quote": "forty girls and boys standing at the foot of them", "ch": "c1", "weight": "should", "also": ["Forty children breathing in a room with no windows"], "alt": ["forty children", "dormitory", "girls and boys"] },
+        { "attr": "atmosphere", "value": "at night, forty children breathing sound like the sea", "quote": "Forty children breathing in a room with no windows sounded like the sea", "ch": "c1", "weight": "nice", "alt": ["like the sea"] },
+        { "attr": "function", "value": "the dormitory where the children are weighed each morning", "quote": "She stood at the foot of her bed with her arms at her sides and waited.", "ch": "c1", "weight": "nice", "alt": ["dormitory", "where they sleep", "weighing"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "high windows", "why": "Ch 2's slip" }
+      ]
+    },
+    {
+      "id": "the-spared", "name": "the Spared", "kind": "group", "aliases": ["Spared"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "description", "value": "the children born inside the Weighhouse", "quote": "The “Spared” were the ones born inside.", "ch": "c1", "weight": "must", "alt": ["born inside"] },
+        { "attr": "custom", "value": "get no labels, but a number inked on the inside of the left wrist the week they are born", "quote": "The Spared did not get labels. They got a number inked on the inside of the left wrist the week they were born.", "ch": "c1", "weight": "must", "alt": ["number inked", "left wrist", "no labels", "tattoo"] },
+        { "attr": "routine", "value": "have drunk the gift every morning of their lives", "quote": "the Spared had been drinking it every morning of their lives", "ch": "c1", "weight": "should", "alt": ["drink the gift"] },
+        { "attr": "members", "value": "Hesper (not Coll)", "quote": "He was not one of the Spared.", "ch": "c1", "weight": "nice", "also": ["Hesper had been born on the third floor"], "alt": ["Hesper"] }
+      ],
+      "traps": [
+        { "attr": "members", "value": "Coll", "why": "he is not one" }
+      ]
+    },
+    {
+      "id": "the-gift", "name": "the gift", "kind": "thing", "aliases": ["gift"], "weight": "should", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "grey and thick; tastes of chalk and pennies", "quote": "It was grey and thick and tasted of chalk and pennies", "ch": "c1", "weight": "must", "alt": ["grey", "thick", "chalk and pennies", "chalk"] },
+        { "attr": "use", "value": "poured from a steel jug into a tin cup and drunk standing up while the warden watches", "quote": "The warden poured it from a steel jug into a tin cup, and you drank it standing up while she watched.", "ch": "c1", "weight": "should", "alt": ["steel jug", "tin cup", "drunk standing"] },
+        { "attr": "effect", "value": "valley children are sick on it for their first month", "quote": "The valley children were sick on it for their first month.", "ch": "c1", "weight": "should", "alt": ["makes them sick", "sick"] },
+        { "attr": "effect", "value": "takes away hunger", "quote": "She was never hungry here; the gift saw to that.", "ch": "c1", "weight": "should", "alt": ["no hunger", "never hungry", "suppresses hunger"] },
+        { "attr": "routine", "value": "drunk every morning, after the weighing", "quote": "the Spared had been drinking it every morning of their lives", "ch": "c1", "weight": "should", "also": ["Next came the \"gift\"."], "alt": ["every morning"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "the-valley", "name": "the valley", "kind": "place", "aliases": ["valley"], "weight": "should", "profile": false,
+      "facts": [
+        { "attr": "location", "value": "below the Weighhouse", "quote": "goes down to the valley, and does not come back up", "ch": "c1", "weight": "should", "alt": ["below", "down"] },
+        { "attr": "description", "value": "where the children who are not Spared come from, by cart, with labels", "quote": "He had come up from the valley in a cart two winters ago", "ch": "c1", "weight": "should", "also": ["The valley children were sick on it for their first month."], "alt": ["valley children", "came up in carts"] },
+        { "attr": "description", "value": "nobody says what happens there", "quote": "Nobody said what happened in the valley.", "ch": "c1", "weight": "should", "alt": ["unknown", "nobody said"] },
+        { "attr": "description", "value": "a town with a mill and too many dogs (Coll says; nobody believes him)", "quote": "Coll, who had come from there, said it was only a town with a mill and too many dogs.", "ch": "c1", "weight": "nice", "said": true, "alt": ["mill", "dogs", "town"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "a town with a mill", "why": "only Coll says so and nobody believes him: a 'said' fact, never a verified one" }
+      ]
+    },
+    {
+      "id": "the-yard", "name": "the yard", "kind": "place", "aliases": ["yard"], "weight": "nice", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "a square of gravel between four high walls; only sky above", "quote": "a square of gravel between four high walls", "ch": "c1", "weight": "should", "also": ["Above the walls there was only sky"], "alt": ["gravel", "high walls"] },
+        { "attr": "routine", "value": "the novices walk in circles for an hour, two by two, without talking", "quote": "where the novices walked in circles for an hour, two by two, without talking", "ch": "c1", "weight": "should", "alt": ["walk in circles", "two by two", "without talking"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "the-scale", "name": "the scale", "kind": "thing", "aliases": ["scale"], "weight": "nice", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "a brass plate and a beam with a sliding weight, on little iron wheels", "quote": "Behind her came the weigher, pushing the scale on its little iron wheels.", "ch": "c1", "weight": "should", "also": ["She stepped onto the brass plate.", "the weigher slid the little weight along it with one finger"], "alt": ["brass plate", "iron wheels", "beam"] },
+        { "attr": "description", "value": "its wheels squeal on every third turn", "quote": "The wheels squealed on every third turn.", "ch": "c1", "weight": "should", "alt": ["squeal", "every third turn"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "the-ledger", "name": "the ledger", "kind": "thing", "aliases": ["ledger"], "weight": "nice", "profile": false,
+      "facts": [
+        { "attr": "use", "value": "the weigher writes every child's weight in it in green", "quote": "he wrote every number in a ledger with a green pen", "ch": "c1", "weight": "should", "alt": ["green", "numbers"] },
+        { "attr": "rule", "value": "the children do not look at it", "quote": "You did not look at the ledger.", "ch": "c1", "weight": "should", "alt": ["don't look"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "the-mountain", "name": "the mountain", "kind": "place", "aliases": ["mountain"], "weight": "nice", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "its tip shows above the yard walls on clear days; white; like a tooth", "quote": "on clear days the tip of the mountain", "ch": "c1", "weight": "should", "also": ["She thought it looked like a tooth.", "the tip of the mountain, white as a tooth"], "alt": ["tooth", "white", "tip"] }
+      ],
+      "traps": []
+    }
+  ],
+  "keyPoints": [
+    { "ch": "c1", "who": ["anselm", "hesper"], "did": "The weigher weighed Hesper, said “Hm” and wrote something in green", "quote": "He wrote something in green.", "also": ["The beam rocked and settled, and the weigher slid the little weight along it with one finger, and peered, and slid it back."], "weight": "must" },
+    { "ch": "c1", "who": ["hesper"], "did": "Hesper drank the gift in four swallows", "quote": "Hesper drank hers in four swallows and handed the cup back.", "weight": "nice" },
+    { "ch": "c1", "who": ["anselm", "hesper"], "did": "The weigher pricked Hesper's thumb and took her blood on a slide", "quote": "The weigher took her right thumb between his finger and thumb", "also": ["He touched a glass slide to it and laid the slide in a wooden tray, in the slot marked with her number."], "weight": "should" },
+    { "ch": "c1", "who": ["coll", "hesper"], "did": "Coll pressed a crust of bread into Hesper's hand", "quote": "Coll glanced at the door again and then, quick as a card trick, he pressed a crust of bread into her hand.", "weight": "must" },
+    { "ch": "c1", "who": ["coll"], "did": "Coll sat on Hesper's bed, against the rules", "quote": "Coll sat down beside her, though it was against the rules to sit on another's bed.", "weight": "nice" },
+    { "ch": "c1", "who": ["anselm", "hesper"], "did": "The weigher told Hesper she had two more dawns", "quote": "When they passed him for the ninth time he said, without looking up, “Forty-one.”", "also": ["“Two more,” said the weigher, and went inside."], "weight": "must" },
+    { "ch": "c1", "who": ["hesper"], "did": "Hesper ate half the crust and saved half for the morning", "quote": "Then she broke it in half, and ate one half, slowly, and put the other half back in her pocket for the morning.", "weight": "must" },
+    { "ch": "c2", "who": ["hesper"], "did": "Hesper ate the half crust before the door unlocked", "quote": "She ate it now, in three bites, before the door unlocked", "weight": "should" },
+    { "ch": "c2", "who": ["anselm", "hesper"], "did": "The weigher did not slide the weight back and wrote in the ledger without a word", "quote": "The weigher slid the little weight along with one finger, and peered, and did not slide it back.", "also": ["Then he wrote in the ledger, in green, and said nothing at all"], "weight": "must" },
+    { "ch": "c2", "who": ["hesper"], "did": "Hesper saw the mountain through the infirmary window", "quote": "through its one window Hesper saw the tip of the mountain, white as a tooth", "weight": "nice" }
+  ],
+  "slips": [
+    { "ch": "c2", "kind": "trait", "entity": "hesper", "attr": "appearance.hair", "sentence": "She tucked her black hair behind her ears, as if that would make any difference, and stood very still.", "span": "black", "to": "fair", "against": { "ch": "c1", "quote": "Her hair was cropped close to the skull and fair as wet straw" }, "weight": "must" },
+    { "ch": "c2", "kind": "open", "entity": "the-long-room", "attr": "description", "sentence": "Grey light came down through the Long Room’s high windows and lay across the beds in stripes, and for a moment she stood in one of them and pretended it was warm.", "span": "high windows", "against": { "ch": "c1", "quote": "and not one window between the lot" }, "weight": "must" },
+    { "ch": "c2", "kind": "deed", "entity": "coll", "attr": "event", "sentence": "She still had the half crust the warden had given her, wrapped in the corner of her handkerchief.", "span": "warden", "to": "Coll", "against": { "ch": "c1", "quote": "Coll glanced at the door again and then, quick as a card trick, he pressed a crust of bread into her hand." }, "weight": "must" },
+    { "ch": "c2", "kind": "open", "entity": "hesper", "attr": "appearance.hair", "sentence": "She tucked her black hair behind her ears, as if that would make any difference, and stood very still.", "span": "tucked her black hair behind her ears", "against": { "ch": "c1", "quote": "Her hair was cropped close to the skull" }, "weight": "nice", "why": "hair cropped close to the skull can't be tucked behind the ears: the same sentence as the trait slip; found either way, never a false slip" }
+  ],
+  "decoys": [
+    { "ch": "c2", "sentence": "His black hair was flat for once; he had slept on it wet.", "why": "Coll's hair is black; not Hesper's" },
+    { "ch": "c2", "sentence": "The bell went six times.", "why": "agrees with Ch 1" },
+    { "ch": "c2", "sentence": "On feast days it went twelve, but the feast of the Weighing was a long way off yet, and six was what it gave them.", "why": "an exception to the routine, not a contradiction of it" },
+    { "ch": "c2", "sentence": "On the way out to the yard they passed the infirmary, and through its one window Hesper saw the tip of the mountain, white as a tooth.", "why": "another room's window; the Long Room has none" },
+    { "ch": "c2", "sentence": "“I never gave you anything,” he said to the wall, quietly, in case anybody asked.", "why": "a lie in speech, said in case anybody asked" },
+    { "ch": "c2", "sentence": "She thought of Coll pressing the crust into her palm, quick as a card trick, and wondered how many rules it had cost him.", "why": "a memory that agrees with Ch 1" },
+    { "ch": "c2", "sentence": "The wheels squealed on every third turn.", "why": "agrees with Ch 1" },
+    { "ch": "c2", "sentence": "He looked at her over his mended spectacles for a long moment.", "why": "agrees with Ch 1" },
+    { "ch": "c2", "sentence": "Hesper was up before the last stroke.", "why": "agrees: she is always up before the bell finishes" }
+  ]
+}

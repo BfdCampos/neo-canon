@@ -4,8 +4,14 @@
 // Pass, on a fixture library, scored against its expected.json. Not part of
 // `npm test` (minutes to an hour on a CPU). docs/semantics/ACCURACY.md.
 //
-//   node scripts/canon-eval.js [--fixture canon|canon-heldout|all] [--model quick|careful|<path.gguf>]
-//                              [--threads N] [--fresh] [--memo <file>] [--json <file>] [--dump] [--log]
+//   node scripts/canon-eval.js [--fixture canon|canon-heldout|all|<fixture dir>] [--model quick|careful|fake|<path.gguf>]
+//                              [--threads N] [--fresh] [--memo <file>] [--json <file>] [--dump] [--log] [--keep <dir>]
+//
+// --keep <dir> keeps what the run made, for scripts/canon-score.js: the
+// Canon folder (entries/*.md) and slips.json (the pass's slips and Worth a
+// look). --model fake answers from the fixture's reader-answers.json (none:
+// a reader that proposes nothing). A fixture without expected.json is run,
+// not scored here.
 //
 // Models come from CANON_MODELS (default /tmp/claude-0/llama-probe/models).
 // Every model answer is remembered in a memo file (keyed by the whole
@@ -184,8 +190,9 @@ function score(expected, entries, slips) {
 }
 
 async function evalFixture(name, reader, tier) {
-  const fixture = path.join(__dirname, 'fixtures', name);
-  const expected = JSON.parse(fs.readFileSync(path.join(fixture, 'expected.json'), 'utf8'));
+  const fixture = fs.existsSync(path.resolve(name, 'library')) ? path.resolve(name) : path.join(__dirname, 'fixtures', name);
+  const expFile = path.join(fixture, 'expected.json');
+  const expected = fs.existsSync(expFile) ? JSON.parse(fs.readFileSync(expFile, 'utf8')) : null;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-eval-'));
   const lib = path.join(root, 'library');
   fs.cpSync(path.join(fixture, 'library'), lib, { recursive: true });
@@ -195,13 +202,21 @@ async function evalFixture(name, reader, tier) {
   try {
     const before = reader.stats.modelMs;
     const t0 = Date.now();
-    const engine = Canon.createEngine({ io, reader: Canon.localReader({ id: tier, tier, ask: reader.ask }) });
+    const fake = tier === 'fake' && (fs.existsSync(path.join(fixture, 'reader-answers.json')) ? JSON.parse(fs.readFileSync(path.join(fixture, 'reader-answers.json'), 'utf8')) : {});
+    const engine = Canon.createEngine({ io, reader: fake ? Canon.fakeReader(fake) : Canon.localReader({ id: tier, tier, ask: reader.ask }) });
     const summary = await engine.readShelf();
     const readMs = reader.stats.modelMs - before;
     const t1 = reader.stats.modelMs;
     const { slips, asks = [] } = await engine.check({ scope: 'shelf' });
     const checkMs = reader.stats.modelMs - t1;
     const entries = io.entries().map((x) => Canon.parseEntry(x.text));
+    if (arg('keep')) {
+      const keep = path.resolve(arg('keep'), path.basename(fixture));
+      fs.rmSync(keep, { recursive: true, force: true });
+      fs.cpSync(dir, path.join(keep, 'canon'), { recursive: true });
+      const pick = (s) => ({ bookId: s.bookId, chId: s.chId, entry: s.entry, name: s.name, attr: s.attr, sentence: s.sentence, span: s.span, to: s.to, strength: s.strength });
+      fs.writeFileSync(path.join(keep, 'slips.json'), JSON.stringify({ model: tier, slips: slips.map(pick), worthALook: asks.map(pick) }, null, 2));
+    }
     if (flag('dump')) for (const x of io.entries()) console.error(x.text);
     // P0 #6: every quote verbatim
     const texts = new Map(shelfSources(lib).map((s) => [s.bookId + '/' + s.chId, Canon.sourceParas(s.html).map((p) => p.text).join('\n')]));
@@ -209,7 +224,8 @@ async function evalFixture(name, reader, tier) {
     // the story so far it kept (STORY.md), each line's quote verbatim too
     const story = entries.flatMap((e) => e.story.map((x) => `${e.name}: ${x.did}  ← "${(x.sources[0] || {}).quote || ''}"`));
     misquoted.push(...entries.flatMap((e) => e.story.flatMap((x) => x.sources.filter((s) => !(texts.get(s.book + '/' + s.ch) || '').includes(s.quote)).map((s) => `${e.name} (story): "${s.quote}"`))));
-    return { fixture: name, model: tier, summary, readModelS: Math.round(readMs / 1000), checkModelS: Math.round(checkMs / 1000), wallS: Math.round((Date.now() - t0) / 1000), misquoted, worthALook: asks.map((x) => `${x.name}: ${x.sentence}`), story, ...score(expected, entries, slips) };
+    const scored = expected ? score(expected, entries, slips) : { verified: entries.reduce((n, e) => n + e.facts.filter((f) => f.state === 'verified').length, 0), precision: NaN, recall: '-', slipsFound: `${slips.length}/-`, falseSlips: [], wrongVerified: [] };
+    return { fixture: name, model: tier, summary, readModelS: Math.round(readMs / 1000), checkModelS: Math.round(checkMs / 1000), wallS: Math.round((Date.now() - t0) / 1000), misquoted, worthALook: asks.map((x) => `${x.name}: ${x.sentence}`), story, ...scored };
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -218,7 +234,7 @@ async function evalFixture(name, reader, tier) {
 async function main() {
   const which = arg('fixture', 'all');
   const fixtures = which === 'all' ? ['canon', 'canon-heldout'] : [which];
-  const model = findModel(arg('model', 'quick'));
+  const model = arg('model', 'quick') === 'fake' ? { tier: 'fake', file: 'fake' } : findModel(arg('model', 'quick'));
   const threads = +arg('threads', Math.max(1, os.cpus().length - 2));
   const memoFile = arg('memo', path.join(os.tmpdir(), 'neo-canon-eval', path.basename(model.file) + '.memo.json'));
   const reader = await startReader(model, threads, memoFile, flag('fresh'));
@@ -239,4 +255,5 @@ async function main() {
   process.exitCode = results.every((r) => r.wrongVerified.length === 0 && r.falseSlips.length === 0) ? 0 : 1;
 }
 
-main().catch((err) => { console.error(err); process.exit(2); });
+if (require.main === module) main().catch((err) => { console.error(err); process.exit(2); });
+module.exports = { shelfSources, folderIO, knownWords };

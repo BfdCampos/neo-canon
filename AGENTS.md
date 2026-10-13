@@ -38,7 +38,7 @@ Menus are built in `buildMenu()` in `main.js`. A menu click sends `{ type, ... }
 
 ## Canon
 
-A shelf can keep a Canon: its people, places, creatures and rules, each fact citing the passage it came from. Specs are in `docs/semantics/` (PRODUCT, ARCHITECTURE, IDE, ACCURACY, STORY). The principle: the local reader proposes, code decides. Never generate prose. A fact whose quote is not found in the text is unverified and never raises a slip.
+A shelf can keep a Canon: its people, places, creatures and rules, each fact citing the passage it came from. Specs are in `docs/semantics/` (PRODUCT, ARCHITECTURE, IDE, ACCURACY, STORY, and READING for the editor-workflow rebuild). The principle: the local reader proposes, code decides. Never generate prose. A fact whose quote is not found in the text is unverified and never raises a slip.
 
 | File | Role |
 |---|---|
