@@ -10,6 +10,8 @@ The owner's rule: *accuracy comes before speed.* A wrong fact marked checked is 
 
    Any other answer, *unsure* included, leaves the fact unchecked. Unchecked facts never raise slips.
 2. **Traits (sex, species, eyes, hair) are checked only by the text.** `shelfEvidence` scans the whole shelf for passages that tie a word to an entry: "Bramble, the grey mare", "Captain Varr's eyes were the grey of wet slate", "John has green eyes", or a note such as "Ilsa: grey eyes". It skips pronouns, speech, questions, maybes and lines the writer has dismissed. A reading whose own quote ties the word to the entry the same way counts too. `established` and `firstCome` then decide, by rule 10.
+   - One narrow exception for sex (`pronounEvidence`, `pronounSex`): where nothing else on the shelf gives a person or creature a sex, the narration's own she/her (or he/him) does, when the slip checker's rules tie it to them (the entry, then "her bed" in its clause; or a sentence naming no one, by rule 9) in two sentences or more and the other pronoun in none. Never from speech or reported speech. The fact cites those sentences and is placed by rule 10 like any other. A noun anywhere on the shelf for the other sex ("Clover, the red cow" against "Clover lowered his head"), a value the writer kept or set aside, or a checked reading of the other value: the pronouns establish nothing.
+   - Speech is what is inside quotation marks, read by which side each mark faces (`speechSpans`): straight quotes, curly mixed with straight, and a curly mark typed the wrong way round all pair up. A mark left open runs to the paragraph's end only when the paragraph opens with it; anywhere else it makes nothing speech. A quoted term of three words or fewer inside a sentence, with no saying verb by it (born into "Fleets."), is a word, not speech. A source an older reading marked `said` whose passage now reads as narration loses the mark on the next read.
 3. **Relations (owner, kin, spouse, home, birthplace) need both names and a relation word in the quote's sentence** (`relation`).
    - `'rule'`: the words also say which way round, and the fact is checked. Examples: "Tamsin Hale, Oren's younger sister"; "Teodor Brisk, Ansel's father"; "Hector, Teodor's black bull"; "belonged to Mara"; "lived in"; "born in".
    - `'linked'`: only the careful reader may be asked about the fact.
@@ -39,7 +41,7 @@ The owner's rule: *accuracy comes before speed.* A wrong fact marked checked is 
    - A proposal that fails a gate is left out quietly; the device's cache keeps it with the reason (`dropped`). It never becomes a Needs You question.
    - Attributes that change (owner, home, title, state) and kin keep every value that got through.
 
-   A slip *before* the canonical sentence could now win, so pronouns still never establish a trait (rule 2): the Lantern Coast's "Clover lowered his head", which comes before "Clover, the red cow", establishes nothing, and Clover stays a cow.
+   A slip *before* the canonical sentence could now win, so pronouns still never establish a trait against a word for it (rule 2): the Lantern Coast's "Clover lowered his head", which comes before "Clover, the red cow", establishes nothing, and Clover stays a cow. Only where no word gives a sex at all do two or more agreeing pronouns, and none against, give one.
 
 11. **Story so far** (STORY.md). The reader's key points pass their own gates (`gateEvent`): the quote verbatim, ≤ 30 words, outside speech, reported speech and plans; each who named in the quote or meant by its first pronoun by rule 9 (strong only); no capitalised word the paragraph doesn't hold, and every other content word of the line sharing a stem with the quote's sentence. A later sentence that gives an earlier key point's deed to someone else is a slip only on the careful reader's *yes* to "Does B say that someone other than John did what A says John did?"; *unclear*, or the Quick reader (never asked), is Worth a look; no reader, nothing. A sentence that names the doer too ("Dave remembered John…") is a slip only on *yes*, never Worth a look.
 
@@ -100,6 +102,8 @@ Re-scored with rules 10 and 11, the Careful reader on both fixtures. The Ashfall
 |---|---|---|---|---|---|---|---|---|---|
 | Careful | Ashfall Road | 8 | 0 | 8/13 | **6/6** (the swap too) | **0** | 3 (2 said, 1 plan) | 14 | 1180 s |
 | Careful | Lantern Coast | 14 | 0 | 14/17 | 4/5 | **0** | 2 (both said) | 10 | 926 s |
+
+Re-scored from the same memo with the narration's pronouns (rule 2's exception) and the new reading of quotation marks: Ashfall Road 8 checked, 0 wrong, 8/14 (Oren Hale's sex, male by his own he, is now expected; Careful's readings didn't reach it), 6/6 slips, 0 false; Lantern Coast 15 checked, 0 wrong, 15/17 (Ansel Brisk is male: "He stayed for supper."), 4/5 slips, 0 false.
 
 Before rules 10 and 11 the same answers left 7 and 8 questions in Needs You, most of them a later value against the first ("Ilsa Varr · Eyes: brown"). Every key-point quote was verbatim. Read time roughly doubled: each story paragraph is asked once more, for its key points.
 

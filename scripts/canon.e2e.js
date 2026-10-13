@@ -287,7 +287,7 @@ test('Read the Shelf (the fake reader), started by the download: progress, a pau
   await until(`!canonReading && /found/.test(canonReadLine)`, 40000); // resumes after ten seconds of quiet
   process.env.NEO_CANON_FAKE_MS = '';
   // (how many check out is the reader's business: canon-fixture.test.js)
-  assert.match(await js(`canonReadLine`), /^Canon found 7 entries and 15 facts\. \d+ checked out; \d+ needs? you\.$/);
+  assert.match(await js(`canonReadLine`), /^Canon found 7 entries and 16 facts\. \d+ checked out; \d+ needs? you\.$/);
   assert.equal(fs.readdirSync(path.join(LIB, CANON, 'entries')).filter((f) => f.endsWith('.md')).length, 7);
   assert.deepEqual(await js(`[...document.querySelectorAll('#nav-list .cn-kind-head')].map((x) => x.textContent)`), ['People', 'Creatures', 'Places']);
   // the writer's own fact stayed theirs, and gained the passages that agree
@@ -994,7 +994,7 @@ test('the owner\'s text, read: the first thing said of John is kept, nothing for
   await until(`!canonReading && /found/.test(canonReadLine)`, 30000);
   const john = fs.readFileSync(path.join(LIB, CANON, 'entries', 'john.md'), 'utf8');
   assert.match(john, /- Eyes: green · verified\n {2}- The Door, Notes: "John has green eyes"/);
-  assert.doesNotMatch(john, /blue/);
+  assert.doesNotMatch(john, /Eyes: blue/);
   assert.match(john, /## Story so far\n- John reached through a red vortex in his room · Canon’s note\n {2}- The Door, Ch 1: "He reached his hand through the swirling red vortex/);
   assert.deepEqual(await js(`canonNeeds().filter((x) => x.e.name === 'John' || x.e.name === 'Dave').map((x) => x.key)`), []);
   await js(`canonShown = 'john'; renderCanon()`);
@@ -1050,6 +1050,53 @@ test('the actor swap: "It was Dave who touched the vortex" is a slip on Dave, ci
   assert.equal(await js(para), SWAP_TEXT);
   assert.ok(!/slip|canon/i.test(await js(`captureBody(document.querySelector('.chapter[data-id="door2"] .chapter-body'))`)));
   await js(`toggleContinuity()`);
+});
+
+// The owner's report: It's true pressed again and again added "Sex: female ·
+// You, in Canon" each time and the card never left; the entry ended with
+// twelve of them.
+const entryHead = (id, name) => `---\nid: ${id}\nname: ${name}\nkind: person\naliases: []\n---\n# ${name}\n\n## Facts\n`;
+const needCards = `[...document.querySelectorAll('#canon-side .cs-need strong')].map((x) => x.textContent)`;
+test('Needs You: It\'s true once, even clicked twice; the card leaves, the fact keeps its passage, and a reload brings nothing back; twelve copies heal', async () => {
+  await js(`canonPassOn && canonPassOff()`);
+  // the owner's entry as the old It's true left it: twelve copies and the line
+  const lady = '- Sex: female · unverified\n  - The Door, Ch 1: "But there was no answer" {book:' + DOOR + ', ch:door1, said}\n';
+  fs.writeFileSync(path.join(ENTRIES, 'pio.md'), entryHead('pio', 'Pio') + lady + '- Sex: female · yours\n  - Written in Canon\n'.repeat(12) + '\n## In my words\nMine.\n');
+  // and a line only the lady says, waiting
+  fs.writeFileSync(path.join(ENTRIES, 'wren.md'), entryHead('wren', 'Wren')
+    + '- Sex: male (boy) · unverified\n  - The Door, Ch 1: "Faintly he heard back" {book:' + DOOR + ', ch:door1, said:the lady}\n'
+    + '- Lives in: Kellsharrow · unverified\n  - The Door, Ch 1: "Faintly he heard back" {book:' + DOOR + ', ch:door1, plan}\n\n## In my words\n');
+  if (await js(`currentTab !== 'canon'`)) await js(`switchTab('canon')`);
+  await js(`canonLoad(true).then(() => { canonShown = 'wren'; renderCanon(); canonSideUpdate(); })`);
+  await until(`${needCards}.some((x) => /Wren is male/.test(x))`);
+  // Pio healed as Canon opened: one fact, the writer's, citing its line; nothing waits
+  const pio = fs.readFileSync(path.join(ENTRIES, 'pio.md'), 'utf8');
+  assert.equal(pio.match(/- Sex: female/g).length, 1, pio);
+  assert.match(pio, /- Sex: female · yours\n {2}- Written in Canon\n {2}- The Door, Ch 1: "But there was no answer"/);
+  assert.match(pio, /## In my words\nMine\.\n$/);
+  assert.ok(!(await js(needCards)).some((x) => /Pio/.test(x)));
+  // It's true, clicked twice at once
+  await js(`(() => { const card = [...document.querySelectorAll('#canon-side .cs-need')].find((n) => /Wren is male/.test(n.textContent)); const b = [...card.querySelectorAll('button')].find((x) => x.textContent === 'It’s true'); b.click(); b.click(); })()`);
+  await until(`!${needCards}.some((x) => /Wren is male/.test(x))`);
+  await tick(300);
+  const wren = () => fs.readFileSync(path.join(ENTRIES, 'wren.md'), 'utf8');
+  assert.equal(wren().match(/- Sex: male/g).length, 1, wren());
+  assert.match(wren(), /- Sex: male \(boy\) · yours\n {2}- The Door, Ch 1: "Faintly he heard back" \{book:[^}]*, said:the lady\}\n/);
+  assert.doesNotMatch(wren(), /Written in Canon/);
+  // not under What others say either: the fact stands among the facts
+  assert.ok(!/male/.test(await js(`document.querySelector('#canon-view .cn-sub')?.nextElementSibling?.textContent || ''`)));
+  // Skip on the plan: remembered with the Canon
+  await js(`(() => { const card = [...document.querySelectorAll('#canon-side .cs-need')].find((n) => /Wren/.test(n.textContent)); [...card.querySelectorAll('button')].find((x) => x.textContent === 'Skip').click(); })()`);
+  await until(`!${needCards}.some((x) => /Wren/.test(x))`);
+  await tick(300);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(LIB, CANON, 'canon.json'), 'utf8')).skipped, ['wren|home|Kellsharrow']);
+  // opened again: the same, nothing back, nothing doubled
+  await js(`canonLoad(true).then(() => { renderCanon(); canonSideUpdate(); })`);
+  await tick(500);
+  assert.ok(!(await js(needCards)).some((x) => /Wren|Pio/.test(x)));
+  assert.equal(wren().match(/- Sex: male/g).length, 1);
+  for (const id of ['pio', 'wren']) fs.rmSync(path.join(ENTRIES, id + '.md'));
+  await js(`canonLoad(true).then(() => { canonShown = null; renderCanon(); })`);
 });
 
 /* ---------- the welcome and the Tutorial, on a fresh computer ---------- */

@@ -2251,14 +2251,28 @@ ipcMain.handle('canon:create', (_e, shelfId, shelfName) => {
   return id;
 });
 
-ipcMain.handle('canon:open', (_e, canonId) => ({
-  meta: readJSON(canonFile(canonId, 'canon.json'), { v: 1, read: {}, out: {} }),
-  entries: canonEntries(canonId),
-  setAside: canonEntries(canonId, 'set-aside'),
-  notSlips: readJSON(canonFile(canonId, 'not-slips.json'), []),
-  reader: canonReaderStatus(),
-  shelf: canonShelfSize(canonId)
-}));
+// An entry an older Canon wrote the same fact into more than once (It's
+// true pressed again and again) is written once more, each fact once with
+// all its sources. Only a file that held copies is touched.
+function canonHeal(canonId) {
+  for (const { file, text } of canonEntryFiles(canonId)) {
+    const data = Canon.parseEntry(text);
+    if (data.error || !data.merged) continue;
+    try { writeFileDurable(file, Canon.serialiseEntry(data)); } catch (err) { logError('canon heal ' + path.basename(file), err); }
+  }
+}
+
+ipcMain.handle('canon:open', (_e, canonId) => {
+  canonHeal(canonId);
+  return {
+    meta: readJSON(canonFile(canonId, 'canon.json'), { v: 1, read: {}, out: {} }),
+    entries: canonEntries(canonId),
+    setAside: canonEntries(canonId, 'set-aside'),
+    notSlips: readJSON(canonFile(canonId, 'not-slips.json'), []),
+    reader: canonReaderStatus(),
+    shelf: canonShelfSize(canonId)
+  };
+});
 
 // what Read the Shelf has before it: books, notebooks and their words
 function canonShelfSize(canonId) {
@@ -2314,7 +2328,7 @@ ipcMain.handle('canon:saveMeta', (_e, canonId, patch) => {
   const file = canonFile(canonId, 'canon.json');
   const meta = readJSON(file, { v: 1 });
   const next = { ...meta };
-  for (const k of ['out', 'settings']) if (patch && patch[k] !== undefined) next[k] = patch[k];
+  for (const k of ['out', 'settings', 'skipped']) if (patch && patch[k] !== undefined) next[k] = patch[k];
   // a page brought back into Canon is read again, whatever it read as before
   if (patch && patch.unread && patch.unread.length) next.read = Object.fromEntries(Object.entries(meta.read || {}).filter(([k]) => !patch.unread.includes(k)));
   if (JSON.stringify(next) !== JSON.stringify(meta)) writeJSON(file, next);
