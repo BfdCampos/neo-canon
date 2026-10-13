@@ -4,8 +4,14 @@
 // Pass, on a fixture library, scored against its expected.json. Not part of
 // `npm test` (minutes to an hour on a CPU). docs/semantics/ACCURACY.md.
 //
-//   node scripts/canon-eval.js [--fixture canon|canon-heldout|all|<fixture dir>] [--model quick|careful|fake|<path.gguf>]
+//   node scripts/canon-eval.js [--fixture canon|canon-heldout|all|<fixture dir>] [--model quick|careful|thorough|deep|fake|<path.gguf>]
 //                              [--threads N] [--fresh] [--memo <file>] [--json <file>] [--dump] [--log] [--keep <dir>]
+//                              [--legacy] [--sequences N] [--only-cached]
+//
+// careful, thorough and deep read the editor's way (docs/semantics/READING.md:
+// cast, dossiers, verifier, profiles); quick, and --legacy, the paragraph way.
+// --sequences N answers N prompts at once (a GPU; 1 on a CPU). --only-cached
+// asks the model nothing new: what the memo doesn't hold is answered "none".
 //
 // --keep <dir> keeps what the run made, for scripts/canon-score.js: the
 // Canon folder (entries/*.md) and slips.json (the pass's slips and Worth a
@@ -35,7 +41,9 @@ const Canon = require('../canon.js');
 const arg = (name, fallback) => { const i = process.argv.indexOf('--' + name); return i < 0 ? fallback : process.argv[i + 1]; };
 const flag = (name) => process.argv.includes('--' + name);
 const MODELS = process.env.CANON_MODELS || '/tmp/claude-0/llama-probe/models';
-const TIERS = { quick: /qwen2\.5-1\.5b-instruct.*q4_k_m\.gguf$/i, careful: /qwen3-4b-instruct-2507.*q4_k_m\.gguf$/i };
+const TIERS = { quick: /qwen2\.5-1\.5b-instruct.*q4_k_m\.gguf$/i, careful: /qwen3-4b-instruct-2507.*q4_k_m\.gguf$/i, thorough: /qwen3-8b.*q4_k_m\.gguf$/i, deep: /qwen3-14b.*q4_k_m\.gguf$/i };
+// as main.js READERS has them
+const LOAD = { quick: {}, careful: { ctx: 8192, editor: true }, thorough: { ctx: 8192, editor: true, thoughts: 'discourage' }, deep: { ctx: 8192, editor: true, thoughts: 'discourage' } };
 
 function findModel(want) {
   if (fs.existsSync(want)) return { tier: path.basename(want), file: want };
@@ -99,21 +107,27 @@ async function startReader(model, threads, memoFile, fresh) {
     child = fork(path.join(__dirname, '..', 'canon-worker.js'), [], { env: { ...process.env, HTTPS_PROXY: dead, HTTP_PROXY: dead, https_proxy: dead, http_proxy: dead } });
     child.on('message', (m) => { const done = waiting.get(m.id); if (done) { waiting.delete(m.id); done(m); } });
     const t0 = Date.now();
-    const r = await request({ type: 'load', chat: model.file, threads });
+    const how = LOAD[model.tier] || {};
+    const r = await request({ type: 'load', chat: model.file, threads, ctx: flag('legacy') ? 2048 : how.ctx || 2048, thoughts: how.thoughts, sequences: +arg('sequences', 1) });
     if (!r.ok) throw new Error(r.error);
     stats.loadMs = Date.now() - t0;
   })());
   let dirty = 0;
   const save = () => { if (dirty) { fs.mkdirSync(path.dirname(memoFile), { recursive: true }); fs.writeFileSync(memoFile, JSON.stringify(memo)); dirty = 0; } };
   const ask = async (msg) => {
-    const key = crypto.createHash('sha256').update(JSON.stringify([path.basename(model.file), msg.system, msg.user, msg.schema, msg.maxTokens])).digest('hex');
+    const key = crypto.createHash('sha256').update(JSON.stringify([path.basename(model.file), msg.system, msg.user, msg.schema, msg.maxTokens, ...(msg.compact ? ['compact'] : [])])).digest('hex');
     const log = (result) => { if (flag('log')) console.error(`--- ${msg.user.split('\n').slice(-2).join(' | ')}\n=> ${JSON.stringify(result)}`); return result; };
     if (memo[key]) { stats.remembered++; stats.modelMs += memo[key].ms; return log(memo[key].result); }
+    if (flag('only-cached')) { stats.missing = (stats.missing || 0) + 1; return null; }
     await load();
     const r = await request({ type: 'prompt', ...msg });
     if (!r.ok) throw new Error(r.error);
     stats.asked++;
     stats.modelMs += r.ms;
+    const kind = msg.schema === Canon.CAST_SCHEMA ? 'cast' : msg.schema === Canon.DOSSIER_SCHEMA ? 'dossier' : msg.schema === Canon.PROFILE_SCHEMA ? 'profile' : msg.schema === Canon.STORY_SCHEMA ? 'events' : msg.schema === Canon.PROPOSE_SCHEMA ? 'propose' : 'question';
+    stats.kinds = stats.kinds || {};
+    const k = stats.kinds[kind] = stats.kinds[kind] || { n: 0, ms: 0 };
+    k.n++; k.ms += r.ms;
     memo[key] = { result: r.result, ms: r.ms };
     if (++dirty >= 5) save();
     return log(r.result);
@@ -203,8 +217,16 @@ async function evalFixture(name, reader, tier) {
     const before = reader.stats.modelMs;
     const t0 = Date.now();
     const fake = tier === 'fake' && (fs.existsSync(path.join(fixture, 'reader-answers.json')) ? JSON.parse(fs.readFileSync(path.join(fixture, 'reader-answers.json'), 'utf8')) : {});
-    const engine = Canon.createEngine({ io, reader: fake ? Canon.fakeReader(fake) : Canon.localReader({ id: tier, tier, ask: reader.ask }) });
-    const summary = await engine.readShelf();
+    const editor = !flag('legacy') && (LOAD[tier] || {}).editor;
+    const real = Canon.localReader({ id: tier, tier, editor, ask: reader.ask });
+    real.parallel = +arg('sequences', 1);
+    const engine = Canon.createEngine({ io, reader: fake ? Canon.fakeReader(fake) : real });
+    let told = 0;
+    const summary = await engine.readShelf({ onProgress: (p) => {
+      if (!flag('progress') || Date.now() - told < 5000) return;
+      told = Date.now();
+      console.error(`[${new Date().toISOString().slice(11, 19)}] ${p.label} ${p.phase}${p.name ? ' ' + p.name : ''} ${p.n || ''}/${p.of || ''} · eta ${p.eta} s · calls ${p.calls}`);
+    } });
     const readMs = reader.stats.modelMs - before;
     const t1 = reader.stats.modelMs;
     const { slips, asks = [] } = await engine.check({ scope: 'shelf' });
@@ -250,7 +272,8 @@ async function main() {
   for (const r of results) {
     console.log([r.fixture.padEnd(14), r.model.padEnd(8), String(r.verified).padEnd(9), ((r.precision * 100).toFixed(0) + '%').padEnd(10), r.recall.padEnd(7), r.slipsFound.padEnd(6), String(r.falseSlips.length).padEnd(12), `${r.readModelS + r.checkModelS} (${r.readModelS}+${r.checkModelS})`].join(' '));
   }
-  console.log(`(${reader.stats.asked} asked, ${reader.stats.remembered} remembered; load ${Math.round(reader.stats.loadMs / 1000)} s)`);
+  if (reader.stats.kinds) console.log('model time by kind (asked this run): ' + Object.entries(reader.stats.kinds).map(([k, v]) => `${k} ${v.n} × ${Math.round(v.ms / v.n / 100) / 10} s`).join(', '));
+  console.log(`(${reader.stats.asked} asked, ${reader.stats.remembered} remembered${reader.stats.missing ? `, ${reader.stats.missing} not in the memo` : ''}; load ${Math.round(reader.stats.loadMs / 1000)} s)`);
   if (arg('json')) fs.writeFileSync(arg('json'), JSON.stringify(results, null, 2));
   process.exitCode = results.every((r) => r.wrongVerified.length === 0 && r.falseSlips.length === 0) ? 0 : 1;
 }

@@ -176,23 +176,41 @@ describe('canon files', { concurrency: 1 }, () => {
   });
 
   // Which reader suits this computer: the graphics card first, then memory
-  test('the reader recommended from the hardware: a 6 GB GPU or Apple silicon with 16 GB → careful; the processor alone → quick', () => {
+  test('the reader recommended from the hardware: an 8 GB GPU → thorough, 6 GB or Apple silicon with 16 GB → careful; the processor alone → quick', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-pick-'));
     try {
       const call = loadMain(dir);
       const pick = (o) => vm.runInContext(`readerPick(${JSON.stringify(o)})`, call.context);
-      assert.equal(pick({ totalGB: 8, platform: 'win32', arch: 'x64', vramGB: 12 }), 'careful');
+      // a graphics card with 8 GB of its own (the owner's RTX 3080 has 10) reads like an editor, thoroughly
+      assert.equal(pick({ totalGB: 8, platform: 'win32', arch: 'x64', vramGB: 12 }), 'thorough');
+      assert.equal(pick({ totalGB: 32, platform: 'win32', arch: 'x64', vramGB: 10 }), 'thorough');
       assert.equal(pick({ totalGB: 8, platform: 'linux', arch: 'x64', vramGB: 6 }), 'careful');
       assert.equal(pick({ totalGB: 8, platform: 'linux', arch: 'x64', vramGB: 4 }), 'quick');
       assert.equal(pick({ totalGB: 16, platform: 'darwin', arch: 'arm64' }), 'careful');
+      assert.equal(pick({ totalGB: 24, platform: 'darwin', arch: 'arm64' }), 'thorough');
       assert.equal(pick({ totalGB: 8, platform: 'darwin', arch: 'arm64' }), 'quick');
-      // on the processor alone the careful reader can't start inside NEO (one block over 2 GiB)
+      // on the processor alone a reader with a block over 2 GiB can't start inside NEO
       assert.equal(pick({ totalGB: 32, platform: 'linux', arch: 'x64' }), 'quick');
+      assert.equal(pick({ totalGB: 64, platform: 'linux', arch: 'x64' }), 'quick');
       assert.equal(pick({ totalGB: 32, platform: 'darwin', arch: 'x64' }), 'quick');
       assert.equal(pick({ totalGB: 6, platform: 'linux', arch: 'x64' }), 'short');
-      assert.equal(pick({ totalGB: 6, platform: 'linux', arch: 'x64', vramGB: 8 }), 'careful');
-      // and once the careful reader failed here, the other
+      assert.equal(pick({ totalGB: 6, platform: 'linux', arch: 'x64', vramGB: 8 }), 'thorough');
+      // and once a reader failed here, the next one down
       assert.equal(pick({ totalGB: 32, platform: 'darwin', arch: 'arm64', failed: 'careful' }), 'quick');
+      assert.equal(pick({ totalGB: 32, platform: 'win32', arch: 'x64', vramGB: 10, failed: 'thorough' }), 'careful');
+      // the deep reader is offered, never picked: a card with 12 GB
+      const offered = (o) => JSON.parse(vm.runInContext(`JSON.stringify(readerOffered(${JSON.stringify(o)}))`, call.context));
+      assert.deepEqual(offered({ totalGB: 32, platform: 'win32', arch: 'x64', vramGB: 10 }), ['thorough', 'careful', 'quick']);
+      assert.deepEqual(offered({ totalGB: 32, platform: 'win32', arch: 'x64', vramGB: 16 }), ['thorough', 'deep', 'careful', 'quick']);
+      assert.deepEqual(offered({ totalGB: 32, platform: 'linux', arch: 'x64' }), ['careful', 'quick']);
+      // the catalogue: Thorough and Deep pinned, thinking off, the editor's reading
+      const R = vm.runInContext('READERS', call.context);
+      assert.equal(R.thorough.sha256, 'd98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785');
+      assert.equal(R.thorough.size, 5027783488);
+      assert.match(R.thorough.url, /\/resolve\/7c41481f57cb95916b40956ab2f0b139b296d974\/Qwen3-8B-Q4_K_M\.gguf$/);
+      assert.equal(R.deep.sha256, '500a8806e85ee9c83f3ae08420295592451379b4f8cf2d0f41c15dffeb6b81f0');
+      assert.equal(R.thorough.thoughts, 'discourage');
+      assert.equal(R.quick.editor, undefined);
       // Reader settings: the hardware and the reader chosen are kept in settings.json
       const r = call('canon:readerSettings', { hardware: 'cpu' });
       assert.equal(r.hardware, 'cpu');
