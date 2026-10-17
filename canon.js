@@ -1545,7 +1545,11 @@
   // checkers' own candidates (no reader): a fact from such a sentence is
   // left out quietly; the pass decides whether it is a slip.
   // `kept`: [{ e, f }] read earlier in this read (not yet through the gates).
-  function editorSuspects({ paras, entries, kept = [], told = [], rare = null }) {
+  // `notes`: Set of 'book/ch' that are the writer's notes; `inNotes`: this chapter is
+  // one. The notes against the prose is a question, not a slip: a prose
+  // sentence is never suspect against a value only the notes hold.
+  function editorSuspects({ paras, entries, kept = [], told = [], rare = null, notes = new Set(), inNotes = false }) {
+    const prose = (f) => inNotes || (f.sources || []).some((x) => x.written || !notes.has(x.book + '/' + x.ch));
     const ids = new Set();
     const live = entries.filter((e) => !e.locked);
     const idx = mentionIndex(live);
@@ -1554,7 +1558,7 @@
     const firm = (f) => ['verified', 'yours'].includes(f.state);
     for (const e of live) {
       for (const attr of Object.keys(TIED)) {
-        const f = e.facts.find((x) => x.attr === attr && firm(x) && lexical(x)) || (kept.find((k) => k.e === e && k.f.attr === attr) || {}).f;
+        const f = e.facts.find((x) => x.attr === attr && firm(x) && lexical(x) && prose(x)) || (kept.find((k) => k.e === e && k.f.attr === attr && prose(k.f)) || {}).f;
         if (f) world.get(e.id)[attr] = f;
       }
     }
@@ -1565,7 +1569,7 @@
       for (const c of paraCandidates(p.text, idx, world, names)) if (c.kind !== 'name' && ss[c.si]) ids.add(ss[c.si].id);
     }
     // open facts said otherwise: earlier ones, of the one a sentence names
-    const opens = [...live.flatMap((e) => e.facts.filter((f) => (f.attr === 'other' || f.attr === 'state') && firm(f)).map((f) => ({ e, f }))), ...kept.filter((k) => k.f.attr === 'other' || k.f.attr === 'state')];
+    const opens = [...live.flatMap((e) => e.facts.filter((f) => (f.attr === 'other' || f.attr === 'state') && firm(f)).map((f) => ({ e, f }))), ...kept.filter((k) => k.f.attr === 'other' || k.f.attr === 'state')].filter((k) => prose(k.f));
     // deeds: an earlier key point's distinctive words, with someone else named
     const deeds = told.map((ev) => ({ ids: ev.who.map((w) => w.id), words: new Set(heavy(ev.did + ' ' + ev.quote).map(stemOf)) }));
     const nameStems = new Set(live.flatMap((e) => [e.name, ...e.aliases]).flatMap(wordsOf).map(stemOf));
@@ -2719,7 +2723,7 @@
               });
             }
             const earlier = [...told.values()].flat();
-            const suspect = editorSuspects({ paras, entries, kept: keptRead, told: earlier, rare: rarity(sources.filter((x) => !isNote(x))) });
+            const suspect = editorSuspects({ paras, entries, kept: keptRead, told: earlier, rare: rarity(sources.filter((x) => !isNote(x))), notes: new Set(sources.filter(isNote).map((x) => x.bookId + '/' + x.chId)), inNotes: isNote(src) });
             const sexOf = (e) => { const f = e.facts.find((x) => x.attr === 'sex' && ['verified', 'yours'].includes(x.state)); return f ? f.value : null; };
             const narrator = narrators.get(src.bookId) || entries.find((e) => !e.locked && e.id === (meta.narrators || {})[src.bookId]) || null;
             let r;

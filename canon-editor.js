@@ -163,12 +163,21 @@ module.exports = function canonEditor(C) {
           if (!/[\p{L}\p{N}]/u.test(lead) || /[“"‘«:]\s*$/.test(lead)) continue; // a sentence's (or a quotation's) first word
           const w = m[1].replace(/['’]s$/, '');
           if (w.split(/\s+/).length === 1 && (lower.has(w.toLowerCase()) || TITLES.has(w.toLowerCase()) || PRONOUNS[w.toLowerCase()] || /^I$/.test(w))) continue;
-          if (nonEntity(w)) continue;
+          if (nonEntity(w) || /s['’]$/.test(w)) continue;
           out.set(w, (out.get(w) || 0) + 1);
         }
       }
     }
-    return [...out.keys()].slice(0, 30);
+    // and the places the chapter calls by a common noun, twice or more after
+    // a preposition ("at the press-house door", "down to the press-house")
+    const places = new Map();
+    for (const m of ch.text.matchAll(/(?<![\p{L}])(?:in|at|to|of|on|from|into|by|down|near|inside|outside|through|across|towards?|past|behind)\s+the\s+(\p{Ll}[\p{Ll}-]{3,})(?![\p{L}'’-])/gu)) {
+      const w = m[1];
+      if (FIXTURES.has(w) || CROWD.has(w) || NUMBER.test(w)) continue;
+      places.set(w, (places.get(w) || 0) + 1);
+    }
+    const extra = [...places].filter(([w, n]) => n >= 2 && written(ch.text, 'the ' + w) >= 2).map(([w]) => 'the ' + w);
+    return [...out.keys()].slice(0, 30 - Math.min(6, extra.length)).concat(extra.slice(0, 6));
   }
 
   // The reader's cast, through the gates. → [{ key, name, kind, aliases, in, entry }]
@@ -709,6 +718,13 @@ module.exports = function canonEditor(C) {
     const gapPunct = (a, b) => /[,;:—–()]/.test(s.text.slice(toks[a].end - s.start, toks[b].start - s.start));
     // "a black-and-white collie bitch called Moss"
     for (const x of cand) if (x.i > ci && x.i - ci <= 6 && x.key !== undefined && /^(?:called|named)$/.test((toks[x.i - 1] || {}).lw || '')) return x.key;
+    // (a possessive in c's own apposition or predicate is c: "Clem, his grey
+    // mare", "Clem: Ivo’s grey mare", "He was my mother’s younger brother")
+    for (const x of cand) {
+      if (!x.poss || x.end >= ci) continue;
+      const sub = cand.filter((y) => y.end < x.i).pop();
+      if (sub && sub.key === c.key && /^(?:['’]s)?\s*(?:[,:—–]|\s(?:was|is)(?:\s+(?:a|an|the))?)\s*$/u.test(s.text.slice(toks[sub.end].end - s.start, toks[x.i].start - s.start))) x.poss = false, x.key = c.key;
+    }
     const before = cand.filter((x) => x.end < ci);
     // an apposition: "at the Corn Exchange, a sandstone hall"; "its Long
     // Gallery, upstairs, a cold panelled room"
@@ -796,6 +812,8 @@ module.exports = function canonEditor(C) {
     // polarity: "not one of the Spared" isn't "one of the Spared"
     const clauses = cited.map((l) => clauseOf(l.s, grounded));
     if (localNeg(clauses.join(' '), grounded) !== negated(value) && !(negated(value) && /less|out\b|\bun/i.test(value))) return { why: 'polarity' };
+    // an age is how old, not who is older ("younger sister": kin)
+    if (key === 'age' && /^(?:younger|older|elder|eldest|youngest|oldest)$/i.test(value)) return { why: 'shape' };
     // no value at all: "not specified", "unknown", "none"
     if (/^(?:not (?:specified|stated|given|described|mentioned|known)|unknown|unspecified|none|n\/a|nothing|unclear)$/i.test(value)) return { why: 'empty' };
     // where someone (or something) is now is the scene, not the bible ("already in the line",
@@ -1337,5 +1355,5 @@ module.exports = function canonEditor(C) {
     return { calls, dropped, kept, cast, ch, narrator: me ? (me.entry || made.get(me.key) || null) : null };
   }
 
-  return { EDITOR_PROMPT, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
+  return { EDITOR_PROMPT, writtenNames, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
 };
