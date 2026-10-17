@@ -1434,6 +1434,8 @@ part('editor', 'Read the Shelf, the editor\'s way: who and what is here, then ea
   await until(`book && book.id === '${UNDER}'`);
   await js(`switchTab('canon'); canonShown = null; renderCanon()`);
   await until(`!!canon && !!canon.reader && canon.reader.installed === 'careful'`);
+  await tick(1200); // (the book's opening tip, out of the screenshots)
+  await js(`clearTimeout(toast._t); $('#hint').hidden = true`);
   if (REAL_RUN) return;
   await js(`setTimeout(() => canonReadShelfNow(), 0); 0`); // (not awaited: the line is watched as it goes)
   const seen = new Set();
@@ -1467,7 +1469,7 @@ part('editor', 'an entry\'s page: the profile, each source a number that opens i
   await shot('editor-entry-person.png');
   await js(`canonShown = 'weighhouse'; renderCanon()`);
   await until(`document.querySelector('#canon-view .cn-name')?.textContent === 'the Weighhouse'`);
-  if (!REAL_RUN) assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-group')].map((h) => h.textContent)`), ['What it is', 'How it works', 'Rules']);
+  if (!REAL_RUN) assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-group')].map((h) => h.textContent)`), ['How it works', 'Rules']);
   await tick(300);
   await shot('editor-entry-place.png');
   if (REAL_RUN) {

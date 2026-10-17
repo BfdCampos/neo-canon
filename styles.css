@@ -2169,7 +2169,7 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 .st-verified .cn-dot { background: #8a8478; border-color: #8a8478; }
 .st-yours .cn-dot { border-radius: 1px 50% 1px 50%; transform: rotate(45deg); background: var(--accent); border-color: var(--accent); }
 .st-disagree .cn-dot { background: linear-gradient(90deg, #8a8478 50%, transparent 50%); }
-.cn-fl { color: #8a8478; margin-right: 0.35em; }
+.cn-fl { color: #8a8478; margin-right: 0.35em; flex: none; white-space: nowrap; }
 .cn-ctl { margin-left: auto; display: flex; gap: 12px; opacity: 0; transition: opacity 0.12s; }
 .cn-fact:hover .cn-ctl, .cn-ctl:focus-within { opacity: 1; }
 .cn-src { margin: 2px 0 0 18px; font-size: 0.86em; color: #5f5a50; }
