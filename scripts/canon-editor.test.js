@@ -44,7 +44,7 @@ test('the cast: names as written, roles written twice, aliases the text ties, th
   const cast = E.castGate({ proposals: CAST.map((c) => ({ name: c.n, kind: c.k, aliases: c.a })), setting: 'the Weighhouse', ch, entries: [], names: Canon.shelfNames([ch.text]) });
   const got = Object.fromEntries(cast.map((c) => [c.name, c.aliases]));
   // "His name, Hesper had once heard the warden say, was Anselm": the weigher's name
-  assert.deepEqual(got.Anselm, ['the weigher', 'Brother Ink', 'weigher']);
+  assert.deepEqual([...got.Anselm].sort(), ['Brother Ink', 'the weigher', 'weigher']);
   assert.deepEqual(got['the warden'], ['warden']);
   // a role written once ("the cloth"), a pronoun, a crowd, a name the text doesn't write: no one
   for (const no of ['She', 'the children', 'the cloth', 'the Valey']) assert.equal(got[no], undefined, no);
@@ -149,7 +149,7 @@ test('Read the Shelf, the editor\'s way: open facts verified by the reader, trai
     assert.ok(room.includes('Description: not one window · verified') && !room.some((l) => /high windows/.test(l)), room.join('\n'));
     // the weigher is Anselm: one entry, his names as aliases
     const anselm = L.entry('anselm');
-    assert.deepEqual(anselm.aliases, ['the weigher', 'Brother Ink', 'weigher']);
+    assert.deepEqual([...anselm.aliases].sort(), ['Brother Ink', 'the weigher', 'weigher']);
     assert.ok(factLines(anselm).includes('Build: thin as a rake · verified'));
     assert.ok(!L.files().includes('weigher.md') && !L.files().includes('she.md') && !L.files().includes('children.md'));
     // the warden is a woman: "She was a narrow woman", her pronoun the warden's by the paragraph

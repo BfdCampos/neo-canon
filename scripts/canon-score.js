@@ -243,7 +243,7 @@ function readProfile(raw) {
     if (c) {
       const ref = Object.fromEntries(c[4].split(',').map((x) => x.trim().split(':')).map(([k, ...v]) => [k, v.join(':').trim()]));
       cites.set(c[1], { label: c[2], quote: c[3], book: ref.book, ch: ref.ch });
-    } else if (line.trim()) prose.push(line.trim());
+    } else if (line.trim() && !/^\s*[-*] Canon['’]s profile\b/i.test(line)) prose.push(line.trim());
   }
   const text = prose.join(' ');
   const sentences = text.split(/(?<=[.!?](?:\s*\[\d+\])*)\s+(?=[A-Z“"‘'])/).map((s) => s.trim()).filter(Boolean);

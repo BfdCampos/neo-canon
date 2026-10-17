@@ -124,6 +124,8 @@ module.exports = function canonEditor(C) {
     if (!name || name.length < 2 || name.length > 40) return null;
     const bare = name.replace(/^the\s+/i, '');
     if (!bare || PRONOUNS[bare.toLowerCase()] || /^(?:i|we|you|they|it|them|us|me)$/i.test(bare)) return null;
+    // (a family's possessive is no place: "the Haddons’ house")
+    if (/s['’]$/.test(bare)) return null;
     if (/^\p{Lu}/u.test(bare)) {
       // every word capitalised but the small ones inside ("House of Varr")
       const parts = bare.split(/\s+/);
@@ -205,6 +207,21 @@ module.exports = function canonEditor(C) {
     // children called him Brother Ink", "His name … was Anselm"): each tie
     // joins the name to the words the text last used for that one ("the
     // weigher"). Names the reader offered as aliases count only when so tied.
+    // a name the reader gave only as another's alias is its own one until
+    // the text ties the two ("Old Man", aliases "Dr Haddon")
+    for (const c of [...cast]) {
+      for (const a of c.wanted) {
+        if (nameKind(a, text, lower, c.kind) === 'proper' && !find(a) && !misspelt(a.replace(/^the\s+/i, ''), entries)) cast.push({ key: cast.length, name: a, kind: c.kind, aliases: [], in: '', proper: true, wanted: [] });
+      }
+    }
+    // a rank's role, written as such ("the doctor", twice or more), is the
+    // one person the chapter gives that rank ("Dr Haddon")
+    for (const [role, titles] of Object.entries(RANK)) {
+      if (written(text, 'the ' + role) < 2) continue;
+      const holders = cast.filter((c) => !c.gone && c.kind === 'person' && [c.name, ...c.aliases].some((y) => String(y).split(/\s+/).length > 1 && titles.includes(norm(String(y).replace(/^the\s+/i, '').split(/\s+/)[0]).replace(/\.$/, ''))));
+      if (holders.length !== 1 || cast.some((c) => c !== holders[0] && !c.gone && [c.name, ...c.aliases].some((n) => norm(n) === 'the ' + role))) continue;
+      if (!holders[0].aliases.some((a) => norm(a) === 'the ' + role)) holders[0].aliases.push('the ' + role);
+    }
     const ties = namingTies(ch, cast);
     const bare = (n) => norm(String(n).replace(/^the\s+/i, ''));
     const tied = new Map(); // bare phrase → Set of bare phrases
@@ -216,6 +233,8 @@ module.exports = function canonEditor(C) {
       const mine = new Set([...group(c.name), ...c.aliases.flatMap((a) => [...group(a)])]);
       for (const a of c.wanted) {
         if (!nameKind(a, text, lower, c.kind)) continue;
+        // (a name the reader gave only as another's alias, with nothing in
+        // the text to tie the two, is its own one: "Old Man", aliases "Dr Haddon")
         if (bare(a) !== bare(c.name) && !mine.has(bare(a))) continue;
         const other = find(a);
         if (other && other !== c && !other.gone) mergeCast(cast, c, other);
@@ -320,7 +339,8 @@ module.exports = function canonEditor(C) {
   }
   function mergeCast(cast, into, from) {
     for (const a of [from.name, ...from.aliases]) if (!into.aliases.some((x) => norm(x) === norm(a)) && norm(a) !== norm(into.name)) into.aliases.push(a);
-    if (!into.proper && from.proper) { const was = into.name; into.name = from.name; into.aliases = [was, ...into.aliases.filter((x) => norm(x) !== norm(from.name))]; into.proper = true; }
+    // (a name before a role, and a person's own name before an epithet: "Dr Haddon", not "the Old Man")
+    if ((!into.proper && from.proper) || (into.kind === 'person' && /^the\s/i.test(into.name) && !/^the\s/i.test(from.name) && from.proper)) { const was = into.name; into.name = from.name; into.aliases = [was, ...into.aliases.filter((x) => norm(x) !== norm(from.name))]; into.proper = true; }
     if (!into.in && from.in) into.in = from.in;
     from.gone = true;
     from.name = '\u0000';
@@ -684,8 +704,7 @@ module.exports = function canonEditor(C) {
         cand.push({ key, i, end: i, poss: POSS_PRON.has(t.lw) && !(t.lw === 'her' && toks[i + 1] && PREP.has(toks[i + 1].lw)), pron: true });
       }
     });
-    // the object of a preposition is no owner ("above the Sare", "below her")
-    const object = (x) => { let k = x.i - 1; while (k >= 0 && SKIP_DET.has(toks[k].lw) && !(k === x.i - 1 && POSS_PRON.has(toks[k].lw) && false)) k--; return k >= 0 && PREP.has(toks[k].lw) && toks[k].lw !== 'of'; };
+    // (the object of a preposition is no owner: "above the Sare", "below her")
     const gapPunct = (a, b) => /[,;:—–()]/.test(s.text.slice(toks[a].end - s.start, toks[b].start - s.start));
     // "a black-and-white collie bitch called Moss"
     for (const x of cand) if (x.i > ci && x.i - ci <= 6 && x.key !== undefined && /^(?:called|named)$/.test((toks[x.i - 1] || {}).lw || '')) return x.key;
@@ -693,7 +712,11 @@ module.exports = function canonEditor(C) {
     // an apposition: "at the Corn Exchange, a sandstone hall"; "its Long
     // Gallery, upstairs, a cold panelled room"
     const near = before[before.length - 1];
-    if (near && near.key !== undefined && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s+(?:[\p{L}\p{N}'’-]+\s+){0,3}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) return near.key;
+    // (after the object of a preposition it may be either's: "the Haddons’
+    // house on Bridge Street, a narrow red-brick building" — the reader's
+    // choice decides)
+    const object = (x) => { let k = x.i - 1; while (k >= 0 && SKIP_DET.has(toks[k].lw)) k--; return k >= 0 && PREP.has(toks[k].lw) && toks[k].lw !== 'of'; };
+    if (near && near.key !== undefined && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s+(?:[\p{L}\p{N}'’-]+\s+){0,3}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) return object(near) ? null : near.key;
     // a possessive just before the claim, in its own phrase
     const poss = before.filter((x) => x.poss && ci - x.end <= 3 && !gapPunct(x.end, ci)).pop();
     if (poss) return poss.key === undefined ? null : poss.key;
@@ -701,7 +724,7 @@ module.exports = function canonEditor(C) {
     // (no subject: the last one named before it, in the same clause run —
     // "its Long Gallery, … a cold panelled room …, where the light came in
     // through tall windows")
-    if (!subj) return near && near.key !== undefined && !/[;:]/.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start)) ? near.key : null;
+    if (!subj) return near && near.key !== undefined && !object(near) && !/[;:]/.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start)) ? near.key : null;
     return subj.key === undefined ? null : subj.key;
   }
 
