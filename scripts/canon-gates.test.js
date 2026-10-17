@@ -220,11 +220,13 @@ test('speech and plans never join a fact of the story, nor become its source (QA
   old.facts.push({ attr: 'sex', value: 'male', as: '', state: 'unverified', sources: [said, { label: 'x', quote: 'Bramble the stallion', book: 'b', ch: 'c9' }] });
   Canon.replaceFact(old, Canon.handFact('Sex: male'), null);
   assert.deepEqual(old.facts.map((f) => [f.state, f.sources.map((s) => !!s.said)]), [['yours', [false, false]], ['unverified', [true]]]);
-  // That's right on what a character says: a fact of the writer's, the line untouched
+  // It's true on what a character says: the writer's fact now, citing the
+  // line it came from (never a second, sourceless one); a second press is nothing
   const c = Canon.newEntry('Bramble', 'creature');
   c.facts.push({ attr: 'sex', value: 'male', as: 'gelding', state: 'unverified', sources: [said] });
   Canon.confirmFact(c, 0);
-  assert.deepEqual(c.facts.map((f) => [f.state, f.sources]), [['unverified', [said]], ['yours', [{ written: true }]]]);
+  Canon.confirmFact(c, 0);
+  assert.deepEqual(c.facts.map((f) => [f.state, f.sources]), [['yours', [said]]]);
   // Merge Into keeps them apart too
   const into = Canon.newEntry('Bramble', 'creature');
   into.facts.push({ attr: 'sex', value: 'male', as: '', state: 'verified', sources: [{ label: 'x', quote: 'the stallion Bramble', book: 'b', ch: 'c9' }] });

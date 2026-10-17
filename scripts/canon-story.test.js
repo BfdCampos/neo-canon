@@ -50,9 +50,10 @@ test('the owner\'s text: the first thing said of John is kept without asking; "h
   const r = await Canon.createEngine({ io: S.io, reader }).readShelf();
   assert.equal(r.needs, 0);
   const john = S.entry('john');
-  assert.deepEqual(john.facts.map((f) => `${f.attr} ${f.value} ${f.state} ${f.sources.map((s) => s.label).join()}`), ['eyes green verified The Door, Notes']);
+  // (and he is male: the narration's he and his, sentence after sentence, none against)
+  assert.deepEqual(john.facts.map((f) => `${f.attr} ${f.value} ${f.state} ${f.sources.map((s) => s.label).join()}`), ['eyes green verified The Door, Notes', 'sex male verified The Door, Ch 1,The Door, Ch 1']);
   // the reader's "blue", from a pronoun, got through no gate: no fact, no question
-  assert.ok(!S.files.john.includes('blue'));
+  assert.doesNotMatch(S.files.john, /Eyes: blue/);
   assert.equal(S.cache().dropped[Object.keys(S.cache().dropped)[0]].why, 'gate');
   const { slips, asks } = await Canon.createEngine({ io: S.io, reader }).check({ bookId: 'door' });
   assert.deepEqual(slips.map((s) => [s.span, s.to]), [['blue', 'green']]);
