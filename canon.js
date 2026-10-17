@@ -1328,6 +1328,15 @@
             if (said !== 'unclear' && c.kind === 'pronoun') continue;
             ask = true;
           }
+          // (round 2: a he or she whose owner only the reader names is never
+          // a slip on its own word: worth a look, at most)
+          if (c.kind === 'pronoun') ask = true;
+        }
+        // a sex read from pronouns alone holds no pronoun to account: whose
+        // "she" is the question, not the slip
+        if (c.kind === 'pronoun' && c.attr === 'sex' && c.fact && !(c.fact.state === 'yours' || (c.fact.as && SEX_WORDS[norm(c.fact.as)]))) {
+          if (c.strength !== 'weak') continue;
+          ask = true;
         }
         const srcs = c.fact ? c.fact.sources.filter((x) => !x.written) : [];
         slips.push({
@@ -3450,7 +3459,7 @@
         if (inB === NOT_SAID || !inB) return 'no';
         if (inB === ELSE) return 'unclear';
         if ((await choose(a)) !== who) return 'unclear';
-        if (kind) return 'yes';
+        // (round 2: always the very same event, a deed of one kind too)
         const r = await safe({ system: SAME_EVENT_SYSTEM, user: `A: "${a}"\nB: "${sentence}"\nIs B about the same event as A?`, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
         return r && r.a === 'yes' ? 'yes' : 'no';
       },

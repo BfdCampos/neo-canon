@@ -232,7 +232,8 @@ test('pronouns: the owner\'s own word in its clause is strong; one opening a sen
     assert.deepEqual(await slipsIn(fine, { reader: yes }), [], fine);
   }
   assert.deepEqual(await slipsIn('Ilsa came in. He said nothing.'), []); // weak, and no reader
-  assert.deepEqual(await slipsIn('Ilsa came in. He said nothing.', { reader: yes }), ['He→She ilsa-varr/sex weak']);
+  // (round 2: a he or she whose owner only the reader names is worth a look, never a slip)
+  assert.deepEqual(await slipsIn('Ilsa came in. He said nothing.', { reader: yes }), []);
   assert.deepEqual(await slipsIn('Ilsa and Oren came in. He said nothing.', { reader: yes }), []);
 });
 
