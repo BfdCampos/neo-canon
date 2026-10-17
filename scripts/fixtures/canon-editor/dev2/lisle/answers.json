@@ -688,7 +688,7 @@
    "entity": "ivo-marchetti",
    "attr": "habit",
    "sentence": "At supper Ivo drank a full glass of the new cider, and nobody remarked on it.",
-   "span": "drank a full glass",
+   "span": "drank a full glass of the new cider",
    "against": {
     "ch": "c1",
     "quote": "He had never touched a drop of the cider"
