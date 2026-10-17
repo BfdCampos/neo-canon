@@ -1,0 +1,21 @@
+{
+ "_about": "Judged by the builder (Claude), not the evaluation lead, for the Thorough dev run in READING.md §11: a kept fact not on the sheet is true when its label and value hold of that entity in the text (a scene detail counts); wrong when it says what the text does not, or calls one moment a habit.",
+ "coll|habit|kept his eyes on the door": false,
+ "coll|relationship|the nearest thing she had to a friend": true,
+ "coll|relationship|walked with coll": false,
+ "coll|hair condition|flat": true,
+ "coll|hair detail|slept on it wet": true,
+ "the gift|purpose|makes you not hungry": true,
+ "hesper|appearance|one window of the infirmary": false,
+ "hesper|habit|lines up by height": true,
+ "the ledger|appearance|red": false,
+ "the ledger|position|stood in the doorway with his ledger under his arm": false,
+ "the ledger|other|written in by someone": true,
+ "the long room|appearance|at the far end of the room": false,
+ "the long room|rule|not allowed before the weighing": true,
+ "the mountain|history|seen twenty times": true,
+ "the spared|habit|grey and thick and tasted of chalk and pennies": false,
+ "the yard|location|on the way out to the yard": false,
+ "the yard|location|tip of the mountain, white as a tooth": false,
+ "the yard|layout|with a one window infirmary next to it": false
+}

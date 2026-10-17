@@ -143,7 +143,9 @@ The dev shelf (*The Weighhouse*, 1,670 words in two chapters), model time summed
 | Story so far (events, as before) | 35 | 8.1 s a call | ~10 s |
 | Profiles | 10 | 17 s a call | ~10 s |
 | The pass (slips, later chapter) | ~10 | ~3 s a call | ~5 s |
-| **Total** | 209 | **~31 min for 1,670 words** (1,794 s read + 31 s pass) | **~1–1.5 min a chapter** |
+| **Total** | 209 | **~31 min for 1,670 words** (1,887 s read + 12 s pass) | **~1–1.5 min a chapter** |
+
+Thorough 8B on the same CPU (plain Node, to check quality, not speed): cast 131 s, dossier 87 s, a question 4.8 s, events 13 s, profiles 24 s a call; 286 calls, **~60 min** of model time for the dev shelf.
 
 The progress line names the pass ("Finding who and what is here…", "Reading about Hesper… (3 of 12)", "Checking facts… (40 of 104)", "Noting what happens…", "Writing profiles…") and estimates what is left from how long each kind of question has taken on this computer.
 
@@ -202,3 +204,22 @@ The legacy fixture scores full marks because its expected facts *are* the closed
 | M6 | UI: grouped facts, profile, Needs You copy; e2e; docs | the owner re-runs his own chapter; then the **held-out set once**: must recall ≥ 75%, precision ≥ 95%, 0 false slips, profiles cited |
 
 A miss on the held-out set sends the work back to dev with a written reason; the held-out sheet is not opened by the builder at any point, and it is replaced (a new one written) if it ever is.
+
+## 11. Results (dev set)
+
+Runs with `scripts/canon-eval.js --fixture scripts/fixtures/canon-editor/dev --model <tier> --keep <dir>` and `scripts/canon-score.js`, 4-core CPU, no GPU, after the tuning below. Precision "after review" counts the kept facts that are not on the sheet as the builder judged them (`scripts/fixtures/canon-editor/dev/reviewed-<tier>.json`: true when the label and value hold of that entity in the text; wrong when they don't, or call one moment a habit); the evaluation lead may judge them otherwise. Held-out: not run (not seen by the builder).
+
+| Engine / reader | Entities | Must facts | Weighted facts | Precision on sheet | Precision after review | Key points | Slips | False slips | Profiles (cited) | Model time |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before: Careful (4B), per paragraph | 2/13 | 0/41 | 0% | — (0 kept) | — | 4/10 | 0/3 | 0 | 0/7 | 1,203 s |
+| **after: Careful (4B), editor's reading** | 11/13 (90% weighted) | **29/41 (71%)** | 55% | 53/53 | **64/65 (98%)** | 5/10 (must 2/5) | **3/3** | **0** | 4/7 (4) | 1,899 s |
+| after: Thorough (8B), CPU | 11/13 (90%) | **30/41 (73%)** | 56% | 52/52 | 60/70 (86%) | 4/10 (must 1/5) | **3/3** | **0** | 5/7 (5) | 3,601 s |
+| after: fake reader (the e2e's answers) | 8/13 | 21/41 | 34% | 25/25 | — | 0/10 | 2/3 | 0 | 3/7 | — |
+
+Acceptance (§10) on dev with Careful: M2 entity recall must 7/8 (the Weighhouse, named once, comes in as the setting; the valley and the scale are missed), weighted 90%; no pronoun or misspelt entry. M3 must recall 71% ≥ 65%, precision 98% ≥ 95%, 0 traps, 0 misquotes, hard traits 100% (Sex, Hair kept only by the rules). M4 profiles for 4 of the 7 `profile: true` entities, every sentence cited and verbatim; the warden's and the Weighhouse's were left out (the warden's sentences held words in no fact; the Weighhouse keeps one fact). M5 slips 3/3, 0 false, no decoy flagged. M6 UI and e2e: done; the owner's chapter and the held-out set are for the owner and the evaluation lead.
+
+**Thorough on dev**: recall is the Careful reader's or a little more, but its verifier says yes to more of the dossiers' stray readings (the yard given the mountain's tip, the ledger "red" for its red ribbon, Coll's one glance kept as a habit): 86% after review, below the 95% bar. Its 0 false slips held. Before the Thorough tier is the 3080's default the owner should run it there (with `sequences: 4` it is also the first GPU measurement) and the review should be repeated; the gates added for its first run (a place's sentence about a person is the person's; an appearance never names another of the cast) took it from 41 facts to review to 18.
+
+What the runs changed (each a commit): naming ties joined through the words the text used ("the weigher" ↔ "Brother Ink" ↔ "Anselm"); the setting only an institution or building, never a room, and only its routines and rules; polarity read beside the value's own words; a habit must be said to recur; a fact tied by a pronoun or a paragraph asked whether it is really someone else's, and a habit or state whether it lasts; a person called by a role has that role; the slip questions asked of each passage alone ("does the Long Room have windows?", "who gave the crust?"), because a small reader shown both took A's word for it, and a deed of no one kind (two people sitting) asked whether it is the same event; "wrote every number" and "could say it" are no reports; an owning "her" after "took" is not the subject's.
+
+Still missed with Careful (dev): the Weighhouse's six routines (its sentences name no one and nothing of it; asked as the setting, the verifier says no), Hesper's membership of the Spared and the inked 41 (two sentences apart), her "getting less", the Long Room's smell, the Spared's custom, the two "friend" facts (kept as "nearest thing she had to a friend", which the sheet's matcher doesn't take for "friend"). Story so far is unchanged (5/10).

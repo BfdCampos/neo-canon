@@ -128,3 +128,16 @@ Careful finds more:
 - the right answer on "who is *he*".
 
 It takes about 1.7 times as long here. With the quick reader, Canon finds fewer facts but not worse ones. The fact precision we measured does not depend on which reader is installed. A bigger model buys recall, never trust.
+
+## The editor's reading (READING.md), dev set
+
+The rebuilt reading keeps every rule above for traits, relations, speech and first said, first kept, and adds gates of its own for open facts (canon-editor.js): the quote is the cited sentence's clause, copied by code (no misquote is possible); half the value's words (every name and number) in it; polarity read beside the value's words; speech and reported speech make it *said* (never kept as true, never asked in Needs You); a habit must be said to recur; a place's, group's or thing's fact may not name another of the cast, and a sentence found by its paragraph that is about a person is that person's; then the reader's *yes*, asked again whether it is stated (for what is read between the lines), whether it is really someone else's (for a pronoun's or a paragraph's sentence) and whether it lasts. A trait read from a pronoun's sentence ("Her hair was … fair as wet straw") counts only where nothing else gives the attribute a value, and only when the pronoun is the entry's by the paragraph's rules or by the reader's answer (kept in `canon.json` `refs`).
+
+Slips on open facts and on deeds ask each passage alone: a 4B reader shown A and B together answered from A ("Coll" to "the crust the warden had given her"; "no" to "high windows" against "not one window"); asked of each sentence by itself it answers each correctly, and the slip is two definite answers that differ. A deed of no one kind is also asked whether B tells the very same event (two people sitting on beds are two events: the Thorough run's one false slip, now gone).
+
+| Reader | Set | Must facts | Precision (sheet / after review) | Slips | False slips |
+|---|---|---|---|---|---|
+| Careful | dev | 29/41 (71%) | 100% / 98% (64/65) | 3/3 | 0 |
+| Thorough (CPU) | dev | 30/41 (73%) | 100% / 86% (60/70) | 3/3 | 0 |
+
+The fixture shelves (Ashfall Road, Lantern Coast) keep the paragraph reading's answers through the fake reader in `npm test`; their numbers above were not re-measured with a real reader in this change. Careful's precision rests on the builder's review of 12 facts not on the sheet; Thorough's does not yet meet the bar (READING.md §11).

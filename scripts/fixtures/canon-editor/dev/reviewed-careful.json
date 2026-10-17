@@ -1,6 +1,5 @@
 {
- "_about": "Judged by the builder (Claude), not the evaluation lead: a kept fact not on the sheet is true when its label and value hold of that entity in the text (a scene detail counts); wrong when it says something the text does not (the ledger is not red: a red ribbon lies in it). Careful, dev, the runs of READING.md §11.",
- "coll|eye movement|kept his eyes on the door": true,
+ "_about": "Judged by the builder (Claude), not the evaluation lead, for the Careful dev run in READING.md §11: a kept fact not on the sheet is true when its label and value hold of that entity in the text (a scene detail counts); wrong when it says what the text does not, or calls one moment a habit.",
  "coll|position|already in the line": true,
  "coll|relationship|was the nearest thing she had to a friend": true,
  "the gift|effect on health|coll had been sick on it for three": true,
