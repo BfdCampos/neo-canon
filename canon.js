@@ -1076,7 +1076,10 @@
     }
     return null;
   }
-  function paraCandidates(text, idx, world, names) {
+  // `opts.narrator`: the entry the narration's "I" is (a first-person book);
+  // `opts.notes`: a page of the writer's notes, where a line that opens
+  // "Ivo Marchetti: …" is about him to its end ("Brown eyes.")
+  function paraCandidates(text, idx, world, names, opts = {}) {
     const ctx = paraCtx(text, idx, world);
     const { every, sents, speech } = ctx;
     const free = (a, b) => !speech.some(([s, e]) => a < e && b > s);
@@ -1174,6 +1177,22 @@
         if (r && r.k.sex && PRONOUNS[w.lw] !== r.k.sex.value) add({ kind: 'pronoun', strength: 'weak', id: r.id, attr: 'sex', fact: r.k.sex, start: w.start, end: w.end, to: swapPronoun(w.w, pronounAt(words, pi, text)), initials: r.initials });
       }
 
+      // the narrator's own word: "I was the only girl in my class"
+      if (opts.narrator && world.get(opts.narrator)) {
+        const k = world.get(opts.narrator);
+        const STOPS = new Set(['with', 'to', 'at', 'for', 'from', 'by', 'beside', 'near', 'like', 'than', 'of', 'behind', 'and', 'or', 'but', 'when', 'who', 'that', 'as', 'in', 'on']);
+        for (let i = 0; i + 1 < words.length; i++) {
+          if (words[i].w !== 'I' || !['was', 'am'].includes(words[i + 1].lw) || !free(words[i].start, words[i + 1].end)) continue;
+          for (let j = i + 2; j < Math.min(words.length, i + 7); j++) {
+            if (/[,;:—–()"“”]/.test(text.slice(words[j - 1].end, words[j].start)) || STOPS.has(words[j].lw)) break;
+            const sw = SEX_WORDS[words[j].lw];
+            if (!sw) continue;
+            if (sw[2] || /['’]s$/.test(words[j].w) || named(words[j])) break;
+            if (k.sex && sw[0] !== k.sex.value) add({ kind: 'noun', strength: 'strong', id: opts.narrator, attr: 'sex', fact: k.sex, start: words[j].start, end: words[j].end, to: keepCase(words[j].w, sw[1]) });
+            break;
+          }
+        }
+      }
       words.forEach((w, i) => {
         // the stallion, when the horse in the last few sentences is a mare (weak)
         const sw = SEX_WORDS[w.lw];
@@ -1199,11 +1218,22 @@
           // or a note's line: "Ilsa: grey eyes, born in Saltmere"
           const head = c && inS[0] && inS[0].start === s.start && /^\s*(?::|[—–]\s)/.test(text.slice(inS[0].end)) && !inS.some((m) => m !== inS[0] && m.start < c.start) ? inS[0] : null;
           // or the sentence's subject has them: "John has green eyes", "Mara had red hair"
+          // or "Ivo was the foreman, a long, stooped man with green eyes": the
+          // subject is a … with them (its first name, nothing named between)
           const haver = c && c.end <= w.start && inS.find((m) => {
             const j = after(m.end);
-            return j >= 0 && ['has', 'had'].includes(words[j].lw) && /^\s+$/.test(text.slice(m.end, words[j].start)) && words[j].end <= c.start && i - j <= 3 && !words.slice(j + 1, i).some(named);
+            if (j < 0 || !/^\s+$/.test(text.slice(m.end, words[j].start)) || words[j].end > c.start || words.slice(j + 1, i).some(named)) return false;
+            if (['has', 'had'].includes(words[j].lw)) return i - j <= 3;
+            return ['was', 'is'].includes(words[j].lw) && m === inS[0] && i - j <= 10 && words.slice(j + 1, i).some((x) => x.lw === 'with') && !/[;:—–()"“”]/.test(text.slice(words[j].end, c.start)) && !/\b(?:and|but)\s+(?:he|she|they|it)\b/i.test(text.slice(words[j].end, c.start));
           });
-          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver;
+          // or a notes line that opens with the name: "Ivo Marchetti: thirty-four … Brown eyes."
+          const noteHead = !inS.length && c && opts.notes && all[0] && all[0].start === 0 && /^\s*[:,—–]/.test(text.slice(all[0].end)) && words.indexOf(c) <= 1 && !all.some((m) => m !== all[0] && m.end <= s.start && world.get(m.id) && ['person', 'creature'].includes(world.get(m.id).e.kind)) ? all[0] : null;
+          // or the narrator's: "my brown eyes", "I had my father’s grey eyes"
+          const mine = !inS.length && c && opts.narrator && world.get(opts.narrator) && (
+            (det && det.lw === 'my' && free(det.start, det.end)) ||
+            (det && /['’]s$/.test(det.w) && words[words.indexOf(det) - 1] && words[words.indexOf(det) - 1].lw === 'my' && /(?:^|\s)I\s+(?:had|have|’ve got|'ve got|got)\s+my\s/u.test(s.text) && free(s.start, s.end)))
+            ? { id: opts.narrator, start: (det || c).start, end: (det || c).end } : null;
+          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver || noteHead || mine;
           const k = owner && world.get(owner.id);
           if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, colourWord(k[attr])) });
           // or, in a sentence naming no one, "his blue eyes" of the one person
@@ -1267,7 +1297,7 @@
       for (const p of sourceParas(src.html)) {
         if (paraOk && !paraOk(src, p)) continue;
         const sents = sentences(p.text);
-        for (const c of paraCandidates(p.text, idx, world, names)) found.push({ c, p, s: sents[c.si] });
+        for (const c of paraCandidates(p.text, idx, world, names, { narrator: narrators[src.bookId] || null, notes: isNote(src) })) found.push({ c, p, s: sents[c.si] });
       }
       // a word the dictionary knows (Corwyn, Bramblee are not words; "Brambles" is) is no slip of the pen
       const odd = [...new Set(found.filter((x) => x.c.kind === 'name').map((x) => x.c.word))];
@@ -1829,14 +1859,14 @@
     const sexOf = (x) => { const g = x.facts.find((h) => h.attr === 'sex' && ['verified', 'yours'].includes(h.state)); return g ? { value: g.value } : undefined; };
     const world = new Map(live.map((x) => [x.id, { e: x, rel: [], ...(sexOf(x) ? { sex: sexOf(x) } : {}) }]));
     const r = referent(para, pron.start, si, paraCtx(para, idx, world), PRONOUNS[pron.lw]);
-    if (r && r.id === e.id && !r.weak && (!r.k.sex || r.k.sex.value === PRONOUNS[pron.lw])) return true;
+    if (r && r.id === e.id && !r.weak && (!r.k.sex || r.k.sex.value === PRONOUNS[pron.lw])) return 'rule';
     const key = e.id + '|' + textHash(norm(st.text));
-    if (refs && refs[key] !== undefined) return refs[key] === true;
+    if (refs && refs[key] !== undefined) return refs[key] === true ? 'reader' : false;
     if (!reader || reader.tier === 'quick' || typeof reader.refers !== 'function') return false;
     const others = [...new Set(mentions(para, idx).map((m) => m.id))].filter((id) => id !== e.id).map((id) => live.find((x) => x.id === id).name);
     const said = await reader.refers({ sentence: st.text, span: pron.w, entity: e.name, paragraph: para, others });
     if (refs && (said === 'yes' || said === 'no')) refs[key] = said === 'yes';
-    return said === 'yes';
+    return said === 'yes' ? 'reader' : false;
   }
 
   /* ---------- story so far (docs/semantics/STORY.md) ---------- */
@@ -2022,7 +2052,7 @@
   // mare", "Captain Varr's eyes were the grey of wet slate", "Ilsa: grey
   // eyes"). Never a pronoun, speech, a question or a maybe, or a sentence
   // the writer said is not a slip. → Map 'id/attr' → Map value → [where]
-  function shelfEvidence(sources, entries, notSlips = []) {
+  function shelfEvidence(sources, entries, notSlips = [], narrators = {}) {
     const idx = mentionIndex(entries);
     const world = new Map(entries.map((x) => [x.id, { e: x, rel: [], sex: NO_VALUE, species: NO_VALUE, eyes: NO_VALUE, hair: NO_VALUE }]));
     const dismissed = new Set(notSlips.map((n) => n.fact + '|' + n.sentence));
@@ -2037,7 +2067,7 @@
     sources.forEach((src, order) => {
       for (const p of sourceParas(src.html)) {
         const sents = sentences(p.text);
-        for (const c of paraCandidates(p.text, idx, world, [])) {
+        for (const c of paraCandidates(p.text, idx, world, [], { narrator: narrators[src.bookId] || null, notes: isNote(src) })) {
           if (c.strength !== 'strong' || c.kind === 'pronoun' || !TIED[c.attr]) continue;
           const s = sents[c.si];
           if (PLAN.test(s.text)) continue;
@@ -2879,7 +2909,9 @@
             if (clash.r.note !== r.note) for (const f of [...clash.facts, ...facts(r)]) kinDisagree.add(f);
           }
         }
-        const evidence = shelfEvidence(sources, entries.filter((e) => !e.locked), await io.notSlips());
+        const narrIds = { ...(meta.narrators || {}) };
+        for (const [b, e] of narrators) narrIds[b] = e.id;
+        const evidence = shelfEvidence(sources, entries.filter((e) => !e.locked), await io.notSlips(), narrIds);
         // where a passage stands in reading order (the writer's notes first)
         const rank = new Map(sources.map((x, i) => [x.bookId + '/' + x.chId, i]));
         const where = (s) => {

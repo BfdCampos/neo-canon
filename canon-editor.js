@@ -517,6 +517,8 @@ module.exports = function canonEditor(C) {
       for (const [si, s] of p.sents.entries()) {
         const here = ph.filter((h) => h.start >= s.start && h.end <= s.end);
         if (here.some((h) => h.key === c.key)) { add(s, 'name'); continue; }
+        // a notes line that opens with the name: "Ivo Marchetti: thirty-four … Brown eyes. Never drinks."
+        if (ch.notes && !here.length && ph[0] && ph[0].key === c.key && ph[0].start === 0 && /^\s*[:,—–]/.test(p.text.slice(ph[0].end))) { add(s, 'name'); continue; }
         if (living.has(c.key)) {
           const m = !s.said && SUBJECT.exec(s.text);
           if (m && PERSONAL[m[1].toLowerCase()]) {
@@ -962,6 +964,7 @@ module.exports = function canonEditor(C) {
   const KIND = { cast: 'cast', dossier: 'dossier', verdict: 'verify', profile: 'profile' };
   async function readChapter({ src, paras, entries, reader, cache, names, stop, tell, suspect, sexOf: sexKnown, timed = null, narrator = null }) {
     const ch = chapterModel(paras);
+    ch.notes = !!(src.notes || src.notebook);
     const book = `${src.book}, ${src.label}`;
     const dropped = [];
     let calls = 0;
