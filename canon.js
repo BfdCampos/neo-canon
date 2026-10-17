@@ -2401,7 +2401,8 @@
             // of "was" ("He was my mother’s younger brother")
             let b = null;
             const after = inS.find((n) => n.start >= last.end && /^\s*,?\s*$/.test(p.text.slice(last.end, n.start)));
-            const before = inS.filter((n) => n.end <= w.start && /^\s*,\s*$/.test(p.text.slice(n.end, w.start))).pop();
+            // (a name the entry holds only in part: "Tamsin Marchetti, Ivo’s elder sister" for "Tamsin")
+            const before = inS.filter((n) => n.end <= w.start && /^(?:\s+\p{Lu}[\p{L}'’-]+){0,2}\s*,\s*$/u.test(p.text.slice(n.end, w.start))).pop();
             const cop = i >= 1 && ['was', 'is'].includes(ws[i - 1].lw) ? i - 1 : -1;
             if (after) b = { id: after.id, strong: true };
             else if (before) b = { id: before.id, strong: true };

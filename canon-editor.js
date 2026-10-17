@@ -878,6 +878,8 @@ module.exports = function canonEditor(C) {
     // polarity: "not one of the Spared" isn't "one of the Spared"
     const clauses = cited.map((l) => clauseOf(l.s, grounded));
     if (localNeg(clauses.join(' '), grounded) !== negated(value) && !(negated(value) && /less|out\b|\bun/i.test(value))) return { why: 'polarity' };
+    // kin with no one it is kin to ("younger sister"): whose? (kin by rule names both)
+    if (key === 'relationship.kin' && !/\p{Lu}/u.test(value.replace(/^\p{Lu}/u, '')) && !/['’]s\b/.test(value) && !others.some((o) => [o.name, ...o.aliases].some((n) => norm(value).includes(norm(n.replace(/^the\s+/i, ''))))) && !/\p{Lu}/u.test(value[0] || '')) return { why: 'shape' };
     // an age is how old, not who is older ("younger sister": kin)
     if (key === 'age' && /^(?:younger|older|elder|eldest|youngest|oldest)$/i.test(value)) return { why: 'shape' };
     // no value at all: "not specified", "unknown", "none"
