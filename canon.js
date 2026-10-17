@@ -3368,14 +3368,17 @@
     required: ['c', 's']
   };
   const FACT_GROUPS = ['appearance', 'age', 'sex', 'role', 'personality', 'habit', 'relationship', 'origin', 'history', 'state', 'possession', 'description', 'location', 'rule', 'membership', 'other'];
+  // (round 2: what an editor looks for in each kind, named outright: the
+  // held-out stories lost most of their looks, routines and rules)
   const DOSSIER_WHAT = {
-    person: 'appearance (body, height, hair, eyes, face, clothing, marks), age, sex, role or work, personality, habits and routines, relationships, origin and history, state (health, situation), possessions',
-    creature: 'appearance, age, sex, what it is, habits, who it belongs to, its history and state',
-    place: 'what it is like (what is seen, heard, smelt, how warm), its layout and parts, how it works (its routines and rules), who is there, where it is',
+    person: 'how they look (height, build, hair, eyes, face, marks or scars, clothes, glasses), their age and sex, their work or rank, what they always or usually do and when, their family (whose son, sister, wife, uncle), where they live and come from, what they own, what they are like',
+    creature: 'what kind of animal it is, its sex, colour and markings, its age, who owns it, its habits, its history and state',
+    place: 'what it is (a town, a house, a room, a ship), what it is built of and looks like, its parts and rooms, what is seen, heard and smelt there, how warm it is, where it is, what happens there every day (its routines) and its rules, who lives or works there',
     group: 'who belongs, how you tell them, their customs, routines and rules, where they come from',
-    thing: 'what it is like, what it is for, its effects, who uses it and how',
+    thing: 'what it is, its make, colour and material, what it is like, who owns it, what it is for and its effects',
     rule: 'the rule itself, what happens to whoever breaks it, who keeps it'
   };
+
   const dossierSystem = (kind) => [
     'You are a story editor keeping a story bible. From the numbered sentences only, list the lasting facts about the one named: ' + (DOSSIER_WHAT[kind] || DOSSIER_WHAT.thing) + '.',
     'Lasting means true beyond one moment: how they look, who and what they are, what they always or usually do, what happened to them before, how they stand with others. Leave out single actions and passing moments (stood up, drank, looked at, walked with): those are the story, not the bible.',
