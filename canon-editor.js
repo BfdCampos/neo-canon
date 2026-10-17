@@ -492,6 +492,8 @@ module.exports = function canonEditor(C) {
   function gateFact(x, part, c, ctx) {
     let g = GROUPS.includes(x && x.g) ? x.g : null;
     if (g && ['sex', 'age'].includes(g) && !['person', 'creature'].includes(c.kind)) g = 'description';
+    // (who belongs is a group's; a place's or thing's "membership" is what it's like)
+    if (g === 'membership' && ['place', 'thing'].includes(c.kind)) g = 'description';
     const value = String((x && x.v) || '').replace(/\s+/g, ' ').trim().replace(/[.;,]+$/, '');
     const label = String((x && x.a) || '').replace(/\s+/g, ' ').trim();
     if (!g || !value || value.length > 110 || value.split(' ').length > 16 || label.split(' ').length > 4) return { why: 'shape' };

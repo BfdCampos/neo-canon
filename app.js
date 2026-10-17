@@ -17942,8 +17942,17 @@ function canonProfile(page, e, el, edit, button) {
   // (each source after its sentence's full stop: "…in her year.¹")
   const text = p.text.replace(/((?:\s*\[\d+\])+)\s*([.!?])/g, '$2$1');
   let at = 0;
+  // (a sentence's last word, its stop and its sources never part at a line's end)
+  let hold = null;
   for (const m of text.matchAll(/\s*\[(\d+)\]/g)) {
-    prose.append(text.slice(at, m.index));
+    const before = text.slice(at, m.index);
+    if (before) {
+      const w = /(\S+)$/.exec(before);
+      prose.append(w ? before.slice(0, w.index) : before);
+      hold = el('span', 'cn-cites');
+      if (w) hold.append(w[1]);
+      prose.appendChild(hold);
+    }
     const c = (p.cites || []).find((x) => x.n === +m[1]);
     const b = el('button', 'cn-cite', m[1]);
     if (c) {
@@ -17951,7 +17960,7 @@ function canonProfile(page, e, el, edit, button) {
       b.setAttribute('aria-label', t('Source {n}: {where}', { n: m[1], where: c.label }));
       b.onclick = () => canonOpenSource(c);
     } else b.disabled = true;
-    prose.appendChild(b);
+    (hold || prose).appendChild(b);
     at = m.index + m[0].length;
   }
   prose.append(text.slice(at));
