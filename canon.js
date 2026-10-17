@@ -1306,9 +1306,11 @@
       const here = every.filter((m) => m.start >= s.start && m.end <= s.end && byId.get(m.id) && ['person', 'creature'].includes(byId.get(m.id).kind));
       if (!here.length) continue;
       for (const ev of story) {
-        // two distinctive words shared, or one found nowhere else ("vortex")
+        // two distinctive words shared, or one found nowhere else ("vortex"),
+        // or one with a deed of the same kind (a crust pressed into her hand;
+        // the crust the warden had given her)
         const shared = [...ev.words].filter((w) => own.has(w));
-        if (ev.pos >= pos || !(shared.length >= 2 || shared.some((w) => rare.only(w)))) continue;
+        if (ev.pos >= pos || !(shared.length >= 2 || shared.some((w) => rare.only(w)) || (shared.length && sameDeed(ev.words, heavy(plain).map(stemOf))))) continue;
         // the one the sentence puts first is its doer; the doer named first
         // is let past only by a "not" ("It wasn't John, it was Dave")
         const other = here.find((m) => !ev.ids.includes(m.id));
@@ -1450,7 +1452,7 @@
           const people = here.filter((m) => { const x = live.find((y) => y.id === m.id); return x && ['person', 'creature'].includes(x.kind); });
           for (const d of deeds) {
             const shared = [...d.words].filter((w) => own.has(w));
-            if (!(shared.length >= 2 || shared.some((w) => rare.only(w)))) continue;
+            if (!(shared.length >= 2 || shared.some((w) => rare.only(w)) || (shared.length && sameDeed(d.words, heavy(s.text).map(stemOf))))) continue;
             if (people.some((m) => !d.ids.includes(m.id))) ids.add(s.id);
           }
         }
@@ -1872,6 +1874,15 @@
     }
     return [...out.values()];
   }
+
+  // Deeds of one kind: giving (gave, handed, pressed into), striking,
+  // taking, opening, killing, finding. Two passages sharing a distinctive
+  // thing and a deed of one kind may be one deed done by two people.
+  const DEEDS = [['give', 'gave', 'given', 'gives', 'giving', 'hand', 'handed', 'press', 'pressed', 'pass', 'passed', 'slip', 'slipped', 'offer', 'offered', 'lend', 'lent', 'brought', 'bring', 'gift', 'gifted', 'save', 'saved'],
+    ['hit', 'strike', 'struck', 'punch', 'punched', 'slap', 'slapped', 'kick', 'kicked', 'beat', 'beaten'], ['take', 'took', 'taken', 'steal', 'stole', 'stolen', 'grab', 'grabbed', 'snatch', 'snatched'],
+    ['open', 'opened', 'unlock', 'unlocked', 'unbolt', 'unbolted'], ['kill', 'killed', 'murder', 'murdered', 'stab', 'stabbed', 'shot', 'shoot', 'drown', 'drowned'],
+    ['find', 'found', 'discover', 'discovered'], ['write', 'wrote', 'written', 'sign', 'signed'], ['burn', 'burnt', 'burned', 'set fire']].map((g) => new Set(g.map(stemOf)));
+  const sameDeed = (a, b) => { const B = new Set(b); return DEEDS.some((g) => [...a].some((w) => g.has(w)) && [...B].some((w) => g.has(w))); };
 
   // what nearly every story's paragraphs do and have: never what ties two deeds
   const COMMON = new Set(['rode', 'ride', 'head', 'came', 'come', 'went', 'turn', 'look', 'back', 'gate', 'door', 'room', 'hand', 'eyes', 'eye', 'wate', 'road', 'nigh', 'morn', 'time', 'kept', 'keep', 'took', 'take', 'made', 'make', 'found', 'find', 'stood', 'stand', 'walk', 'told', 'tell', 'felt', 'feel', 'left', 'leave', 'wait', 'light', 'house', 'town', 'away', 'there', 'first', 'last', 'long', 'little', 'great', 'every', 'never', 'always', 'again'].map(stemOf));
@@ -2847,7 +2858,7 @@
       async cast({ text }) {
         this.calls++;
         const hit = (answers.cast || []).find((x) => norm(text).includes(norm(x.para)));
-        return hit ? hit.cast.map((c) => ({ name: c.n, kind: c.k, aliases: c.a || [], in: c.in || '' })) : [];
+        return { cast: hit ? hit.cast.map((x) => ({ name: x.n, kind: x.k, aliases: x.a || [] })) : [], setting: (hit && hit.s) || '' };
       },
       async dossier({ name, text }) {
         this.calls++;
@@ -2960,15 +2971,16 @@
   const CAST_KINDS = ['person', 'creature', 'place', 'group', 'thing', 'rule'];
   const CAST_SYSTEM = [
     'You are a story editor making the cast list of one chapter of a novel: every person, creature, place, group, thing and rule of the story\'s world that the chapter names, or calls by a role ("the warden", "the cook").',
-    'For each one: n = the name exactly as the chapter writes it (a role with "the"); k = person, creature, place, group, thing or rule; a = the other names the chapter uses for the same one, exactly as written (a nickname, a real name the chapter gives), else []; in = for a place, the larger place it is inside, if the chapter shows it, else "".',
-    'Leave out pronouns, crowds ("the children"), and ordinary objects that matter only once. One item for one person, however many names they have.',
-    'Example. Chapter: ¶1 Old Bren unbolted the mill gate. The miller\'s girl, Wren, ran past him to the yard. ¶2 "Bren the Bolt," the boys called him. The mill had stood by the Ashen ford for a century; the yard behind it was mud.',
-    'Answer: {"c":[{"n":"Bren","k":"person","a":["Bren the Bolt"],"in":""},{"n":"Wren","k":"person","a":[],"in":""},{"n":"the mill","k":"place","a":[],"in":""},{"n":"the yard","k":"place","a":[],"in":"the mill"},{"n":"the Ashen ford","k":"place","a":[],"in":""}]}'
+    'For each one: n = the name exactly as the chapter writes it (a role with "the"); k = person, creature, place, group, thing or rule; a = the other names the chapter uses for the same one, exactly as written (a nickname, a real name the chapter gives), else [].',
+    'Then s = the building, institution, town or ship the chapter is set in, as the chapter names it (not a single room), else "".',
+    'Leave out pronouns, crowds ("the children"), and everyday objects (cups, lamps, clothes, food) unless the story names them or they matter beyond one moment. One item for one person, however many names they have.',
+    'Example. Chapter: ¶1 Old Bren unbolted the gate of Ashen Mill. The miller\'s girl, Wren, ran past him to the yard with a cup of milk. ¶2 "Bren the Bolt," the boys called him. The mill had stood by the ford for a century; the yard behind it was mud.',
+    'Answer: {"c":[{"n":"Bren","k":"person","a":["Bren the Bolt"]},{"n":"Wren","k":"person","a":[]},{"n":"Ashen Mill","k":"place","a":["the mill"]},{"n":"the yard","k":"place","a":[]},{"n":"the ford","k":"place","a":[]}],"s":"Ashen Mill"}'
   ].join('\n');
   const CAST_SCHEMA = {
     type: 'object',
-    properties: { c: { type: 'array', maxItems: 24, items: { type: 'object', properties: { n: { type: 'string' }, k: { enum: CAST_KINDS }, a: { type: 'array', maxItems: 4, items: { type: 'string' } }, in: { type: 'string' } }, required: ['n', 'k', 'a', 'in'] } } },
-    required: ['c']
+    properties: { c: { type: 'array', maxItems: 24, items: { type: 'object', properties: { n: { type: 'string' }, k: { enum: CAST_KINDS }, a: { type: 'array', maxItems: 4, items: { type: 'string' } } }, required: ['n', 'k', 'a'] } }, s: { type: 'string' } },
+    required: ['c', 's']
   };
   const FACT_GROUPS = ['appearance', 'age', 'sex', 'role', 'personality', 'habit', 'relationship', 'origin', 'history', 'state', 'possession', 'description', 'location', 'rule', 'membership', 'other'];
   const DOSSIER_WHAT = {
@@ -2980,11 +2992,12 @@
     rule: 'the rule itself, what happens to whoever breaks it, who keeps it'
   };
   const dossierSystem = (kind) => [
-    'You are a story editor keeping a story bible. From the numbered sentences only, list what an editor would note about the one named: ' + (DOSSIER_WHAT[kind] || DOSSIER_WHAT.thing) + '.',
+    'You are a story editor keeping a story bible. From the numbered sentences only, list the lasting facts about the one named: ' + (DOSSIER_WHAT[kind] || DOSSIER_WHAT.thing) + '.',
+    'Lasting means true beyond one moment: how they look, who and what they are, what they always or usually do, what happened to them before, how they stand with others. Leave out single actions and passing moments (stood up, drank, looked at, walked with): those are the story, not the bible.',
     'One fact per item: g = its group; a = a short label (1 to 3 words); v = the value, at most 10 words, in the sentences\' own words; s = the numbers of the sentences that state it (1 to 3); x = 1 if it is only said by a character (in quotation marks, or "he said that…"), else 0.',
-    'Only what the sentences state about the one named: not about anyone else, not a guess, not a feeling of the moment. Each fact once.',
-    'Example. Sentences about Bren: [1] Old Bren unbolted the mill gate. [2] He was a broad man with a white beard and a limp. [3] "Bren the Bolt," the boys called him.',
-    'Answer: {"f":[{"g":"age","a":"age","v":"old","s":[1],"x":0},{"g":"appearance","a":"build","v":"broad","s":[2],"x":0},{"g":"appearance","a":"beard","v":"white beard","s":[2],"x":0},{"g":"appearance","a":"walk","v":"a limp","s":[2],"x":0},{"g":"habit","a":"work","v":"unbolts the mill gate","s":[1],"x":0},{"g":"other","a":"nickname","v":"Bren the Bolt","s":[3],"x":0}]}'
+    'Only what the sentences state about the one named: not about anyone else, not a guess. Each fact once.',
+    'Example. Sentences about Bren: [1] Every morning old Bren unbolted the mill gate. [2] He was a broad man with a white beard and a limp. [3] He dropped the key. [4] "Bren the Bolt," the boys called him.',
+    'Answer: {"f":[{"g":"age","a":"age","v":"old","s":[1],"x":0},{"g":"habit","a":"mornings","v":"unbolts the mill gate every morning","s":[1],"x":0},{"g":"appearance","a":"build","v":"broad","s":[2],"x":0},{"g":"appearance","a":"beard","v":"white beard","s":[2],"x":0},{"g":"appearance","a":"walk","v":"a limp","s":[2],"x":0},{"g":"other","a":"nickname","v":"Bren the Bolt","s":[4],"x":0}]}'
   ].join('\n');
   const DOSSIER_SCHEMA = {
     type: 'object',
@@ -3081,11 +3094,13 @@
       // the editor's reading (READING.md), for the readers that do it
       editor: !!editor,
       parallel: 1,
-      async cast({ text, known = [] }) {
+      // (`names`: the capitalised names code found, so none is overlooked)
+      async cast({ text, known = [], names: found = [] }) {
         this.calls++;
         const names = known.map((k) => `${k.name} (${k.kind}${k.aliases && k.aliases.length ? ': ' + k.aliases.join(', ') : ''})`).join('; ');
-        const r = await safe({ system: CAST_SYSTEM, user: (names ? `Already in the story bible: ${names}\n\n` : '') + `Chapter:\n${text}\n\nThe cast list as JSON.`, schema: CAST_SCHEMA, maxTokens: 700, compact: true }, null);
-        return ((r && r.c) || []).map((x) => ({ name: x.n, kind: x.k, aliases: x.a || [], in: x.in || '' }));
+        const user = (names ? `Already in the story bible: ${names}\n\n` : '') + `Chapter:\n${text}\n\n` + (found.length ? `Names written in this chapter: ${found.join(', ')}\n` : '') + 'The cast list as JSON.';
+        const r = await safe({ system: CAST_SYSTEM, user, schema: CAST_SCHEMA, maxTokens: 700, compact: true }, null);
+        return { cast: ((r && r.c) || []).map((x) => ({ name: x.n, kind: x.k, aliases: x.a || [] })), setting: (r && r.s) || '' };
       },
       async dossier({ name, kind, aliases = [], text }) {
         this.calls++;

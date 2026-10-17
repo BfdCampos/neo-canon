@@ -129,7 +129,8 @@ async function startReader(model, threads, memoFile, fresh) {
     const k = stats.kinds[kind] = stats.kinds[kind] || { n: 0, ms: 0 };
     k.n++; k.ms += r.ms;
     memo[key] = { result: r.result, ms: r.ms };
-    if (++dirty >= 5) save();
+    dirty++;
+    save(); // (every answer: a run stopped part way keeps what it asked)
     return log(r.result);
   };
   return { ask, stats, save, stop: () => { save(); if (child) child.kill(); } };

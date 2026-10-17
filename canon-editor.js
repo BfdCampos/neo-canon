@@ -103,7 +103,7 @@ module.exports = function canonEditor(C) {
   // for a role, with a capital The at a sentence's start
   function written(text, phrase) {
     const role = /^the\s/i.test(phrase) && /^\p{Ll}/u.test(phrase.replace(/^the\s+/i, ''));
-    const body = role ? `[Tt]he\\s+${escRe(phrase.replace(/^the\s+/i, ''))}` : escRe(phrase);
+    const body = role ? `[Tt]he\\s+[“"‘']?${escRe(phrase.replace(/^the\s+/i, ''))}[”"’']?` : escRe(phrase);
     return (text.match(new RegExp(`(?<![\\p{L}\\p{N}'’-])${body}(?![\\p{L}\\p{N}])`, 'gu')) || []).length;
   }
   // a cast name as Canon keeps it: as written; a role keeps its "the"
@@ -147,8 +147,28 @@ module.exports = function canonEditor(C) {
     return before.length ? before[before.length - 1].key : null;
   }
 
+  // The capitalised names a chapter writes that aren't a sentence's first
+  // word, a title or a word it also writes in lower case: Hesper, the Long
+  // Room, the Weighhouse. Given to the reader so it overlooks none.
+  function writtenNames(ch, names) {
+    const out = new Map();
+    const lower = (names && names.lower) || new Set();
+    for (const p of ch.paras) {
+      for (const s of p.sents) {
+        for (const m of s.text.matchAll(/(?<![\p{L}\p{N}'’-])(\p{Lu}[\p{Ll}'’-]+(?:\s+(?:of\s+(?:the\s+)?)?\p{Lu}[\p{Ll}'’-]+)*)/gu)) {
+          const lead = s.text.slice(0, m.index);
+          if (!/[\p{L}\p{N}]/u.test(lead) || /[“"‘«:]\s*$/.test(lead)) continue; // a sentence's (or a quotation's) first word
+          const w = m[1].replace(/['’]s$/, '');
+          if (w.split(/\s+/).length === 1 && (lower.has(w.toLowerCase()) || TITLES.has(w.toLowerCase()) || PRONOUNS[w.toLowerCase()] || /^I$/.test(w))) continue;
+          out.set(w, (out.get(w) || 0) + 1);
+        }
+      }
+    }
+    return [...out.keys()].slice(0, 30);
+  }
+
   // The reader's cast, through the gates. → [{ key, name, kind, aliases, in, entry }]
-  function castGate({ proposals, ch, entries, names }) {
+  function castGate({ proposals, ch, entries, names, setting = '' }) {
     const text = ch.text;
     const lower = names && names.lower;
     const cast = [];
@@ -210,11 +230,21 @@ module.exports = function canonEditor(C) {
       c.entry = [c.name, ...c.aliases].map((n) => findEntry(entries, n)).find(Boolean) || null;
       if (c.entry && c.entry.locked) c.skip = true;
     }
-    // the setting: the place the chapter's other places are part of
-    const places = kept.filter((c) => c.kind === 'place');
-    for (const c of places) c.contains = places.filter((x) => x !== c && x.in && [c.name, ...c.aliases].some((n) => norm(n.replace(/^the\s+/i, '')) === norm(x.in.replace(/^the\s+/i, '')))).length;
-    const top = places.filter((c) => c.contains && !places.some((x) => x !== c && c.in && [x.name, ...x.aliases].some((n) => norm(n.replace(/^the\s+/i, '')) === norm(c.in.replace(/^the\s+/i, '')))));
-    if (top.length === 1) top[0].setting = true;
+    // the setting: the building, institution or town the reader says the
+    // chapter is set in, when it is a place of the cast (else none). The
+    // place proposed only as the setting joins the cast.
+    if (setting) {
+      const name = cleanName(setting);
+      const bare = (n) => norm(String(n).replace(/^the\s+/i, ''));
+      let c = kept.find((x) => [x.name, ...x.aliases].some((n) => bare(n) === bare(name)));
+      if (!c && nameKind(name, text, lower, 'place') === 'proper' && !misspelt(name.replace(/^the\s+/i, ''), entries)) {
+        c = { key: cast.length, name: written(text, 'the ' + name.replace(/^the\s+/i, '')) ? 'the ' + name.replace(/^the\s+/i, '') : name.replace(/^the\s+/i, ''), kind: 'place', aliases: [], in: '', proper: true, wanted: [] };
+        if (/^the\s/i.test(c.name)) c.aliases.push(c.name.slice(4));
+        kept.push(c);
+        c.entry = [c.name, ...c.aliases].map((n) => findEntry(entries, n)).find(Boolean) || null;
+      }
+      if (c && c.kind === 'place') c.setting = true;
+    }
     return kept.filter((c) => !c.skip);
   }
   function mergeCast(cast, into, from) {
@@ -413,7 +443,9 @@ module.exports = function canonEditor(C) {
         if (got.size === all.size) { if (!best || j - i < best[1] - best[0]) best = [i, j]; break; }
       }
     }
-    const [first, last] = best;
+    let [first, last] = best;
+    // (the sentence's start, who it is about, stays unless it runs long)
+    if (first > 0 && text.slice(0, segs[first].a).split(/\s+/).length <= 12) first = 0;
     const cut = text.slice(segs[first].a, segs[last].b).replace(/[\s,;:—–]+$/, '');
     // too short to stand alone, or a clause that leans on the one before: the sentence
     if (cut.split(/\s+/).length < 4 || (first > 0 && /^(?:and|but|or|which|who|that|as|with|than)\b/i.test(cut))) return fit(low.length ? text : cut, words);
@@ -433,7 +465,7 @@ module.exports = function canonEditor(C) {
     const g = GROUPS.includes(x && x.g) ? x.g : null;
     const value = String((x && x.v) || '').replace(/\s+/g, ' ').trim().replace(/[.;,]+$/, '');
     const label = String((x && x.a) || '').replace(/\s+/g, ' ').trim();
-    if (!g || !value || value.length > 80 || value.split(' ').length > 12 || label.split(' ').length > 4) return { why: 'shape' };
+    if (!g || !value || value.length > 110 || value.split(' ').length > 16 || label.split(' ').length > 4) return { why: 'shape' };
     // 1 cited: every id one of the part's sentences
     const ids = [...new Set((Array.isArray(x.s) ? x.s : [x.s]).map((n) => +n).filter((n) => Number.isInteger(n)))];
     if (!ids.length || ids.length > 3 || ids.some((n) => n < 1 || n > part.lines.length)) return { why: 'cited' };
@@ -643,9 +675,11 @@ module.exports = function canonEditor(C) {
     const near = entries.filter((e) => !e.locked && mentions(ch.text, mentionIndex([e])).length);
     const known = near.slice(0, 40).map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases }));
     if (tell) tell({ phase: 'cast' });
-    const castAnswer = await ask('cast', H('cast', ch.text, known), () => reader.cast({ text: ch.paras.map((p) => `¶${p.pi + 1} ${p.text}`).join('\n'), known }));
+    const found = writtenNames(ch, names);
+    const castAnswer = await ask('cast', H('cast', ch.text, known, found), () => reader.cast({ text: ch.paras.map((p) => `¶${p.pi + 1} ${p.text}`).join('\n'), known, names: found }));
     if (stop && stop()) return { calls, dropped, stopped: true };
-    const cast = castGate({ proposals: castAnswer || [], ch, entries: entries.filter((e) => !e.locked), names });
+    const answer = Array.isArray(castAnswer) ? { cast: castAnswer, setting: '' } : castAnswer || { cast: [], setting: '' };
+    const cast = castGate({ proposals: answer.cast || [], setting: answer.setting, ch, entries: entries.filter((e) => !e.locked), names });
     // known entries the chapter names, if the reader left them out
     for (const e of near) {
       if (cast.some((c) => c.entry === e)) continue;

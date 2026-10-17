@@ -22,78 +22,11 @@ const BOOK = path.join(DEV, 'library', 'book-under-the-line-wh1');
 const C1 = Canon.sourceParas(fs.readFileSync(path.join(BOOK, 'chapters', 'c1.html'), 'utf8'));
 const CANON = 'canon-the-weighhouse-shelf-wh';
 
-// what a reader proposes: sentences cited by their words (the fake reader
-// numbers them as the pack does), verdicts by "name|value" (none: yes)
-const CAST = [
-  { n: 'Hesper', k: 'person', a: ['Forty-one'] }, { n: 'Coll', k: 'person', a: [] }, { n: 'the warden', k: 'person', a: [] },
-  { n: 'the weigher', k: 'person', a: ['Brother Ink', 'Anselm'] }, { n: 'the Long Room', k: 'place', a: [], in: 'the Weighhouse' },
-  { n: 'the Weighhouse', k: 'place', a: ['Weighhouse'] }, { n: 'the yard', k: 'place', a: [], in: 'the Weighhouse' },
-  { n: 'She', k: 'person', a: [] }, { n: 'the children', k: 'group', a: [] }, { n: 'the Valey', k: 'place', a: [] }, { n: 'the cloth', k: 'thing', a: [] }
-];
-const ANSWERS = {
-  cast: [{ para: 'The bell went six times, the way it always did', cast: CAST },
-    { para: 'On feast days it went twelve', cast: [{ n: 'Hesper', k: 'person', a: [] }, { n: 'Coll', k: 'person', a: [] }, { n: 'the Long Room', k: 'place', a: [] }, { n: 'the warden', k: 'person', a: [] }] }],
-  dossier: [
-    { name: 'Hesper', facts: [
-      { g: 'age', a: 'age', v: 'fifteen', s: ['Hesper was fifteen'] },
-      { g: 'appearance', a: 'height', v: 'tallest girl in her year', s: ['Hesper was fifteen'] },
-      { g: 'appearance', a: 'hair', v: 'fair as wet straw', s: ['fair as wet straw'] },
-      { g: 'appearance', a: 'haircut', v: 'cropped close to the skull', s: ['fair as wet straw'] },
-      { g: 'habit', a: 'hands', v: 'keeps her hands still', s: ['She kept her hands still'] },
-      { g: 'habit', a: 'stillness', v: 'kept her hands still', s: ['She kept her hands still'] },
-      { g: 'origin', a: 'born', v: 'born on the third floor, in the room with the green tiles', s: ['born on the third floor'] },
-      // a sentence that isn't there; a claim nobody wrote; a dragon from the first sentence
-      { g: 'other', a: 'pet', v: 'a tame dragon', s: [99] },
-      { g: 'role', a: 'job', v: 'rides dragons for the king', s: ['The bell went six times'] },
-      // the warden's opinion, only said; and an opinion read between the lines
-      { g: 'appearance', a: 'height', v: 'too tall', s: ['Hesper was fifteen'], x: 1 },
-      { g: 'personality', a: 'personality', v: 'secretly furious', s: ['She kept her hands still'] }
-    ] },
-    { name: 'Hesper', part: 'She tucked her black hair', facts: [
-      { g: 'appearance', a: 'hair', v: 'black', s: ['She tucked her black hair'] },
-      { g: 'habit', a: 'up early', v: 'up before the last stroke', s: ['Hesper was up before the last stroke'] }
-    ] },
-    { name: 'Coll', facts: [
-      { g: 'membership', a: 'caste', v: 'one of the Spared', s: ['He was not one of the Spared'] },
-      { g: 'membership', a: 'caste', v: 'not one of the Spared', s: ['He was not one of the Spared'] },
-      { g: 'appearance', a: 'hair', v: 'black hair that stuck up at the crown', s: ['had black hair that stuck up'] },
-      { g: 'origin', a: 'from', v: 'came up from the valley in a cart', s: ['come up from the valley in a cart'] },
-      { g: 'other', a: 'valley', v: 'the valley is a town with a mill and too many dogs', s: ['only a town with a mill'] }
-    ] },
-    { name: 'the Long Room', facts: [
-      { g: 'description', a: 'windows', v: 'not one window', s: ['not one window between the lot'] },
-      { g: 'description', a: 'beds', v: 'forty beds in two rows', s: ['Forty beds ran down the Long Room'] },
-      { g: 'description', a: 'light', v: 'strip of yellow lamps that hum when cold', s: ['strip of yellow lamps'] },
-      { g: 'description', a: 'smell', v: 'smells of lye and apples', s: ['The air smelled of lye'] },
-      { g: 'description', a: 'door', v: 'door unlocks from the outside', s: ['It always unlocked from the outside'] }
-    ] },
-    { name: 'the Long Room', part: 'high windows', facts: [
-      { g: 'description', a: 'windows', v: 'high windows', s: ['high windows'] }
-    ] },
-    { name: 'the warden', facts: [
-      { g: 'sex', a: 'sex', v: 'woman', s: ['She was a narrow woman'] },
-      { g: 'appearance', a: 'clothing', v: 'grey coat buttoned to the throat', s: ['She was a narrow woman'] },
-      // the reader, asked, says no
-      { g: 'possession', a: 'keys', v: 'a ring of keys she never looked at', s: ['She was a narrow woman'] }
-    ] },
-    { name: 'Anselm', facts: [
-      { g: 'appearance', a: 'build', v: 'thin as a rake', s: ['He was an old man, thin as a rake'] },
-      { g: 'habit', a: 'humming', v: 'hums the same three hymns in the same order', s: ['He hummed while he worked'] }
-    ] },
-    { name: 'the Weighhouse', facts: [
-      { g: 'rule', a: 'rule', v: 'a child below the red line three dawns running goes down to the valley', s: ['a child who falls below the red line'] },
-      { g: 'habit', a: 'bell', v: 'the bell goes six times', s: ['The bell went six times, the way it always did'] }
-    ] }
-  ],
-  verify: { 'hesper|secretly furious': 'guess', 'anselm|thin as a rake': 'yes', 'the warden|a ring of keys she never looked at': 'no' },
-  refers: [{ sentence: 'Her hair was cropped', span: 'Her', entity: 'Hesper', answer: 'yes' }, { sentence: 'He was a head shorter', span: 'He', entity: 'Coll', answer: 'yes' }],
-  profile: [{ name: 'Hesper', p: [
-    { t: 'Hesper is fifteen and the tallest girl in her year.', f: ['fifteen', 'tallest girl in her year'] },
-    { t: 'She is secretly a princess.', f: ['fifteen'] },
-    { t: 'Her hair is fair as wet straw.', f: ['fair (fair as wet straw)'] }
-  ] }],
-  clash: [{ sentence: 'Grey light came down through the Long Room', answer: 'yes' }]
-};
+// what a reader proposes (scripts/fixtures/canon-editor/dev/reader-answers.json):
+// sentences cited by their words (the fake reader numbers them as the pack
+// does), verdicts by "name|value" (none: yes)
+const ANSWERS = JSON.parse(fs.readFileSync(path.join(DEV, 'reader-answers.json'), 'utf8'));
+const CAST = ANSWERS.cast[0].cast;
 
 function library() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-editor-'));
@@ -108,7 +41,7 @@ const factLines = (e) => e.facts.map((f) => `${Canon.labelOf(f)}: ${f.value}${f.
 
 test('the cast: names as written, roles written twice, aliases the text ties, the setting; no pronoun, crowd or misspelling', () => {
   const ch = E.chapterModel(C1);
-  const cast = E.castGate({ proposals: CAST.map((c) => ({ name: c.n, kind: c.k, aliases: c.a, in: c.in || '' })), ch, entries: [], names: Canon.shelfNames([ch.text]) });
+  const cast = E.castGate({ proposals: CAST.map((c) => ({ name: c.n, kind: c.k, aliases: c.a })), setting: 'the Weighhouse', ch, entries: [], names: Canon.shelfNames([ch.text]) });
   const got = Object.fromEntries(cast.map((c) => [c.name, c.aliases]));
   // "His name, Hesper had once heard the warden say, was Anselm": the weigher's name
   assert.deepEqual(got.Anselm, ['the weigher', 'Brother Ink', 'weigher']);
@@ -125,7 +58,7 @@ test('the cast: names as written, roles written twice, aliases the text ties, th
 
 test('the packs: a person\'s pronoun sentences, a place\'s paragraph and "the room", nobody else\'s sentences', () => {
   const ch = E.chapterModel(C1);
-  const cast = E.castGate({ proposals: CAST.map((c) => ({ name: c.n, kind: c.k, aliases: c.a, in: c.in || '' })), ch, entries: [], names: Canon.shelfNames([ch.text]) });
+  const cast = E.castGate({ proposals: CAST.map((c) => ({ name: c.n, kind: c.k, aliases: c.a })), setting: 'the Weighhouse', ch, entries: [], names: Canon.shelfNames([ch.text]) });
   const hits = E.chapterHits(ch, cast);
   const pack = (name) => E.packFor(ch, hits, cast, cast.find((c) => c.name === name), () => null).map((x) => [x.why, x.s.text]);
   const has = (p, words) => p.find(([, t]) => t.includes(words));
@@ -150,7 +83,7 @@ test('the packs: a person\'s pronoun sentences, a place\'s paragraph and "the ro
 
 test('the gates on a dossier fact: cited, grounded, polarity, what is only said; the quote is the writer\'s clause', () => {
   const ch = E.chapterModel(C1);
-  const cast = E.castGate({ proposals: CAST.map((c) => ({ name: c.n, kind: c.k, aliases: c.a, in: c.in || '' })), ch, entries: [], names: Canon.shelfNames([ch.text]) });
+  const cast = E.castGate({ proposals: CAST.map((c) => ({ name: c.n, kind: c.k, aliases: c.a })), setting: 'the Weighhouse', ch, entries: [], names: Canon.shelfNames([ch.text]) });
   const hits = E.chapterHits(ch, cast);
   const ctx = { ch, text: ch.text, suspect: new Set() };
   const gate = (name, x) => {
@@ -318,13 +251,13 @@ test('the reader\'s prompts: a cast, a dossier by sentence numbers, a yes or no,
   const asked = [];
   const reader = Canon.localReader({ id: 'c', tier: 'careful', editor: true, ask: async (m) => {
     asked.push(m);
-    if (m.schema === Canon.CAST_SCHEMA) return { c: [{ n: 'Hesper', k: 'person', a: [], in: '' }] };
+    if (m.schema === Canon.CAST_SCHEMA) return { c: [{ n: 'Hesper', k: 'person', a: [] }], s: '' };
     if (m.schema === Canon.DOSSIER_SCHEMA) return { f: [{ g: 'age', a: 'age', v: 'fifteen', s: [1], x: 0 }] };
     if (m.schema === Canon.PROFILE_SCHEMA) return { p: [{ t: 'Hesper is fifteen.', f: [1] }] };
     return { a: /contradict/.test(m.user) ? 'yes' : /both be true/.test(m.user) ? 'no' : 'yes' };
   } });
   assert.equal(reader.editor, true);
-  assert.deepEqual(await reader.cast({ text: '¶1 Hesper was fifteen.', known: [] }), [{ name: 'Hesper', kind: 'person', aliases: [], in: '' }]);
+  assert.deepEqual(await reader.cast({ text: '¶1 Hesper was fifteen.', known: [] }), { cast: [{ name: 'Hesper', kind: 'person', aliases: [] }], setting: '' });
   assert.deepEqual(await reader.dossier({ name: 'Hesper', kind: 'person', aliases: [], text: '[1] Hesper was fifteen.' }), [{ g: 'age', a: 'age', v: 'fifteen', s: [1], x: 0 }]);
   assert.equal(await reader.verify({ name: 'Hesper', label: 'Age', value: 'fifteen', passage: 'Hesper was fifteen.' }), 'yes');
   assert.equal(await reader.clash({ name: 'the Long Room', a: 'not one window', label: 'U, Ch 1', fact: 'Description: no windows', sentence: 'high windows' }), 'yes');
