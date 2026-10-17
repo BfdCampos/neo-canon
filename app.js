@@ -17073,6 +17073,17 @@ function canonReadText() {
   const p = canonReadAt;
   if (!p) return canonReadLine;
   if (p.phase === 'check') return t('Checking {facts} facts · {n} done', { facts: p.facts, n: p.n - 1 });
+  // the editor's reading (READING.md): which pass, and an honest guess at
+  // what's left, from how long each kind of question has taken here
+  const pass = { cast: () => t('Finding who and what is here…'), dossier: () => t('Reading about {name}… ({n} of {of})', { name: p.name, n: p.n, of: p.of }),
+    verify: () => t('Checking facts… ({n} of {of})', { n: p.n, of: p.of }), events: () => t('Noting what happens…'),
+    profile: () => t('Writing profiles… ({n} of {of})', { n: p.n, of: p.of }) }[p.phase];
+  if (pass) {
+    let line = pass() + ' · ' + (p.phase === 'profile' ? t('the whole shelf') : t('{book}, {where}', { book: p.book, where: p.label }));
+    if (p.chapters > 1 && p.phase !== 'profile') line += ' ' + t('({n} of {of})', { n: p.chapter, of: p.chapters });
+    if (p.calls >= 3 && p.eta > 0) line += ' · ' + t('{about} left', { about: canonAbout(p.eta) });
+    return line;
+  }
   let line = t('Reading {book} · {where} ({n} of {of})', { book: p.book, where: p.label, n: p.n, of: p.of });
   // a guess only once three answers have been timed on this computer
   if (p.calls >= 3 && p.left) line += ' · ' + t('{about} left', { about: canonAbout((p.left * p.ms) / 1000) });
@@ -17085,7 +17096,8 @@ function canonReadProgress() {
   const bar = document.createElement('div');
   bar.className = 'cn-bar';
   const fill = document.createElement('i');
-  const done = !p ? 0 : p.phase === 'check' ? (p.n - 1) / Math.max(1, p.of) : p.calls / Math.max(1, p.calls + p.left);
+  const spent = p ? (p.calls * p.ms) / 1000 : 0;
+  const done = !p ? 0 : p.phase === 'check' ? (p.n - 1) / Math.max(1, p.of) : p.eta != null && p.phase !== 'read' ? spent / Math.max(1, spent + p.eta) : p.calls / Math.max(1, p.calls + p.left);
   fill.style.width = Math.round(done * 100) + '%';
   bar.appendChild(fill);
   const line = document.createElement('p');
@@ -17122,6 +17134,8 @@ if (CANON_ON) {
 // ---- the reader's setup page: one button, inside the Canon tab ----
 const canonGB = (bytes) => fmtNum(Math.round(bytes / 1e8) / 10);
 const CANON_TIERS = () => ({
+  thorough: { name: t('Thorough reader'), desc: t('Reads like an editor and finds the most. For a graphics card with 8 GB of its own memory, or a Mac with Apple silicon and 24 GB.') },
+  deep: { name: t('Deep reader'), desc: t('The largest reader: slower, for a graphics card with 12 GB or more.') },
   careful: { name: t('Careful reader'), desc: t('Reads closely and misses less. For a computer with a graphics card, or a Mac with Apple silicon and 16 GB of memory.') },
   quick: { name: t('Quick reader'), desc: t('Faster, misses more. Runs on any computer with 8 GB of memory.') }
 });
@@ -17192,7 +17206,7 @@ function canonSetup() {
     say(t('{reader} · {size} GB — recommended for this computer', { reader: tiers[best].name, size: canonGB(r.catalogue[best].size) }), 'cn-note cn-pick');
     button(label, () => get(best), 'btn-gold cn-download');
   } else say(t('This computer is short on memory for the reader. You can still keep a Canon by hand.'));
-  const others = Object.keys(r.catalogue).filter((x) => x !== best && tiers[x]);
+  const others = Object.keys(r.catalogue).filter((x) => x !== best && tiers[x] && (!r.offered || r.offered.includes(x)));
   const foot = document.createElement('div');
   foot.className = 'cn-foot';
   if (best) say(after, 'cn-note', foot);
@@ -17409,7 +17423,7 @@ function canonReaderFill(bd) {
   ]);
   const tiers = CANON_TIERS();
   const chosen = r.installed || (dl.state === 'downloading' || dl.state === 'paused' ? dl.tier : null);
-  pick(t('Reader'), ['careful', 'quick'].filter((x) => r.catalogue[x]).map((x) => ({
+  pick(t('Reader'), (r.offered || ['careful', 'quick']).filter((x) => r.catalogue[x] || x === r.installed).map((x) => ({
     name: `${tiers[x].name} · ${canonGB(r.catalogue[x].size)} GB`,
     desc: tiers[x].desc + (x === r.recommend ? ' ' + t('Recommended for this computer.') : ''),
     on: x === chosen,
@@ -17486,7 +17500,8 @@ function canonNeeds() {
         continue;
       }
       const key = x.id + '|' + f.attr + '|' + f.value;
-      if (canonHeard(f) && !skipped.has(key) && !canonSettled(x.data, f)) out.push({ e: x.data, f, key });
+      // (what someone says of the story's open facts is shown on the entry, never asked)
+      if (canonHeard(f) && f.attr !== 'other' && !skipped.has(key) && !canonSettled(x.data, f)) out.push({ e: x.data, f, key });
     }
   }
   return out;
@@ -17771,8 +17786,30 @@ function canonEntryPage(e) {
   const firm = e.facts.map((f, i) => [f, i]).filter(([f]) => !heard(f));
   // (what someone says that the facts already hold is no second line)
   const others = e.facts.map((f, i) => [f, i]).filter(([f]) => heard(f) && !canonSettled(e, f));
+  canonProfile(page, e, el, edit, button);
   page.appendChild(el('h3', 'cn-h', t('Facts')));
-  page.appendChild(factList(firm.map(([f]) => f), false, firm.map(([, i]) => i)));
+  // the facts in sections (READING.md §4), each folded after six lines
+  const groups = new Map();
+  for (const [f, i] of firm) {
+    const k = Canon.factSection ? Canon.factSection(f, e.kind) : 'other';
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push([f, i]);
+  }
+  if (!firm.length) page.appendChild(factList([], false));
+  const names = CANON_SECTIONS(e.kind);
+  for (const k of Canon.SECTIONS || ['other']) {
+    const g = groups.get(k);
+    if (!g) continue;
+    if (groups.size > 1) page.appendChild(el('h4', 'cn-h cn-group', names[k] || names.other));
+    const ul = factList(g.map(([f]) => f), false, g.map(([, i]) => i));
+    [...ul.children].forEach((li, n) => { li.hidden = n >= 6; });
+    page.appendChild(ul);
+    if (g.length > 6) {
+      const more = el('button', 'cn-btn cn-show-all', t('Show all {n}', { n: g.length }));
+      more.onclick = () => { for (const li of ul.children) li.hidden = false; more.remove(); };
+      page.appendChild(more);
+    }
+  }
   const add = el('button', 'cn-add', '+ ' + t('Add a fact'));
   add.onclick = () => {
     const input = el('input', 'cn-add-input');
@@ -17874,6 +17911,61 @@ function canonEntryPage(e) {
   show();
   page.appendChild(words);
   return page;
+}
+
+// The sections of an entry's facts, as the page heads them
+const CANON_SECTIONS = (kind) => ({
+  who: ['place', 'thing', 'rule'].includes(kind) ? t('What it is') : kind === 'group' ? t('Who they are') : t('Who they are'),
+  appearance: t('Appearance'), role: t('Role and work'), personality: t('Personality'), habits: t('Habits and routines'),
+  relationships: t('Relationships'), history: t('Origin and history'), state: t('State and possessions'),
+  like: t('What it’s like'), works: t('How it works'), there: t('Who’s there'), rules: t('Rules'), other: t('Other')
+});
+// The profile (READING.md §4): a few sentences Canon made from the kept
+// facts, each citing its passages (a click opens one), or the writer's own
+// once they edit it. Canon never rewrites the writer's.
+function canonProfile(page, e, el, edit, button) {
+  const p = e.profile;
+  if (!p || !String(p.text || '').trim()) return;
+  const box = el('div', 'cn-profile' + (p.state === 'note' ? ' st-note' : ''));
+  const head = el('div', 'cn-row cn-profile-head');
+  head.appendChild(el('h3', 'cn-h', t('Profile')));
+  if (p.state === 'note') head.appendChild(el('span', 'cn-tag cn-by', t('Canon’s profile')));
+  const ctl = el('span', 'cn-ctl');
+  ctl.appendChild(button(t('Edit'), async () => {
+    const v = await askInput(t('Edit the profile'), t('A few sentences'), p.text);
+    const text = v === null ? '' : v.replace(/\s+/g, ' ').trim();
+    if (text && text !== p.text) edit((d) => { d.profile = { ...(d.profile || { cites: [] }), text, state: 'yours' }; });
+  }));
+  head.appendChild(ctl);
+  box.appendChild(head);
+  const prose = el('p', 'cn-profile-text');
+  // (each source after its sentence's full stop: "…in her year.¹")
+  const text = p.text.replace(/((?:\s*\[\d+\])+)\s*([.!?])/g, '$2$1');
+  let at = 0;
+  // (a sentence's last word, its stop and its sources never part at a line's end)
+  let hold = null;
+  for (const m of text.matchAll(/\s*\[(\d+)\]/g)) {
+    const before = text.slice(at, m.index);
+    if (before) {
+      const w = /(\S+)$/.exec(before);
+      prose.append(w ? before.slice(0, w.index) : before);
+      hold = el('span', 'cn-cites');
+      if (w) hold.append(w[1]);
+      prose.appendChild(hold);
+    }
+    const c = (p.cites || []).find((x) => x.n === +m[1]);
+    const b = el('button', 'cn-cite', m[1]);
+    if (c) {
+      b.title = `${c.label}: “${c.quote}”`;
+      b.setAttribute('aria-label', t('Source {n}: {where}', { n: m[1], where: c.label }));
+      b.onclick = () => canonOpenSource(c);
+    } else b.disabled = true;
+    (hold || prose).appendChild(b);
+    at = m.index + m[0].length;
+  }
+  prose.append(text.slice(at));
+  box.appendChild(prose);
+  page.appendChild(box);
 }
 
 // Linked from and Mentioned in, below the facts (IDE.md §2.2): hidden when
@@ -18390,6 +18482,7 @@ function canonPopOpen(s, x, y) {
   const rec = canon && canon.entries.get(s.entry);
   s.entryKind = rec && rec.data ? rec.data.kind : '';
   if (s.attr === 'event') { canonDeedPop(s, pop, el); canonPopPlace(s, pop, x, y); return; }
+  if (s.kind === 'open') { canonOpenPop(s, pop, el); canonPopPlace(s, pop, x, y); return; }
   if (s.ask) { canonAskPop(s, pop, el); canonPopPlace(s, pop, x, y); return; }
   el('div', 'cp-claim', canonClaim(s));
   const where = s.sources.map((x) => x.label);
@@ -18452,6 +18545,28 @@ function canonDeedPop(s, pop, el) {
     keep.appendChild(swap);
   }
   btn(t('Not a slip'), () => canonNotSlip(s, s.ask ? 'no' : undefined));
+}
+// A later sentence says otherwise of the story bible's own words (an open
+// fact: READING.md §1 pass 5). No swap is offered: the writer decides
+// which is right and changes the words, or keeps both.
+function canonOpenPop(s, pop, el) {
+  const v = { name: s.name, label: s.as, value: s.value, span: s.span, where: s.sources[0] ? s.sources[0].label : '' };
+  el('div', 'cp-claim', s.ask ? t('Does this say otherwise of {name}?', v) : t('Canon has {name} · {label}: {value}.', v));
+  if (s.ask) el('div', 'cp-deed', `${v.label}: ${v.value}`);
+  if (v.where) el('div', 'cp-where', t('Established in {where}', { where: v.where }));
+  if (s.sources[0]) el('q', 'cp-quote', s.sources[0].quote);
+  el('div', 'cp-why', t('Here it says “{span}”.', v));
+  el('div', 'cp-ask', t('Nothing to swap here: the words are yours to change.'));
+  const row = el('div', 'cp-row');
+  const b = document.createElement('button');
+  b.className = 'cp-main';
+  b.textContent = t('Not a slip');
+  b.onclick = () => canonNotSlip(s);
+  row.appendChild(b);
+  const go = document.createElement('button');
+  go.textContent = t('Open {name}', v);
+  go.onclick = () => { canonPopClose(); canonGo(s.entry); };
+  row.appendChild(go);
 }
 // Worth a look: Canon can't tell whom the word means, so it asks. Each
 // answer but the change is remembered against the sentence, like Not a slip.

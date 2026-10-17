@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-br",
+      "name": "Brennock",
+      "bookIds": [
+        "book-the-doctor-br1"
+      ],
+      "canonId": "canon-brennock-shelf-br"
+    }
+  ]
+}

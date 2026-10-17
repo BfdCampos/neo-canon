@@ -1,0 +1,1317 @@
+// NEO — Canon's editor reading (docs/semantics/READING.md): how a reader
+// that can read a chapter at a time reads one, the way a story editor would.
+//
+//   1 CAST      the reader lists who and what the chapter names; code keeps
+//               the names written as written, joins aliases the text ties
+//   2 PACKS     code gathers each one's sentences: those naming it, the
+//               pronouns after them, a place's paragraph, the setting's chapter
+//   3 DOSSIERS  the reader lists facts about each one, citing sentence ids;
+//               code copies the writer's words for the quote
+//   4 GATES     cited, tied, grounded, not from a slip's sentence, then the
+//               reader's yes (twice for what is read between the lines)
+//   5 EDITOR    code merges and orders; the reader writes a short profile
+//               from the kept facts, every word of it checked against them
+//
+// No I/O, like canon.js, which loads this with its own helpers (`C`) and
+// runs it from the engine's Read the Shelf. The reader proposes, code
+// decides; nothing here writes a word into a book.
+'use strict';
+
+module.exports = function canonEditor(C) {
+  const { norm, normMap, textHash, sentences, speechSpans, reportedSpans, mentions, mentionIndex, wordsOf, slug, newEntry,
+    findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, canonLabel, labelFamily, nonEntity, stripTitles } = C;
+
+  // bumped when a prompt or a gate that the cache keeps answers for changes
+  const EDITOR_PROMPT = 1;
+
+  /* ---------- words ---------- */
+
+  const STOPW = new Set(('a an the and or but of to in on at by for with from into onto as is was were be been being are it its it\'s this that these those ' +
+    'her his him he she they them their there here who whom which what when where while than then so very much more most some any all ' +
+    'has have had do does did nor only own same such too can will would could should may might must just also each ' +
+    'one once up down out over under again further about above below after before between through during without within ' +
+    'i me my we our you your himself herself itself themselves s like how even still yet whose').split(' '));
+  const NEGATORS = new Set(['no', 'not', 'never', 'none', 'nothing', 'nobody', 'nowhere', 'neither', 'nor', 'without', "n't", 'cannot', 'windowless']);
+  const VARIANT = { gray: 'grey', colour: 'color', colored: 'color', coloured: 'color', blond: 'blonde' };
+  // one word in a common form: plural, past, -ing, -ly off
+  function stem(w) {
+    w = VARIANT[w] || w;
+    if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
+    if (w.length > 5 && w.endsWith('ing')) return w.slice(0, -3);
+    if (w.length > 4 && w.endsWith('ed')) return w.slice(0, -2);
+    if (w.length > 4 && w.endsWith('ly')) return w.slice(0, -2);
+    if (w.length > 3 && w.endsWith('es') && !w.endsWith('ses')) return w.slice(0, -2);
+    if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+    return w;
+  }
+  // Words a value may use for the text's own: "girl" says female, "tallest"
+  // says tall, "not one window" says no windows. Each group's words stand for
+  // each other; nothing here turns one claim into another.
+  const LEXICON = [
+    ['female', 'woman', 'girl', 'lady', 'she', 'her', 'mare', 'sister', 'mother', 'daughter', 'wife'],
+    ['male', 'man', 'boy', 'gentleman', 'he', 'him', 'his', 'brother', 'father', 'son', 'husband'],
+    ['tall', 'tallest', 'taller'], ['short', 'shorter', 'shortest'], ['old', 'older', 'oldest', 'elderly', 'aged'], ['young', 'younger', 'youngest'],
+    ['thin', 'thinner', 'narrow', 'skinny', 'lean', 'slight'], ['fair', 'blonde', 'flaxen'], ['spectacle', 'glass', 'glasses'],
+    ['no', 'not', 'none', 'never', 'without', 'nothing', 'windowless'], ['window', 'windowless'], ['every', 'each', 'always', 'daily'],
+    ['morning', 'dawn', 'daybreak'], ['sick', 'ill'], ['gentle', 'gently'], ['friend', 'friendship'], ['born', 'birth', 'birthplace'],
+    ['hum', 'humm', 'hummed'], ['lock', 'locked', 'unlock', 'unlocked'], ['weigh', 'weighing', 'weighed', 'weight', 'weigher'],
+    ['child', 'children', 'kid'], ['number', 'numbered'], ['ink', 'inked', 'tattoo'], ['smell', 'smelled', 'smelt', 'scent'],
+    ['light', 'lit', 'lamp'], ['forty', '40'], ['fifteen', '15'], ['twelve', '12'], ['six', '6'], ['three', '3'], ['two', '2'], ['one', '1'],
+    ['hair', 'haired'], ['eye', 'eyes', 'eyed'], ['live', 'lives', 'lived', 'living', 'sleep', 'sleeps', 'slept'], ['wear', 'wore', 'worn', 'wearing'],
+    ['carry', 'carried', 'carries'], ['write', 'wrote', 'written', 'writes'], ['drink', 'drank', 'drunk', 'drinking'], ['come', 'came'],
+    ['say', 'said', 'says'], ['keep', 'kept', 'keeps'], ['learn', 'learned', 'learnt'], ['go', 'went', 'goes', 'gone'], ['run', 'ran', 'running'],
+    ['give', 'gave', 'given'], ['take', 'took', 'taken'], ['see', 'saw', 'seen'], ['know', 'knew', 'known'], ['stand', 'stood'], ['sit', 'sat'],
+    ['line', 'lined'], ['prick', 'pricked', 'pricks', 'needle'], ['blood', 'bead']
+  ].map((g) => g.map(stem));
+  const LEX = new Map();
+  for (const [i, g] of LEXICON.entries()) for (const w of g) { if (!LEX.has(w)) LEX.set(w, new Set()); LEX.get(w).add(i); }
+  const tokens = (s) => norm(s).replace(/['’]s\b/g, '').replace(/n't\b/g, ' not').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const content = (s) => tokens(s).filter((w) => !STOPW.has(w) || NEGATORS.has(w)).map(stem);
+  // does `w` (a stem) stand in `bag` (a Set of stems), itself or through the lexicon
+  const inBag = (w, bag) => bag.has(w) || [...(LEX.get(w) || [])].some((g) => LEXICON[g].some((x) => bag.has(x)));
+  const negated = (s) => tokens(s).some((w) => NEGATORS.has(w));
+  const NUMBER = /^(?:\d+(?:st|nd|rd|th)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|twelfth)$/;
+
+  /* ---------- a chapter's sentences ---------- */
+
+  // Paragraphs and their sentences, numbered through the chapter, each
+  // knowing what in it is speech (quoted) or talk (reported).
+  function chapterModel(paras) {
+    const all = [];
+    const out = paras.map((p, pi) => {
+      const talk = speechSpans(p.text).concat(reportedSpans(p.text));
+      const speech = speechSpans(p.text);
+      const sents = sentences(p.text).map((s) => {
+        const said = speech.some(([a, b]) => s.start >= a && s.end <= b + 1);
+        const x = { id: all.length + 1, pi, start: s.start, end: s.end, text: s.text, said, talk: talk.filter(([a, b]) => a < s.end && b > s.start) };
+        all.push(x);
+        return x;
+      });
+      return { pi, text: p.text, hash: p.hash, sents, talk };
+    });
+    return { paras: out, sents: all, text: paras.map((p) => p.text).join('\n') };
+  }
+
+  /* ---------- 1 · the cast ---------- */
+
+  const KINDS = ['person', 'creature', 'place', 'group', 'thing', 'rule'];
+  const ROOMS = /(?<![\p{L}])(?:room|hall|chamber|kitchen|cell|corridor|yard|office|attic|cellar|stair|stairs|landing|ward|dormitory|gate|door)s?$/iu;
+  // nouns for many people, not one: never a role name
+  const CROWD = new Set(['children', 'child', 'girls', 'boys', 'girl', 'boy', 'others', 'people', 'everyone', 'everybody', 'someone', 'nobody', 'crowd', 'men', 'women', 'man', 'woman', 'kids', 'line', 'rest', 'novices', 'students', 'pupils', 'class', 'family', 'one', 'ones', 'two', 'three', 'stranger', 'figure', 'voice']);
+  // the parts and furniture of any room, and the stuff of every page: never an entry by themselves
+  const FIXTURES = new Set(['door', 'doors', 'floor', 'floors', 'wall', 'walls', 'window', 'windows', 'ceiling', 'room', 'rooms', 'bed', 'beds', 'table', 'chair', 'corner', 'stairs', 'stair', 'roof', 'ground', 'light', 'air', 'cup', 'jug', 'plate', 'tray', 'hand', 'hands', 'face', 'head', 'eyes', 'hair', 'feet', 'thumb', 'aisle', 'sky', 'night', 'day', 'morning', 'bell', 'line', 'rules', 'rule', 'pocket', 'smock', 'blanket', 'cloth', 'way', 'end', 'side', 'top', 'feeling', 'turn', 'time']);
+  const NAMING = /(?<![\p{L}])(?:name|names|named|called|calls|call|known as|nicknamed|nickname|went by)(?![\p{L}])/iu;
+  const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // how often the chapter writes `phrase`, as written (capitals kept) or,
+  // for a role, with a capital The at a sentence's start
+  function written(text, phrase) {
+    const role = /^the\s/i.test(phrase) && /^\p{Ll}/u.test(phrase.replace(/^the\s+/i, ''));
+    const body = role ? `[Tt]he\\s+[“"‘']?${escRe(phrase.replace(/^the\s+/i, ''))}[”"’']?` : escRe(phrase);
+    return (text.match(new RegExp(`(?<![\\p{L}\\p{N}'’-])${body}(?![\\p{L}\\p{N}])`, 'gu')) || []).length;
+  }
+  // a cast name as Canon keeps it: as written; a role keeps its "the"
+  function cleanName(n) {
+    let name = String(n || '').replace(/[“”"«»]/g, '').replace(/\s+/g, ' ').trim();
+    const lead = name.split(' ');
+    while (lead.length > 1 && LEADERS.has(lead[0].toLowerCase()) && lead[0].toLowerCase() !== 'the') lead.shift();
+    name = lead.join(' ');
+    if (/^The\s+\p{Ll}/u.test(name)) name = 'the' + name.slice(3);
+    return name;
+  }
+  // Is this a name the chapter gives someone or something? → 'proper',
+  // 'role' (the warden: lower case, written twice or more) or null
+  function nameKind(name, text, lower, kind) {
+    if (!name || name.length < 2 || name.length > 40) return null;
+    const bare = name.replace(/^the\s+/i, '');
+    if (!bare || PRONOUNS[bare.toLowerCase()] || /^(?:i|we|you|they|it|them|us|me)$/i.test(bare)) return null;
+    // (a family's possessive is no place: "the Haddons’ house")
+    if (/s['’]$/.test(bare)) return null;
+    if (/^\p{Lu}/u.test(bare)) {
+      // every word capitalised but the small ones inside ("House of Varr")
+      const parts = bare.split(/\s+/);
+      if (!parts.every((w, i) => /^[\p{Lu}\p{N}]/u.test(w) || (i > 0 && i < parts.length - 1 && /^(?:of|the|de|du|da|del|la|le|van|von|der|and|on|upon)$/.test(w)))) return null;
+      if (!written(text, bare)) return null;
+      // a word the shelf writes in lower case too: "Nobody", "Ponies" (not
+      // a number the text gives as a name, capitalised mid-sentence: "Nine")
+      const asNumber = parts.length === 1 && NUMBER.test(bare.toLowerCase().split('-')[0]) && new RegExp(`[\\p{L},;]\\s+${escRe(bare)}(?![\\p{L}-])`, 'u').test(text);
+      if (parts.length === 1 && lower && lower.has(bare.toLowerCase()) && !written(text, 'the ' + bare) && !asNumber) return null;
+      if (parts.length === 1 && TITLES.has(bare.toLowerCase())) return null;
+      // a month, a day, a holiday, a language, "Someone": nobody
+      if (nonEntity(bare, kind)) return null;
+      return 'proper';
+    }
+    // a role: "the warden", one or two lower-case words with "the", written twice
+    if (kind === 'rule') return null;
+    const words = bare.split(/\s+/);
+    if (words.length > 2 || words.some((w) => !/^\p{Ll}[\p{Ll}'’-]*$/u.test(w))) return null;
+    if (CROWD.has(words[words.length - 1]) || FIXTURES.has(words[words.length - 1])) return null;
+    if (written(text, 'the ' + bare) < 2) return null;
+    return 'role';
+  }
+
+
+  // The capitalised names a chapter writes that aren't a sentence's first
+  // word, a title or a word it also writes in lower case: Hesper, the Long
+  // Room, the Weighhouse. Given to the reader so it overlooks none.
+  function writtenNames(ch, names) {
+    const out = new Map();
+    const lower = (names && names.lower) || new Set();
+    for (const p of ch.paras) {
+      for (const s of p.sents) {
+        for (const m of s.text.matchAll(/(?<![\p{L}\p{N}'’-])(\p{Lu}[\p{Ll}'’-]+(?:\s+(?:of\s+(?:the\s+)?)?\p{Lu}[\p{Ll}'’-]+)*)/gu)) {
+          const lead = s.text.slice(0, m.index);
+          if (!/[\p{L}\p{N}]/u.test(lead) || /[“"‘«:]\s*$/.test(lead)) continue; // a sentence's (or a quotation's) first word
+          const w = m[1].replace(/['’]s$/, '');
+          if (w.split(/\s+/).length === 1 && (lower.has(w.toLowerCase()) || TITLES.has(w.toLowerCase()) || PRONOUNS[w.toLowerCase()] || /^I$/.test(w))) continue;
+          if (nonEntity(w)) continue;
+          out.set(w, (out.get(w) || 0) + 1);
+        }
+      }
+    }
+    return [...out.keys()].slice(0, 30);
+  }
+
+  // The reader's cast, through the gates. → [{ key, name, kind, aliases, in, entry }]
+  function castGate({ proposals, ch, entries, names, setting = '' }) {
+    const text = ch.text;
+    const lower = names && names.lower;
+    const cast = [];
+    // (a place's plural and singular are one place: "the Downs", "the Down")
+    const singular = (x) => x.length > 4 && /[^s]s$/.test(x) ? x.slice(0, -1) : x;
+    const sameName = (a, n, plural) => norm(a) === norm(n) || norm(a.replace(/^the\s+/i, '')) === norm(n.replace(/^the\s+/i, '')) || (plural && singular(norm(a.replace(/^the\s+/i, ''))) === singular(norm(n.replace(/^the\s+/i, ''))));
+    const find = (n, kind = null) => cast.find((c) => !c.gone && [c.name, ...c.aliases].some((a) => sameName(a, n, kind === 'place' && c.kind === 'place')));
+    for (const p of proposals || []) {
+      const kind = KINDS.includes(p.kind) ? p.kind : 'thing';
+      // (a person is "Daniel Fell", not "Daniel Fell of Mercer Row")
+      const name = kind === 'person' ? cleanName(p.name).replace(/\s+of\s+(?:the\s+)?\p{Lu}.*$/u, '') : cleanName(p.name);
+      const how = nameKind(name, text, lower, kind);
+      if (!how || misspelt(name.replace(/^the\s+/i, ''), entries)) continue;
+      // a thing or rule called only by a lower-case word, said once or twice, is no entry
+      // (a proper name the text writes with "the": "the Weighhouse", "the Long Room")
+      const named = how === 'proper' && !/^the\s/i.test(name) && written(text, 'the ' + name) && written(text, 'the ' + name) + written(text, 'The ' + name) >= written(text, name) ? 'the ' + name : name;
+      let c = find(named, kind);
+      if (!c) {
+        c = { key: cast.length, name: named, kind, aliases: [], in: '', proper: how === 'proper', wanted: [] };
+        cast.push(c);
+      }
+      c.wanted.push(...(p.aliases || []).map(cleanName).filter((a) => a && norm(a) !== norm(name)));
+      if (p.in && !c.in) c.in = cleanName(p.in);
+    }
+    // the scare-quoted capitalised term the chapter defines: the “Spared”
+    for (const m of text.matchAll(/[“"]\s*(\p{Lu}[\p{Ll}]{2,}(?:\s\p{Lu}[\p{Ll}]{2,})?)\s*[”"]/gu)) {
+      const w = m[1];
+      if (find(w) || find('the ' + w) || written(text, w) < 2 || (lower && lower.has(w.toLowerCase()))) continue;
+      cast.push({ key: cast.length, name: written(text, 'the ' + w) ? 'the ' + w : w, kind: 'group', aliases: [], in: '', proper: true, wanted: [] });
+    }
+    // aliases: the same one called otherwise ("Weighhouse" for "the
+    // Weighhouse"), or a name the text gives the one its pronoun means ("The
+    // children called him Brother Ink", "His name … was Anselm"): each tie
+    // joins the name to the words the text last used for that one ("the
+    // weigher"). Names the reader offered as aliases count only when so tied.
+    // a name the reader gave only as another's alias is its own one until
+    // the text ties the two ("Old Man", aliases "Dr Haddon")
+    for (const c of [...cast]) {
+      for (const a of c.wanted) {
+        if (nameKind(a, text, lower, c.kind) === 'proper' && !find(a) && !misspelt(a.replace(/^the\s+/i, ''), entries)) cast.push({ key: cast.length, name: a, kind: c.kind, aliases: [], in: '', proper: true, wanted: [] });
+      }
+    }
+    // a rank's role, written as such ("the doctor", twice or more), is the
+    // one person the chapter gives that rank ("Dr Haddon")
+    for (const [role, titles] of Object.entries(RANK)) {
+      if (written(text, 'the ' + role) < 2) continue;
+      const holders = cast.filter((c) => !c.gone && c.kind === 'person' && [c.name, ...c.aliases].some((y) => String(y).split(/\s+/).length > 1 && titles.includes(norm(String(y).replace(/^the\s+/i, '').split(/\s+/)[0]).replace(/\.$/, ''))));
+      if (holders.length !== 1 || cast.some((c) => c !== holders[0] && !c.gone && [c.name, ...c.aliases].some((n) => norm(n) === 'the ' + role))) continue;
+      if (!holders[0].aliases.some((a) => norm(a) === 'the ' + role)) holders[0].aliases.push('the ' + role);
+    }
+    const ties = namingTies(ch, cast);
+    const bare = (n) => norm(String(n).replace(/^the\s+/i, ''));
+    const tied = new Map(); // bare phrase → Set of bare phrases
+    const link = (x, y) => { for (const [a, b] of [[x, y], [y, x]]) { if (!tied.has(a)) tied.set(a, new Set()); tied.get(a).add(b); } };
+    for (const t of ties) link(bare(t.ref), bare(t.name));
+    const group = (n) => { const seen = new Set([bare(n)]); const todo = [bare(n)]; while (todo.length) for (const x of tied.get(todo.pop()) || []) if (!seen.has(x)) { seen.add(x); todo.push(x); } return seen; };
+    for (const c of cast) {
+      if (c.gone) continue;
+      const mine = new Set([...group(c.name), ...c.aliases.flatMap((a) => [...group(a)])]);
+      for (const a of c.wanted) {
+        if (!nameKind(a, text, lower, c.kind)) continue;
+        // (a name the reader gave only as another's alias, with nothing in
+        // the text to tie the two, is its own one: "Old Man", aliases "Dr Haddon")
+        if (bare(a) !== bare(c.name) && !mine.has(bare(a))) continue;
+        const other = find(a);
+        if (other && other !== c && !other.gone) mergeCast(cast, c, other);
+        else if (!other && !c.aliases.some((x) => norm(x) === norm(a))) c.aliases.push(a);
+      }
+      // the names and roles the text ties to this one, as written
+      for (const x of mine) {
+        if (x === bare(c.name)) continue;
+        const other = cast.find((y) => y !== c && !y.gone && [y.name, ...y.aliases].some((n) => bare(n) === x));
+        if (other) { mergeCast(cast, c, other); continue; }
+        const t = ties.find((y) => bare(y.name) === x || bare(y.ref) === x);
+        const as = t ? (bare(t.name) === x ? t.name : t.ref) : null;
+        if (as && nameKind(as, text, lower, c.kind) && !c.aliases.some((y) => bare(y) === x)) c.aliases.push(as);
+      }
+    }
+    personMerges(cast);
+    // the name the text gives a role is its name: "His name … was Anselm"
+    for (const t of ties.filter((y) => y.given)) {
+      const c = cast.find((y) => !y.gone && [y.name, ...y.aliases].some((n) => bare(n) === bare(t.name)));
+      if (c && bare(c.name) !== bare(t.name)) { const was = c.name; c.name = t.name; c.aliases = [was, ...c.aliases.filter((x) => bare(x) !== bare(t.name))]; c.proper = true; }
+    }
+    // a role keeps its bare word as an alias too ("warden" for "the warden")
+    for (const c of cast) {
+      if (/^the\s/i.test(c.name) && !c.aliases.some((a) => norm(a) === norm(c.name.slice(4)))) c.aliases.push(c.name.slice(4));
+      for (const a of [...c.aliases]) if (/^the\s/i.test(a) && !c.aliases.some((x) => norm(x) === norm(a.slice(4)))) c.aliases.push(a.slice(4));
+      c.aliases = c.aliases.filter((a, i, all) => norm(a) !== norm(c.name) && all.findIndex((x) => norm(x) === norm(a)) === i);
+    }
+    const kept = cast.filter((c) => !c.gone);
+    // joined to the Canon's entries by name or alias; a full name to the one
+    // entry called by a part of it ("Constance Haddon", "Constance")
+    const coreOf = (n) => norm(stripTitles(String(n).replace(/^the\s+/i, '')));
+    for (const c of kept) {
+      c.entry = [c.name, ...c.aliases].map((n) => findEntry(entries, n)).find(Boolean) || null;
+      if (!c.entry && c.kind === 'person' && coreOf(c.name).split(/\s+/).length > 1) {
+        const ws = coreOf(c.name).split(/\s+/);
+        // (a given name, or a surname written with no title: "Dr Haddon" is no "Constance Haddon")
+        const titled = (n) => { const w = String(n).replace(/^the\s+/i, '').split(/\s+/); return w.length > 1 && TITLES.has(norm(w[0]).replace(/\.$/, '')); };
+        const by = entries.filter((e) => e.kind === 'person' && !e.locked && [e.name, ...e.aliases].some((n) => { const w = coreOf(n); return w && !/\s/.test(w) && (w === ws[0] || (w === ws[ws.length - 1] && !titled(n))); }));
+        if (by.length === 1 && !kept.some((o) => o !== c && o.kind === 'person' && coreOf(o.name).split(/\s+/).includes(coreOf(by[0].name)))) c.entry = by[0];
+      }
+      if (c.entry && c.entry.locked) c.skip = true;
+    }
+    // the setting: the building, institution or town the reader says the
+    // chapter is set in, when it is a place of the cast (else none). The
+    // place proposed only as the setting joins the cast.
+    if (setting) {
+      const name = cleanName(setting);
+      const bare = (n) => norm(String(n).replace(/^the\s+/i, ''));
+      let c = kept.find((x) => [x.name, ...x.aliases].some((n) => bare(n) === bare(name)));
+      if (!c && nameKind(name, text, lower, 'place') === 'proper' && !misspelt(name.replace(/^the\s+/i, ''), entries)) {
+        c = { key: cast.length, name: written(text, 'the ' + name.replace(/^the\s+/i, '')) ? 'the ' + name.replace(/^the\s+/i, '') : name.replace(/^the\s+/i, ''), kind: 'place', aliases: [], in: '', proper: true, wanted: [] };
+        if (/^the\s/i.test(c.name)) c.aliases.push(c.name.slice(4));
+        kept.push(c);
+        c.entry = [c.name, ...c.aliases].map((n) => findEntry(entries, n)).find(Boolean) || null;
+      }
+      // (a building, institution, town or ship: never one room of it)
+      if (c && c.kind === 'place' && !ROOMS.test(c.name)) c.setting = true;
+    }
+    return kept.filter((c) => !c.skip);
+  }
+  // One person written several ways, by the text's own words (never by the
+  // reader's say-so): "Commander Okafor" and "Okafor" (the same name but
+  // the title); "Danny" or "Fell" and "Danny Fell" (the full name holds the
+  // short one, and no one else's does: two Haddons, no "Haddon"); "the
+  // commander", "the doctor" and the one person who holds that rank. Two
+  // first names are never one person.
+  const RANK = { doctor: ['dr', 'doctor'], commander: ['commander'], inspector: ['inspector'], captain: ['captain', 'capt'], sergeant: ['sergeant', 'sgt'], professor: ['professor', 'prof'],
+    lieutenant: ['lieutenant', 'lt'], colonel: ['colonel', 'col'], major: ['major'], general: ['general'], admiral: ['admiral'], nurse: ['nurse'], constable: ['constable'], detective: ['detective'], reverend: ['reverend', 'rev'], judge: ['judge'], mayor: ['mayor'] };
+  function personMerges(cast) {
+    const people = () => cast.filter((c) => !c.gone && c.kind === 'person' && c.proper);
+    const core = (n) => norm(stripTitles(String(n).replace(/^the\s+/i, '')).replace(/['’]s$/, ''));
+    const longer = (a, b) => (b.name.split(/\s+/).length > a.name.split(/\s+/).length ? [b, a] : [a, b]);
+    // the same name but the title (one with none, or both the same one:
+    // "Dr Haddon" and "Mrs Haddon" are two people; "Haddon" beside both, no one)
+    const title = (n) => { const w = String(n).replace(/^the\s+/i, '').split(/\s+/); return w.length > 1 && TITLES.has(norm(w[0]).replace(/\.$/, '')) ? norm(w[0]).replace(/\.$/, '') : ''; };
+    const fits = (x, y) => core(x) && core(x) === core(y) && (!title(x) || !title(y) || title(x) === title(y));
+    for (const a of people()) {
+      if (a.gone) continue;
+      const same = people().filter((b) => b !== a && [a.name, ...a.aliases].some((x) => [b.name, ...b.aliases].some((y) => fits(x, y))));
+      if (same.length === 1) { const [into, from] = longer(a, same[0]); mergeCast(cast, into, from); }
+      else if (same.length > 1 && !title(a.name)) { a.gone = true; a.name = '\u0000'; a.aliases = []; }
+    }
+    // a short form only one full name holds
+    for (const a of people()) {
+      if (a.gone) continue;
+      const w = core(a.name);
+      if (!w || /\s/.test(w)) continue;
+      const holders = people().filter((b) => b !== a && [b.name, ...b.aliases].some((y) => core(y).split(/\s+/).length > 1 && core(y).split(/\s+/).includes(w)));
+      if (holders.length === 1) mergeCast(cast, holders[0], a);
+      else if (holders.length > 1) { a.gone = true; a.name = '\u0000'; a.aliases = []; } // ("Haddon", with two Haddons: no one)
+    }
+    // a rank's role and the one who holds the rank (the role's own entry,
+    // or the one the text has tied it to: "the doctor", called Arthur)
+    for (const r of cast.filter((c) => !c.gone && c.kind === 'person')) {
+      if (r.gone) continue;
+      const role = [r.name, ...r.aliases].find((n) => /^the\s+\p{Ll}+$/u.test(n) && RANK[n.slice(4)]);
+      if (!role) continue;
+      const titles = RANK[role.slice(4)];
+      const holders = people().filter((b) => b !== r && [b.name, ...b.aliases].some((y) => titles.includes(norm(String(y).replace(/^the\s+/i, '').split(/\s+/)[0]).replace(/\.$/, '')) && String(y).split(/\s+/).length > 1));
+      if (holders.length === 1) mergeCast(cast, holders[0], r);
+    }
+  }
+  function mergeCast(cast, into, from) {
+    for (const a of [from.name, ...from.aliases]) if (!into.aliases.some((x) => norm(x) === norm(a)) && norm(a) !== norm(into.name)) into.aliases.push(a);
+    // (a name before a role, and a person's own name before an epithet: "Dr Haddon", not "the Old Man")
+    if ((!into.proper && from.proper) || (into.kind === 'person' && /^the\s/i.test(into.name) && !/^the\s/i.test(from.name) && from.proper)) { const was = into.name; into.name = from.name; into.aliases = [was, ...into.aliases.filter((x) => norm(x) !== norm(from.name))]; into.proper = true; }
+    if (!into.in && from.in) into.in = from.in;
+    from.gone = true;
+    from.name = '\u0000';
+    from.aliases = [];
+  }
+  // "His name, Hesper had once heard the warden say, was Anselm"; "The
+  // children called him Brother Ink"; "known as the Hound": a name the text
+  // gives the one its pronoun means (the last named before it, in narration)
+  function namingTies(ch, cast) {
+    const out = [];
+    const plain = (xs) => xs.flatMap((a) => /^the\s/i.test(a) ? [a, a.slice(4)] : [a]);
+    const idx = mentionIndex(cast.filter((c) => !c.gone).map((c) => ({ id: c.key, name: c.name, kind: c.kind, aliases: plain([c.name, ...c.aliases, ...c.wanted]) })));
+    for (const p of ch.paras) {
+      const hits = mentions(p.text, idx).map((m) => ({ key: m.id, start: m.start, end: m.end }));
+      const persons = new Set(cast.filter((c) => !c.gone && ['person', 'creature'].includes(c.kind)).map((c) => c.key));
+      const free = (a, b) => !p.talk.some(([x, y]) => a < y && b > x);
+      const asWritten = (h) => { let ref = p.text.slice(h.start, h.end); if (/^\p{Ll}/u.test(ref) && /\bthe\s+$/i.test(p.text.slice(0, h.start))) ref = 'the ' + ref; return ref; };
+      for (const s of p.sents) {
+        // a number for a name, in narration: "Teodora Kask had been Nine for
+        // three years", "Ada was Fourteen"
+        for (const m of s.text.matchAll(/(?<![\p{L}])(?:had been|has been|was|is|became)\s+((?:One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty|Thirty|Forty|Fifty|Sixty|Seventy|Eighty|Ninety)(?:-(?:one|two|three|four|five|six|seven|eight|nine))?)(?![\p{L}-])/gu)) {
+          const pos = s.start + m.index;
+          const h = hits.find((x) => persons.has(x.key) && /^\s+$/.test(p.text.slice(x.end, pos)) && x.end <= pos);
+          if (!h || !free(h.start, pos + m[0].length) || s.said) continue;
+          out.push({ key: h.key, ref: asWritten(h), name: m[1], given: false, sentence: s.text });
+        }
+        // "The vicar, the Reverend Amos Lyle, came…": a role and a name side
+        // by side, set off by commas (not a list: no "and" after)
+        const inS = hits.filter((h) => h.start >= s.start && h.end <= s.end && persons.has(h.key));
+        for (let i = 0; i + 1 < inS.length; i++) {
+          const [a, b] = [inS[i], inS[i + 1]];
+          if (a.key === b.key || !free(a.start, b.end)) continue;
+          const gap = p.text.slice(a.end, b.start);
+          if (!/^,\s+(?:the\s+)?(?:\p{Lu}[\p{L}.]*\s+)?$/u.test(gap)) continue;
+          const after = p.text.slice(b.end, b.end + 8);
+          if (!/^\s*[,.;—–]/u.test(after) || /^\s*,\s*(?:and|or|nor)\b/i.test(after)) continue;
+          const ra = asWritten(a);
+          const rb = asWritten(b);
+          // (one a role in lower case, the other a name)
+          if (/^the\s+\p{Ll}/u.test(ra) === /^the\s+\p{Ll}/u.test(rb)) continue;
+          out.push({ key: a.key, ref: ra, name: rb, given: false, sentence: s.text, apposition: true });
+        }
+        if (!NAMING.test(s.text)) continue;
+        const pats = [
+          [/(?<![\p{L}])([Hh]is|[Hh]er|[Ii]ts)\s+(?:real\s+|true\s+|own\s+)?name\b[\s\S]*?\b(?:was|is)\s+((?:\p{Lu}[\p{L}'’-]+)(?:\s+\p{Lu}[\p{L}'’-]+)?)/u, true],
+          [/(?<![\p{L}])(?:called|named|call|calls|nicknamed)\s+(him|her|it)\s+((?:the\s+)?(?:\p{Lu}[\p{L}'’-]+)(?:\s+\p{Lu}[\p{L}'’-]+)?)/u, false],
+          [/(?<![\p{L}])([Hh]e|[Ss]he|[Ii]t)\s+(?:was|is)\s+(?:called|named|known as)\s+((?:\p{Lu}[\p{L}'’-]+)(?:\s+\p{Lu}[\p{L}'’-]+)?)/u, true]
+        ];
+        for (const [re, given] of pats) {
+          const m = re.exec(s.text);
+          if (!m) continue;
+          const pos = s.start + m.index;
+          // (not the one who does the calling: "Constance called him Arthur")
+          const before = hits.filter((h) => h.end <= pos && persons.has(h.key) && !(given === false && /^[\s\p{Ll}]*$/u.test(p.text.slice(h.end, pos)) && h.end > s.start));
+          if (!before.length) continue;
+          const h = before[before.length - 1];
+          let ref = p.text.slice(h.start, h.end);
+          if (/^\p{Ll}/u.test(ref) && /\bthe\s+$/i.test(p.text.slice(0, h.start))) ref = 'the ' + ref;
+          const name = m[2].replace(/['’]s$/, '');
+          if (norm(ref) === norm(name)) continue;
+          out.push({ key: h.key, ref, name, given, sentence: s.text });
+        }
+      }
+    }
+    return out;
+  }
+
+  /* ---------- the narrator ---------- */
+
+  // A story told in the first person: "I", "me", "my" in the narration
+  // (outside speech) five times or more. The lead is the narrator, who gets
+  // an entry like anyone else: named when someone names them to their face
+  // ("“You’ll be wanting your tea, Nell,” Granny Ruth said … in front of
+  // me") or the narration does ("called me Nell", "my name was Ida", "At
+  // home I was Eleanor"); else "the narrator".
+  const SELF = /(?<![\p{L}'’])(I|me|my|myself|mine|Me|My|Myself|Mine)(?![\p{L}'’])/gu;
+  function selfHits(p) {
+    const out = [];
+    for (const m of p.text.matchAll(SELF)) {
+      if (p.talk.some(([a, b]) => m.index < b && m.index + m[0].length > a)) continue;
+      out.push({ start: m.index, end: m.index + m[0].length, word: m[0].toLowerCase() });
+    }
+    return out;
+  }
+  function firstPerson(ch) {
+    return ch.paras.reduce((n, p) => n + selfHits(p).length, 0) >= 5;
+  }
+  function narratorNames(ch, cast, lower) {
+    const ok = (w) => w && /^\p{Lu}\p{Ll}/u.test(w) && !nonEntity(w, 'person') && !TITLES.has(w.toLowerCase()) && !(lower && lower.has(w.toLowerCase())) && !PRONOUNS[w.toLowerCase()];
+    const strong = [];
+    const weak = [];
+    const voc = [];
+    const asOther = new Set(); // a name the narration uses for someone else ("Nell said")
+    for (const p of ch.paras) {
+      const narr = (a, b) => !p.talk.some(([x, y]) => a < y && b > x);
+      for (const m of p.text.matchAll(/(?<![\p{L}])(?:called|call|calls|named)\s+me\s+(\p{Lu}[\p{L}'’-]+)|(?<![\p{L}])[Mm]y\s+name\s+(?:is|was)\s+(\p{Lu}[\p{L}'’-]+)/gu)) {
+        if (narr(m.index, m.index + m[0].length)) strong.push((m[1] || m[2]).replace(/['’]s$/, ''));
+      }
+      for (const m of p.text.matchAll(/(?<![\p{L}])I\s+(?:was|am|’m|'m)\s+(\p{Lu}[\p{L}'’-]+)(?=\s*[,.;!?]|\s+to\b)/gu)) {
+        if (narr(m.index, m.index + m[0].length)) weak.push(m[1]);
+      }
+      // a name said to someone in a paragraph whose narration has "me" in the same sentence
+      for (const s of p.sents) {
+        const narration = selfHits(p).filter((h) => h.start >= s.start && h.end <= s.end && h.word === 'me');
+        if (!narration.length) continue;
+        for (const [a, b] of speechSpans(p.text)) {
+          if (a < s.start || b > s.end + 1) continue;
+          const said = p.text.slice(a, b);
+          for (const m of said.matchAll(/(?:^[“"‘']\s*(\p{Lu}\p{Ll}+)\s*,|,\s*(\p{Lu}\p{Ll}+)\s*[,.!?]\s*[”"’']?\s*$|,\s*(\p{Lu}\p{Ll}+)\s*[,.!?])/gu)) voc.push(m[1] || m[2] || m[3]);
+        }
+      }
+      for (const m of p.text.matchAll(/(?<![\p{L}])(\p{Lu}\p{Ll}+)\s+(?:said|asked|told|was|had|did|went|came|looked|turned|smiled|nodded|laughed)\b/gu)) if (narr(m.index, m.index + m[0].length)) asOther.add(m[1]);
+    }
+    const good = (w) => ok(w) && !asOther.has(w);
+    // the narration's own word first, then a name said to the narrator's face
+    const name = strong.find(good) || voc.find(good) || null;
+    if (!name) return { name: null, aliases: [] };
+    // ("At home I was Eleanor": a second name, beside the first)
+    return { name, aliases: [...new Set([...strong, ...voc, ...weak])].filter((w) => w !== name && good(w)) };
+  }
+
+  /* ---------- 2 · passage packs ---------- */
+
+  // Where each cast member is named in the chapter: its names and aliases,
+  // and for a place with a name of two words or more, "the <last word>"
+  // when nothing else has that word and nothing qualifies it ("the room",
+  // not "the room with the green tiles")
+  function chapterHits(ch, cast) {
+    const idx = mentionIndex(cast.filter((c) => !c.narrator || c.proper).map((c) => ({ id: c.key, name: c.narrator && !c.proper ? '\u0000' : c.name, kind: c.kind, aliases: c.aliases })));
+    const me = cast.find((c) => c.narrator);
+    const heads = new Map();
+    for (const c of cast) {
+      if (c.kind !== 'place' || c.name.split(/\s+/).length < 2) continue;
+      const head = c.name.split(/\s+/).pop().toLowerCase();
+      if (head.length < 3 || cast.some((x) => x !== c && [x.name, ...x.aliases].some((n) => n.split(/\s+/).pop().toLowerCase() === head))) continue;
+      heads.set(head, c.key);
+    }
+    return ch.paras.map((p) => {
+      const hits = mentions(p.text, idx).map((m) => ({ key: m.id, start: m.start, end: m.end, via: m.via }));
+      // the narrator: "I", "me", "my" in the narration
+      if (me) for (const h of selfHits(p)) if (!hits.some((x) => x.start < h.end && x.end > h.start)) hits.push({ key: me.key, start: h.start, end: h.end, via: 'self' });
+      for (const [head, key] of heads) {
+        for (const m of p.text.matchAll(new RegExp(`(?<![\\p{L}])the\\s+${escRe(head)}(?![\\p{L}])(?!\\s+(?:with|of|that|where|which|on|in|at|behind|beside|across)\\b)`, 'giu'))) {
+          if (hits.some((h) => h.start < m.index + m[0].length && h.end > m.index)) continue;
+          hits.push({ key, start: m.index, end: m.index + m[0].length, via: 'head' });
+        }
+      }
+      return hits.sort((a, b) => a.start - b.start);
+    });
+  }
+  // Who is he and who is she, by the chapter's own narration: a sentence
+  // that opens with he or she after one naming a single person, and "Hesper
+  // was on her feet" (an owning his or her a few words after the name, no
+  // one else named between). Two votes or more, none against. → key → sex
+  function sexHints(ch, hits, cast) {
+    const living = new Set(cast.filter((x) => ['person', 'creature'].includes(x.kind)).map((x) => x.key));
+    const votes = new Map();
+    const vote = (key, sex) => { if (!votes.has(key)) votes.set(key, { male: 0, female: 0 }); votes.get(key)[sex]++; };
+    for (const p of ch.paras) {
+      const free = (h) => !p.talk.some(([a, b]) => h.start < b && h.end > a);
+      const ph = hits[p.pi].filter((h) => living.has(h.key) && free(h) && h.via !== 'self');
+      p.sents.forEach((s, si) => {
+        const here = ph.filter((h) => h.start >= s.start && h.end <= s.end);
+        const people = [...new Set(here.map((h) => h.key))];
+        if (people.length === 1) {
+          const h = here[0];
+          const after = p.text.slice(h.end, s.end);
+          // "Hesper made herself look"; "Hesper had been born …, and she had never"
+          const m = /(?<![\p{L}])(himself|herself)(?![\p{L}])|(?:,\s*|(?<![\p{L}])and\s+|(?<![\p{L}])then\s+)(he|she)(?![\p{L}])/u.exec(after);
+          if (m && !p.talk.some(([a, b]) => h.end + m.index < b && h.end + m.index + m[0].length > a)) vote(people[0], (m[1] || m[2]) === 'himself' || (m[1] || m[2]) === 'he' ? 'male' : 'female');
+          const next = p.sents[si + 1];
+          const n = next && /^(he|she)\b/i.exec(next.text);
+          if (n && !ph.some((x) => x.start >= next.start && x.end <= next.end)) vote(people[0], n[1].toLowerCase() === 'he' ? 'male' : 'female');
+        }
+      });
+    }
+    const out = new Map();
+    for (const [k, v] of votes) if (v.male + v.female >= 2 && (!v.male || !v.female)) out.set(k, v.male ? 'male' : 'female');
+    out.votes = votes;
+    return out;
+  }
+  const SUBJECT = /^(?:[“"‘']?\s*)(?:(?:then|and|but|so|now|still|later|once|when|after|before|there|here|yet)\s*,?\s+)?(he|she|his|her|it|its|they|their)\b/i;
+  const PERSONAL = { he: 'male', his: 'male', she: 'female', her: 'female' };
+  // The sentences about one cast member, each with why it is there:
+  // 'name' (it is named), 'chain' (the pronoun after it), 'para' (a place's
+  // or thing's paragraph, after it is named), 'setting' (the chapter's place)
+  function packFor(ch, hits, cast, c, sexOf) {
+    const out = new Map();
+    const living = new Set(cast.filter((x) => ['person', 'creature'].includes(x.kind)).map((x) => x.key));
+    const add = (s, why) => { if (!out.has(s.id) || (out.get(s.id) === 'setting' && why !== 'setting')) out.set(s.id, why); };
+    let carry = []; // the ones a paragraph opening with a pronoun may mean: the last named before it, latest last
+    for (const p of ch.paras) {
+      const ph = hits[p.pi];
+      for (const [si, s] of p.sents.entries()) {
+        const here = ph.filter((h) => h.start >= s.start && h.end <= s.end);
+        if (here.some((h) => h.key === c.key)) { add(s, 'name'); continue; }
+        // a notes line that opens with the name: "Ivo Marchetti: thirty-four … Brown eyes. Never drinks."
+        if (ch.notes && !here.length && ph[0] && ph[0].key === c.key && ph[0].start === 0 && /^\s*[:,—–]/.test(p.text.slice(ph[0].end))) { add(s, 'name'); continue; }
+        if (living.has(c.key)) {
+          const m = !s.said && SUBJECT.exec(s.text);
+          if (m && PERSONAL[m[1].toLowerCase()]) {
+            const pos = s.start + m.index + m[0].length - m[1].length;
+            // (in the first person, "she" is never the narrator)
+            const seen = ph.filter((h) => h.end <= pos && living.has(h.key) && h.via !== 'self' && !p.talk.some(([a, b]) => h.start < b && h.end > a));
+            const sex = PERSONAL[m[1].toLowerCase()];
+            // the last one named before whose sex (if known) agrees
+            let who = null;
+            for (let i = seen.length - 1; i >= 0; i--) { const k = sexOf(seen[i].key); if (!k || k === sex) { who = seen[i].key; break; } }
+            if (who == null && !seen.length && si === 0) for (let i = carry.length - 1; i >= 0; i--) { const k = sexOf(carry[i]); if (!k || k === sex) { who = carry[i]; break; } }
+            if (who === c.key && !here.some((h) => living.has(h.key) && h.via !== 'self' && h.start < pos)) { add(s, 'chain'); continue; }
+          }
+        } else {
+          // a place's (or group's, thing's) paragraph: after it's named,
+          // until something else of its kind is
+          const before = ph.filter((h) => h.end <= s.start && cast[h.key] && cast[h.key].kind === c.kind);
+          if (before.length && before[before.length - 1].key === c.key && !here.some((h) => cast[h.key] && cast[h.key].kind === c.kind)) { add(s, 'para'); continue; }
+        }
+        if (c.setting && !s.said) add(s, 'setting');
+      }
+      const named = ph.filter((h) => living.has(h.key) && h.via !== 'self' && !p.talk.some(([a, b]) => h.start < b && h.end > a));
+      for (const h of named) carry = [...carry.filter((k) => k !== h.key), h.key].slice(-3);
+    }
+    const ids = [...out.keys()].sort((a, b) => a - b);
+    return ids.map((id) => ({ s: ch.sents[id - 1], why: out.get(id) }));
+  }
+  // A pack as the reader sees it, split where it runs long (~1,500 tokens):
+  // [{ lines: [{ n, s, why }], text }], sentences numbered from 1 in each part
+  const PACK_CHARS = 5600;
+  function packParts(pack) {
+    const parts = [];
+    let cur = [];
+    let size = 0;
+    for (const x of pack) {
+      const len = x.s.text.length + 6;
+      if (cur.length && size + len > PACK_CHARS && cur[cur.length - 1].s.pi !== x.s.pi) { parts.push(cur); cur = []; size = 0; }
+      cur.push(x);
+      size += len;
+    }
+    if (cur.length) parts.push(cur);
+    return parts.map((xs) => {
+      const lines = xs.map((x, i) => ({ n: i + 1, s: x.s, why: x.why }));
+      let text = '';
+      lines.forEach((l, i) => { text += (i && lines[i - 1].s.pi !== l.s.pi ? '\n\n' : i ? ' ' : '') + `[${l.n}] ${l.s.text}`; });
+      return { lines, text };
+    });
+  }
+
+  /* ---------- 3 · gates on a fact ---------- */
+
+  const GROUPS = ['appearance', 'age', 'sex', 'role', 'personality', 'habit', 'relationship', 'origin', 'history', 'state', 'possession', 'description', 'location', 'rule', 'membership', 'other'];
+  // what may be one moment rather than a lasting fact: asked whether it lasts
+  const LASTING = new Set(['habit', 'state', 'possession', 'personality', 'other']);
+  // read between the lines, by nature: asked twice
+  const INTERPRETIVE = new Set(['personality', 'relationship', 'opinion', 'manner', 'manner.speech']);
+  const GROUP_KEY = { appearance: 'appearance', age: 'age', sex: 'sex', role: 'role', personality: 'personality', habit: 'habit', relationship: 'relationship',
+    origin: 'origin', history: 'history', state: 'state', possession: 'possession', description: 'description', location: 'location', rule: 'rule', membership: 'membership', other: 'other' };
+  // a label's canonical key: the label's own if the table knows it, else the group's
+  function keyOf(group, label) {
+    const k = canonLabel(label || '');
+    if (C.KNOWN_KEYS.has(k)) return k;
+    return GROUP_KEY[group] || 'other';
+  }
+  // the clause of a sentence that holds the words, when it stands alone:
+  // cut at commas and semicolons, the run of segments holding every matched
+  // word; a clause that starts the sentence keeps its start
+  function clauseOf(s, words) {
+    const text = s.text;
+    const low = norm(text);
+    if (!words.length) return text;
+    const cuts = [0];
+    for (const m of text.matchAll(/[,;:]\s+|\s+[—–]\s+/g)) cuts.push(m.index + m[0].length);
+    cuts.push(text.length + 1);
+    const segs = cuts.slice(0, -1).map((a, i) => ({ a, b: Math.min(text.length, cuts[i + 1]) }));
+    // (a word written as the value writes it beats one the lexicon allows: "too tall", not "tallest")
+    const bags = segs.map((seg) => new Set(content(norm(text.slice(seg.a, seg.b)))));
+    const has = bags.map((t) => new Set(words.filter((w) => t.has(w) || (!bags.some((x) => x.has(w)) && inBag(w, t)))));
+    const all = new Set(has.flatMap((x) => [...x]));
+    if (!all.size) return fit(text, words);
+    // the fewest segments holding every word the value shares with the sentence
+    let best = null;
+    for (let i = 0; i < segs.length; i++) {
+      const got = new Set();
+      for (let j = i; j < segs.length; j++) {
+        for (const w of has[j]) got.add(w);
+        if (got.size === all.size) { if (!best || j - i < best[1] - best[0]) best = [i, j]; break; }
+      }
+    }
+    let [first, last] = best;
+    // (the sentence's start, who it is about, stays unless it runs long)
+    if (first > 0 && text.slice(0, segs[first].a).split(/\s+/).length <= 12) first = 0;
+    const cut = text.slice(segs[first].a, segs[last].b).replace(/[\s,;:—–]+$/, '');
+    // too short to stand alone, or a clause that leans on the one before: the sentence
+    if (cut.split(/\s+/).length < 4 || (first > 0 && /^(?:and|but|or|which|who|that|as|with|than)\b/i.test(cut))) return fit(low.length ? text : cut, words);
+    return fit(cut, words);
+  }
+  // "no", "not", "never" just before one of the value's words in the text
+  function localNeg(text, words) {
+    const ts = tokens(text);
+    const st = ts.map(stem);
+    for (let i = 0; i < ts.length; i++) {
+      if (!words.some((w) => w === st[i] || inBag(w, new Set([st[i]])))) continue;
+      if (NEGATORS.has(ts[i]) && words.includes(st[i])) return true; // ("never" is the value's own word)
+      if (ts.slice(Math.max(0, i - 5), i).some((w) => NEGATORS.has(w))) return true;
+    }
+    return false;
+  }
+  // what is done more than once, in so many words (round 2: "all" and "any"
+  // made one moment a habit)
+  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|kept|keeps|keep|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|since)(?![\p{L}])/iu;
+  // a role that was, not one that is: "had been a soldier", "used to be",
+  // "formerly" (but "had been the town's doctor for twenty-two years" still is)
+  const PAST_ROLE = /(?<![\p{L}])(?:had been|used to be|was once|once was|formerly|former|ex-|retired|until)(?![\p{L}])/iu;
+  const ONGOING = /(?<![\p{L}])(?:for (?:\S+\s+){0,2}(?:years?|months?|weeks?|decades?)|since)(?![\p{L}])/iu;
+  // at most 30 words (the quote gate's limit): the 30 around the value's words
+  function fit(text, words) {
+    const ws = text.split(/\s+/);
+    if (ws.length <= 30) return text;
+    const at = ws.findIndex((w) => words.some((x) => inBag(x, new Set(content(w)))));
+    const from = Math.max(0, Math.min(ws.length - 30, (at < 0 ? 0 : at) - 8));
+    return ws.slice(from, from + 30).join(' ').replace(/^[,;:\s]+|[,;:\s]+$/g, '');
+  }
+  // Whose is the claim in this sentence? (round 2: a fact must be tied to
+  // its entity by the sentence's grammar, not by standing near it.) The
+  // claim's first word is owned by a possessive just before it ("her green
+  // eyes", "my father's grey eyes", "Mara's brother"), else by the clause's
+  // subject: the last one named before it who is not the object of a
+  // preposition ("above the Sare", "below her", "at Saltby") — or, when
+  // a name follows "called"/"named" just after the claim ("a collie bitch
+  // called Moss"), that one. A pronoun opening a sentence the pack tied to
+  // `c` is `c`'s. → a cast key, or null when the sentence doesn't say.
+  const PREP = new Set(['in', 'on', 'at', 'by', 'to', 'from', 'with', 'without', 'for', 'into', 'onto', 'over', 'under', 'above', 'below', 'beneath', 'beside', 'behind', 'near', 'past', 'through', 'across', 'along', 'around', 'among', 'between', 'toward', 'towards', 'off', 'up', 'down', 'than', 'like', 'about', 'after', 'before', 'beyond', 'inside', 'outside', 'upon', 'within', 'against', 'except', 'as']);
+  const SKIP_DET = new Set(['the', 'a', 'an', 'old', 'young', 'little', 'poor', 'dear', 'all', 'both', 'each', 'his', 'her', 'their', 'its', 'my', 'our', 'your']);
+  const POSS_PRON = new Set(['his', 'her', 'its', 'their', 'my']);
+  const SUBJ_PRON = new Set(['he', 'she', 'it', 'they', 'i']);
+  function claimOwner(l, words, c, ctx) {
+    const s = l.s;
+    const p = ctx.ch.paras[s.pi];
+    const hits = ((ctx.hits || [])[s.pi] || []).filter((h) => h.start >= s.start && h.end <= s.end && !p.talk.some(([a, b]) => h.start < b && h.end > a));
+    const toks = [...s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)].map((m) => ({ w: m[0], lw: norm(m[0]).replace(/['’]s$/, ''), poss: /['’]s$/.test(m[0]), start: s.start + m.index, end: s.start + m.index + m[0].length }));
+    if (!toks.length) return null;
+    const inHit = (t) => hits.find((h) => h.start < t.end && h.end > t.start);
+    // the claim: the first of its words in the sentence, outside any name
+    const want = new Set(words);
+    const ci = toks.findIndex((t) => !inHit(t) && !STOPW.has(t.lw) && (want.has(stem(t.lw)) || inBag(stem(t.lw), want)));
+    if (ci < 0) return null;
+    // the one each word stands for
+    const cand = [];
+    let lastHit = null;
+    toks.forEach((t, i) => {
+      const h = inHit(t);
+      if (h) {
+        if (h === lastHit) { cand[cand.length - 1].end = i; cand[cand.length - 1].poss = t.poss || /^['’]s/.test(p.text.slice(h.end, h.end + 2)); return; }
+        lastHit = h;
+        cand.push({ key: h.key, i, end: i, poss: t.poss || /^['’]s/.test(p.text.slice(h.end, h.end + 2)), self: h.via === 'self' });
+        return;
+      }
+      lastHit = null;
+      if (POSS_PRON.has(t.lw) || SUBJ_PRON.has(t.lw) || ['him', 'them', 'me'].includes(t.lw)) {
+        // (a sentence the pack tied to c by its opening pronoun: that pronoun is c's)
+        const key = i === 0 && ['chain', 'para'].includes(l.why) ? c.key : undefined;
+        cand.push({ key, i, end: i, poss: POSS_PRON.has(t.lw) && !(t.lw === 'her' && toks[i + 1] && PREP.has(toks[i + 1].lw)), pron: true });
+      }
+    });
+    // (the object of a preposition is no owner: "above the Sare", "below her")
+    const gapPunct = (a, b) => /[,;:—–()]/.test(s.text.slice(toks[a].end - s.start, toks[b].start - s.start));
+    // "a black-and-white collie bitch called Moss"
+    for (const x of cand) if (x.i > ci && x.i - ci <= 6 && x.key !== undefined && /^(?:called|named)$/.test((toks[x.i - 1] || {}).lw || '')) return x.key;
+    const before = cand.filter((x) => x.end < ci);
+    // an apposition: "at the Corn Exchange, a sandstone hall"; "its Long
+    // Gallery, upstairs, a cold panelled room"
+    const near = before[before.length - 1];
+    // (after the object of a preposition it may be either's: "the Haddons’
+    // house on Bridge Street, a narrow red-brick building" — the reader's
+    // choice decides)
+    const object = (x) => { let k = x.i - 1; while (k >= 0 && SKIP_DET.has(toks[k].lw)) k--; return k >= 0 && PREP.has(toks[k].lw) && toks[k].lw !== 'of'; };
+    if (near && near.key !== undefined && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s+(?:[\p{L}\p{N}'’-]+\s+){0,3}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) return object(near) ? null : near.key;
+    // a possessive just before the claim, in its own phrase
+    const poss = before.filter((x) => x.poss && ci - x.end <= 3 && !gapPunct(x.end, ci)).pop();
+    if (poss) return poss.key === undefined ? null : poss.key;
+    const subj = before.filter((x) => !x.poss && !object(x) && !(x.pron && !['he', 'she', 'it', 'they', 'i'].includes(toks[x.i].lw))).pop();
+    // (no subject: the last one named before it, in the same clause run —
+    // "its Long Gallery, … a cold panelled room …, where the light came in
+    // through tall windows")
+    if (!subj) return near && near.key !== undefined && !object(near) && !/[;:]/.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start)) ? near.key : null;
+    return subj.key === undefined ? null : subj.key;
+  }
+
+  // Cited, tied, grounded: the gates a proposal passes before the reader
+  // is asked about it. → { why } or { quote, said, key, label, value, ... }
+  function gateFact(x, part, c, ctx) {
+    let g = GROUPS.includes(x && x.g) ? x.g : null;
+    if (g && ['sex', 'age'].includes(g) && !['person', 'creature'].includes(c.kind)) g = 'description';
+    // (who belongs is a group's; a place's or thing's "membership" is what it's like)
+    if (g === 'membership' && ['place', 'thing'].includes(c.kind)) g = 'description';
+    const value = String((x && x.v) || '').replace(/\s+/g, ' ').trim().replace(/[.;,]+$/, '');
+    const label = String((x && x.a) || '').replace(/\s+/g, ' ').trim();
+    if (!g || !value || value.length > 110 || value.split(' ').length > 16 || label.split(' ').length > 4) return { why: 'shape' };
+    // 1 cited: every id one of the part's sentences
+    const ids = [...new Set((Array.isArray(x.s) ? x.s : [x.s]).map((n) => +n).filter((n) => Number.isInteger(n)))];
+    if (!ids.length || ids.length > 3 || ids.some((n) => n < 1 || n > part.lines.length)) return { why: 'cited' };
+    const cited = ids.map((n) => part.lines[n - 1]);
+    // 2 tied: each cited sentence names it, follows on with its pronoun, is
+    // its place's paragraph, or the chapter is set in it
+    if (cited.some((l) => !l.why)) return { why: 'tied' };
+    // the words it's about, and the value's words in the text
+    const own = new Set([c.name, ...c.aliases].flatMap((n) => content(n)));
+    const valueWords = content(value).filter((w) => !own.has(w));
+    const text = cited.map((l) => l.s.text).join(' ');
+    const bag = new Set(content(text));
+    // 3 grounded: half the value's words (all its names and numbers) in the sentences
+    const grounded = valueWords.filter((w) => inBag(w, bag));
+    const caps = (value.match(/(?<![\p{L}])\p{Lu}[\p{L}'’-]+/gu) || []).filter((w, i) => i > 0 || !STOPW.has(w.toLowerCase()));
+    if (caps.some((w) => !norm(text).includes(norm(w.replace(/['’]s$/, ''))) && !own.has(stem(norm(w))))) return { why: 'invented' };
+    if (valueWords.filter((w) => NUMBER.test(w)).some((w) => !inBag(w, bag))) return { why: 'invented' };
+    let key = keyOf(g, label);
+    // about someone (or something) else: a place's, group's or thing's fact
+    // whose label or value names another of the cast ("Weigher's nickname"
+    // on the Weighhouse), or names itself ("not one of the Spared" is
+    // someone's, not the Spared's)
+    const others = (ctx.cast || []).filter((o) => o !== c && !o.gone);
+    const namesOther = (t) => others.some((o) => [o.name, ...o.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && new RegExp(`(?<![\\p{L}])${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(norm(t)); }));
+    if (c.kind !== 'person' && c.kind !== 'creature' && !['relationship', 'location'].includes(g) && !['residents', 'members'].includes(key)) {
+      if (namesOther(label + ' ' + value)) return { why: 'someone else' };
+      if ([c.name, ...c.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && norm(value).includes(b); })) return { why: 'someone else' };
+    }
+    // a place's, group's or thing's sentence found by its paragraph (not its
+    // name) that is about a person ("Hesper had been born…", "his neck")
+    // is that person's; and how anyone looks is never another of the cast
+    if (c.kind !== 'person' && c.kind !== 'creature' && !['relationship', 'location'].includes(g) && cited.some((l) => l.why !== 'name')) {
+      const people = others.filter((o) => ['person', 'creature'].includes(o.kind));
+      const personal = (t) => /(?<![\p{L}])(?:he|she|his|her|him|hers)(?![\p{L}])/iu.test(t) || people.some((o) => [o.name, ...o.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && new RegExp(`(?<![\\p{L}])${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(norm(t)); }));
+      if (cited.some((l) => l.why !== 'name' && personal(l.s.text))) return { why: 'someone else' };
+    }
+    if (labelFamily(keyOf(g, label)) === 'appearance' && namesOther(value)) return { why: 'someone else' };
+    // whose the claim is, by the sentence's grammar: a fact about someone
+    // or something else in the same sentence is theirs (the town's slate
+    // filed on its river; one person's eye patch on the group they lead)
+    let owned = false;
+    if (ctx.hits && !['relationship', 'location', 'membership', 'possession'].includes(g) && !['residents', 'members', 'possession'].includes(key)) {
+      const owners = cited.map((l) => claimOwner(l, grounded, c, ctx));
+      if (owners.some((k) => k != null && k !== c.key)) return { why: 'someone else' };
+      owned = owners.some((k) => k === c.key);
+    }
+    // the setting's own: how it works (its routines and rules, who belongs),
+    // from a clause that names no one and nothing else of the cast
+    const bySetting = cited.some((l) => l.why === 'setting');
+    if (bySetting && !['habit', 'rule', 'membership'].includes(g)) return { why: 'setting' };
+    const interpretive = INTERPRETIVE.has(key) || INTERPRETIVE.has(labelFamily(key)) || g === 'personality';
+    const ratio = valueWords.length ? grounded.length / valueWords.length : 0;
+    if (!valueWords.length) return { why: 'empty' };
+    if (ratio < 0.5 && !(interpretive && ratio > 0)) return { why: 'ungrounded' };
+    // polarity: "not one of the Spared" isn't "one of the Spared"
+    const clauses = cited.map((l) => clauseOf(l.s, grounded));
+    if (localNeg(clauses.join(' '), grounded) !== negated(value) && !(negated(value) && /less|out\b|\bun/i.test(value))) return { why: 'polarity' };
+    // a past role is history, not who they are now
+    if (labelFamily(key) === 'role' && PAST_ROLE.test(clauses.join(' ')) && !ONGOING.test(clauses.join(' '))) { g = 'history'; key = 'history'; }
+    // a habit or routine is what is done more than once: the words must say so
+    // (always, every, never, kept, the same…); one moment is the story's, not the bible's
+    if ((g === 'habit' || labelFamily(key) === 'habit') && !HABITUAL.test(value + ' ' + cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
+    // an appearance is how they look, not what they did ("slid the weight", "did not turn round")
+    if (labelFamily(key) === 'appearance' && /^(?:did|was|were|went|tried|kept|got|had|has|made|took|gave|came|stood|sat|looked|turned|peered|slid|walked|ran|said|felt)\b/i.test(value)) return { why: 'once' };
+    // a personality is a word or two, or a way they always are
+    if (g === 'personality' && value.split(/\s+/).length > 4 && !HABITUAL.test(value + ' ' + cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
+    // the quote: the cited sentence (its clause), as the writer wrote it
+    const quotes = cited.map((l, i) => gateQuote(clauses[i], ctx.text) || gateQuote(l.s.text, ctx.text)).filter(Boolean);
+    if (quotes.length !== cited.length) return { why: 'quote' };
+    // said: inside speech or reported speech, whatever the reader marked
+    const said = !!x.x || cited.every((l) => { const q = clauseOf(l.s, grounded); return talkOf(l.s, q, ctx); });
+    if (bySetting && quotes.some((q) => namesOther(q) || others.some((o) => o.kind === 'place' && o.name.split(/\s+/).length > 1 && new RegExp(`(?<![\\p{L}])${o.name.split(/\s+/).pop()}s?(?![\\p{L}])`, 'iu').test(q)))) return { why: 'setting' };
+    // not from a sentence a slip stands on (a later value that differs)
+    if (cited.some((l) => ctx.suspect && ctx.suspect.has(l.s.id))) return { why: 'suspect' };
+    return { g, key, label, value, quotes, cited, said, interpretive: interpretive && ratio < 0.5, strong: cited.every((l) => l.why === 'name'), owned,
+      setting: bySetting, lasting: LASTING.has(g) || ['habit', 'routine', 'custom', 'state', 'possession', 'personality'].includes(labelFamily(key)) || ['habit', 'routine', 'custom', 'state', 'possession'].includes(key) };
+  }
+  // is the clause `q` of sentence `s` talk (speech, or reported)
+  function talkOf(s, q, ctx) {
+    const p = ctx.ch.paras[s.pi];
+    const at = normMap(p.text);
+    const i = at.text.indexOf(norm(q), s.start === 0 ? 0 : Math.max(0, at.map.findIndex((m) => m >= s.start) - 1));
+    if (i < 0) return s.said;
+    const a = at.map[i];
+    const b = at.map[i + norm(q).length - 1] + 1;
+    return p.talk.some(([x, y]) => a < y && b > x) && !(p.talk.every(([x, y]) => b <= x + 1 || a >= y - 1));
+  }
+
+  /* ---------- introductions, read by code ---------- */
+
+  const INTRO_NOUN = new Set(['man', 'woman', 'girl', 'boy', 'lad', 'lass', 'child', 'fellow', 'figure', 'person', 'creature', 'gentleman', 'lady']);
+  const ADJ_SLOT = {};
+  for (const w of ['tall', 'short', 'tallest', 'shortest', 'taller', 'long', 'towering']) ADJ_SLOT[w] = ['appearance', 'height'];
+  for (const w of ['thin', 'narrow', 'heavy', 'big', 'broad', 'stout', 'slight', 'lean', 'square', 'stooped', 'small', 'plump', 'fat', 'wiry', 'burly', 'slender', 'skinny', 'gaunt', 'bony', 'stocky', 'large', 'hefty', 'straight-backed', 'hunched', 'frail', 'sturdy', 'muscular', 'tiny', 'little']) ADJ_SLOT[w] = ['appearance', 'build'];
+  for (const w of ['old', 'young', 'elderly', 'middle-aged', 'ancient', 'aged']) ADJ_SLOT[w] = ['age', 'age'];
+  for (const w of ['bald', 'balding', 'grey-haired', 'gray-haired', 'sandy-haired', 'red-haired', 'fair-haired', 'dark-haired', 'white-haired', 'black-haired', 'curly-haired', 'shaven-headed']) ADJ_SLOT[w] = ['appearance', 'hair'];
+  for (const w of ['freckled', 'pale', 'sunburnt', 'sunburned', 'bearded', 'clean-shaven', 'scarred', 'one-eyed', 'weathered', 'pock-marked', 'ruddy']) ADJ_SLOT[w] = ['appearance', 'face'];
+  for (const w of ['anxious', 'nervous', 'quiet', 'cheerful', 'shy', 'gentle', 'stern', 'kindly', 'fierce', 'timid', 'cheery', 'grim', 'solemn', 'restless']) ADJ_SLOT[w] = ['personality', 'personality'];
+  const WITH_SLOT = [[/\b(?:hair|head|curls|plait|braid|ponytail|fringe)\b/, ['appearance', 'hair']], [/\beyes?\b/, ['appearance', 'eyes']], [/\b(?:beard|moustache|mustache|whiskers|stubble|teeth|nose|chin|jaw|cheeks?|freckles|face|skin)\b/, ['appearance', 'face']],
+    [/\b(?:scar|scars|burn|tattoo|tattoos|mark|birthmark|patch)\b/, ['appearance', 'mark']], [/\b(?:spectacles|glasses|monocle|earrings?|ring|hat|coat|cap|cloak|apron|boots|uniform|scarf)\b/, ['appearance', 'clothing']],
+    [/\b(?:limp|stick|cane|crutch|stoop)\b/, ['appearance', 'other']], [/\bvoice\b/, ['personality', 'speech']], [/\blaugh\b/, ['personality', 'laugh']]];
+  // → [{ g, a, v }] from one sentence that opens with c (named, or its pronoun)
+  function introFacts(l, c, phits, para) {
+    const s = l.s;
+    const text = s.text;
+    const head = (phits || []).find((h) => h.key === c.key && h.start === s.start + (text.match(/^[\s“"‘']*/u) || [''])[0].length);
+    const pron = l.why === 'chain' && /^(?:he|she)\b/i.test(text);
+    if (!head && !pron) return [];
+    if (para && para.talk.some(([a, b]) => a < s.end && b > s.start)) return [];
+    const rest = head ? text.slice(head.end - s.start) : text.replace(/^\s*\S+/, '');
+    const m = /^\s+(?:was|is)\s+(.+?)[.!?]*$/u.exec(rest);
+    if (!m) return [];
+    const out = [];
+    const add = (g, a, v) => { v = v.replace(/^[\s,]+|[\s,]+$/g, ''); if (v && v.split(/\s+/).length <= 12 && !out.some((x) => x.v === v)) out.push({ g, a, v }); };
+    // the head: "a short, bald man of sixty", "nineteen, narrow and quick", "the chief engineer, a heavy man"
+    let body = m[1];
+    // (where they are or what they're doing is the scene, not the person: "was in the galley", "was waiting")
+    if (/^(?:in|at|on|by|with|from|under|over|behind|beside|near|inside|outside|already|still|now|waiting|sitting|standing|out|up|down|there|here|not|never|about|going|being)\b/i.test(body) || /^\w+ing\b/.test(body)) return [];
+    // (a predicate that is someone's kin, "my mother's younger brother, a big slow man": what follows it)
+    if (/['’]s\s/.test(body.split(',')[0])) {
+      const next = /^[^,]*,\s+((?:a|an)\s.+)$/u.exec(body);
+      if (!next) return [];
+      body = next[1];
+    }
+    const stopAt = body.search(/\s(?:who|whose|that|which|where|when)\s|,?\s+and\s+(?:she|he|it|they|had|was|is)\s|;|—|–/);
+    const clause = stopAt < 0 ? body : body.slice(0, stopAt);
+    const cut = clause.search(/\s(?:with|from)\s/);
+    const front = cut < 0 ? clause : clause.slice(0, cut);
+    const words = front.split(/[\s,]+/).filter(Boolean).map((w) => w.toLowerCase().replace(/[’']s$/, ''));
+    const ageN = /\bof\s+((?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-\w+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|\d+)\b/.exec(front) || /^((?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-[a-z]+)?|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|\d+)\b/.exec(front);
+    if (ageN) add('age', 'age', ageN[1]);
+    const slots = new Map();
+    for (const w of words) {
+      const k = ADJ_SLOT[w];
+      if (!k) continue;
+      const key = k.join('.');
+      if (!slots.has(key)) slots.set(key, []);
+      slots.get(key).push(w);
+    }
+    for (const [key, ws] of slots) {
+      const [g, a] = key.split('.');
+      // (as written: the words in their order)
+      add(g, a === 'height' ? 'height' : a, ws.join(g === 'personality' || a === 'build' ? ' and ' : ', ').replace(/^(\w+), (\w+)$/, '$1, $2'));
+    }
+    const noun = words.find((w) => INTRO_NOUN.has(w));
+    if (noun && SEX_WORDS[noun]) add('sex', 'sex', noun);
+    // "with a shaved head and a burn scar across the back of her right hand"
+    const w = /\swith\s+(.+)$/u.exec(clause);
+    if (w) {
+      for (const np of w[1].split(/,\s+(?:and\s+)?|\s+and\s+(?=(?:a|an|the|his|her|two|one)\s)/u)) {
+        if (/^(?:he|she|it|they)\b/i.test(np.trim())) break;
+        // "with … a habit of rubbing the bridge of his nose when he was tired"
+        if (/^(?:a|the)\s+(?:habit|way|knack|tendency|trick)\s+of\b/i.test(np.trim())) { add('habit', 'habit', np.split(/,\s/)[0]); continue; }
+        const slot = WITH_SLOT.find(([re]) => re.test(np.toLowerCase()));
+        if (slot) add(slot[1][0], slot[1][1], np.split(/\s+(?:who|which|that|and\s+(?:he|she))\s/u)[0]);
+      }
+    }
+    // "with half-moon spectacles and a voice too big for him" is the person's; a place in it is not
+    return out.filter((x) => !(phits || []).some((h) => h.key !== c.key && x.v.includes(para.text.slice(h.start, h.end))));
+  }
+
+  /* ---------- hard traits read from open facts ---------- */
+
+  // A trait the reader read (Hair: fair as wet straw; Sex: woman) is a
+  // proposal of the closed kind, for the trait gates to decide: the colour
+  // or the sex word must be in the quote (canon.js rule 2 then wants the
+  // text's own tie, or the pronoun's referent).
+  function traitOf(key, value, quote) {
+    const w = wordsOf(value + ' ' + quote);
+    const vw = wordsOf(value);
+    if (key === 'sex') {
+      const word = vw.find((x) => SEX_WORDS[x]) || (['female', 'male'].includes(norm(value)) ? norm(value) : null);
+      if (!word) return null;
+      const v = SEX_WORDS[word] ? SEX_WORDS[word][0] : word;
+      if (!w.some((x) => (SEX_WORDS[x] && SEX_WORDS[x][0] === v))) return { attr: 'sex', value: v, as: '' }; // (a pronoun's: the rule decides)
+      return { attr: 'sex', value: v, as: SEX_WORDS[word] ? word : '' };
+    }
+    if (key === 'appearance.hair' || key === 'appearance.eyes') {
+      const c = vw.find((x) => COLOURS[x]);
+      if (!c || !wordsOf(quote).includes(c)) return null;
+      return { attr: key === 'appearance.hair' ? 'hair' : 'eyes', value: COLOURS[c], as: norm(value) === c ? '' : value };
+    }
+    if (key === 'species') {
+      const s = vw.find((x) => SPECIES[x]);
+      return s && wordsOf(quote).includes(s) ? { attr: 'species', value: SPECIES[s], as: '' } : null;
+    }
+    return null;
+  }
+
+  /* ---------- 5 · open-fact slips: candidates (code) ---------- */
+
+  const ANTONYMS = [['thin', 'fat'], ['thin', 'stout'], ['thin', 'plump'], ['narrow', 'wide'], ['narrow', 'broad'], ['tall', 'short'], ['old', 'young'], ['cold', 'warm'], ['cold', 'hot'],
+    ['dark', 'bright'], ['quiet', 'loud'], ['empty', 'full'], ['inside', 'outside'], ['locked', 'unlocked'], ['always', 'never'], ['high', 'low'], ['heavy', 'light'],
+    ['clean', 'dirty'], ['rich', 'poor'], ['kind', 'cruel'], ['gentle', 'rough'], ['calm', 'angry']].map((p) => p.map(stem));
+  const ANT = new Map();
+  for (const [a, b] of ANTONYMS) { if (!ANT.has(a)) ANT.set(a, new Set()); if (!ANT.has(b)) ANT.set(b, new Set()); ANT.get(a).add(b); ANT.get(b).add(a); }
+
+  // Does sentence B say otherwise of a kept fact? Code finds the candidates:
+  // the same head noun with "no/not/never" on one side only ("not one
+  // window" / "high windows"), a word against one of the value's (thin /
+  // stout), or another number of the same thing. → the words of B to mark, or null
+  const UNREAL = /(?<![\p{L}])(?:pretend\w*|imagin\w*|wish\w*|dream\w*|as if|as though|seem\w*|felt like|feels like|remember\w*|thought of|if only|would have|could have)(?![\p{L}])/iu;
+  // the words of B to mark, or null (clashDetail also says what to ask)
+  const clashCandidate = (f, quote, sentence, names = []) => (clashDetail(f, quote, sentence, names) || {}).span || null;
+  // …and the one question each passage is asked on its own, whose answers
+  // must differ: "does the Long Room have windows?", "is the weigher stout?"
+  // a number written as words or digits: "twenty-six" → 26, "forty" → 40
+  const UNITS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
+  const TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+  function numberOf(w) {
+    const t = String(w || '').toLowerCase();
+    if (/^\d+$/.test(t)) return +t;
+    const [a, b] = t.split('-');
+    if (UNITS[a] !== undefined && !b) return UNITS[a];
+    if (TENS[a] !== undefined && (!b || UNITS[b] !== undefined)) return TENS[a] + (b ? UNITS[b] : 0);
+    return null;
+  }
+  // how old a sentence says someone is: "twenty-nine years", "aged sixty",
+  // "a woman of sixty", "was nineteen" → [{ n, start, end }]
+  function agesIn(text) {
+    const out = [];
+    const NUM = '(\\d+|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-(?:one|two|three|four|five|six|seven|eight|nine))?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)';
+    for (const re of [new RegExp(`(?<![\\p{L}-])${NUM}[- ]years?(?:[- ]old)?(?![\\p{L}])`, 'giu'), new RegExp(`(?<![\\p{L}])(?:aged|was|is|of)\\s+${NUM}(?![\\p{L}-])(?!\\s+(?:years?\\s+(?:ago|before|later|since)|times|of|minutes|hours|days|weeks|months|men|women|people|feet|miles|yards|metres|pounds))`, 'giu')]) {
+      for (const m of text.matchAll(re)) {
+        const n = numberOf(m[1]);
+        if (n == null || n > 120) continue;
+        const at = m.index + m[0].indexOf(m[1]);
+        if (!out.some((x) => x.start === at)) out.push({ n, start: at, end: at + m[1].length });
+      }
+    }
+    return out;
+  }
+  // words of one kind that can't both hold: colours, and what a thing is built of
+  const MATERIAL = { sandstone: 'sandstone', brick: 'brick', 'red-brick': 'brick', stone: 'stone', timber: 'timber', wooden: 'timber', wood: 'timber', slate: 'slate', concrete: 'concrete', granite: 'granite', marble: 'marble', glass: 'glass', iron: 'iron', steel: 'steel', thatch: 'thatch', thatched: 'thatch', flint: 'flint', cob: 'cob', limestone: 'limestone' };
+  const classOf = (w) => (COLOURS[w] ? ['colour', COLOURS[w]] : MATERIAL[w] ? ['material', MATERIAL[w]] : null);
+  function clashDetail(f, quote, sentence, names = []) {
+    const who = names[0] || 'it';
+    // an age said otherwise: "twenty-nine years of him" against "twenty-six"
+    if (canonLabel(f.label || '') === 'age' || f.attr === 'age') {
+      const had = agesIn(f.value).concat(numberOf(f.value.trim()) != null ? [{ n: numberOf(f.value.trim()) }] : []);
+      const now = UNREAL.test(sentence) ? [] : agesIn(sentence);
+      if (had.length && now.length && !now.some((x) => had.some((y) => y.n === x.n))) {
+        const x = now[0];
+        return { span: sentence.slice(x.start, x.end), q: `is ${who} ${sentence.slice(x.start, x.end)} years old?` };
+      }
+    }
+    // a colour or a material said otherwise of the same thing: "his blue
+    // Rover" against "a green P6", "the red-brick Corn Exchange" against
+    // "a sandstone hall" (the value's own word, before any "with" or "on")
+    {
+      const vtoks = tokens(f.value.split(/\s(?:with|on|in|at|by|of|and|that|which|where)\s/i)[0]);
+      const vclass = vtoks.map(classOf).filter(Boolean);
+      if (vclass.length) {
+        const heads = new Set([...content(f.value), ...names.flatMap((n) => content(n))].filter((w) => !classOf(w)));
+        const raw = [...sentence.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)];
+        for (let i = 0; i < raw.length - 1; i++) {
+          const w = norm(raw[i][0]);
+          const k = classOf(w);
+          if (!k || vclass.some((x) => x[0] === k[0] && x[1] === k[1]) || !vclass.some((x) => x[0] === k[0])) continue;
+          const next = raw.slice(i + 1, i + 3).map((m) => stem(norm(m[0]).replace(/['’]s$/, '')));
+          const noun = next.findIndex((x) => heads.has(x));
+          if (noun < 0) continue;
+          const at = raw[i].index;
+          const a = Math.max(sentence.lastIndexOf(',', at), sentence.lastIndexOf(';', at)) + 1;
+          if (UNREAL.test(sentence.slice(a, at + raw[i][0].length + 20))) continue;
+          const nounStem = next[noun];
+          const thing = names.find((n) => content(n).includes(nounStem)) || 'the ' + raw[i + 1 + noun][0].replace(/['’]s$/, '');
+          return { span: raw[i][0], q: `is ${thing} ${raw[i][0]}?` };
+        }
+      }
+    }
+    const rawAt = (i) => { const raw = [...sentence.matchAll(/[\p{L}\p{N}'’-]+/gu)]; const j = raw.findIndex((m) => stem(norm(m[0]).replace(/['’]s$/, '')) === stem(tokens(sentence)[i] || '')); return j < 0 ? null : raw[j][0].replace(/['’]s$/, ''); };
+    const b = tokens(sentence);
+    const bs = b.map(stem);
+    const vs = content(f.value + ' ' + (f.as || ''));
+    const qs = content(quote);
+    const own = new Set([...vs, ...qs]);
+    // (a clause that only pretends, remembers or supposes says nothing of the story)
+    const unreal = (i) => {
+      const raw = [...sentence.matchAll(/[\p{L}\p{N}'’-]+/gu)];
+      const j = raw.findIndex((m) => stem(norm(m[0]).replace(/['’]s$/, '')) === bs[i]);
+      if (j < 0) return false;
+      const at = raw[j].index;
+      const a = Math.max(sentence.lastIndexOf(',', at), sentence.lastIndexOf(';', at)) + 1;
+      const z = [sentence.indexOf(',', at), sentence.indexOf(';', at)].filter((x) => x >= 0);
+      return UNREAL.test(sentence.slice(a, z.length ? Math.min(...z) : sentence.length));
+    };
+    const mark = (i) => {
+      if (unreal(i)) return null;
+      // the noun phrase around B's word: the words before it back to a determiner
+      const raw = [...sentence.matchAll(/[\p{L}\p{N}'’-]+/gu)];
+      const j = raw.findIndex((m) => stem(norm(m[0]).replace(/['’]s$/, '')) === bs[i]);
+      if (j < 0) return null;
+      let a = j;
+      while (a > 0 && !/^(?:the|a|an|its|his|her|their|our|my|your|this|that|those|these|of|in|on|at|through|and|with)$/i.test(raw[a - 1][0]) && !/['’]s$/.test(raw[a - 1][0]) && j - a < 2) a--;
+      return sentence.slice(raw[a].index, raw[j].index + raw[j][0].length);
+    };
+    // polarity on a shared noun
+    const nouns = vs.filter((w) => !NEGATORS.has(w) && w.length >= 4 && !NUMBER.test(w) && qs.includes(w));
+    for (const n of nouns) {
+      const i = bs.indexOf(n);
+      if (i < 0) continue;
+      const near = (arr, k) => arr.slice(Math.max(0, k - 4), k).some((w) => NEGATORS.has(w));
+      const qi = qs.indexOf(n);
+      const qTokens = tokens(quote).map(stem);
+      const fNeg = near(qTokens, qTokens.indexOf(n)) || (negated(f.value) && qi >= 0);
+      const bNeg = near(bs, i);
+      if (fNeg !== bNeg && mark(i)) {
+        // (a "never" in the fact's own words: asked the plain way round, "has Ivo touched a drop of the cider?")
+        const plain = negated(f.value) ? f.value.replace(/(?<![\p{L}])(?:never|not|no longer|n't)(?![\p{L}])\s*/giu, '').replace(/\s+/g, ' ').trim() : '';
+        return { span: mark(i), q: plain ? `is this so of ${who}: ${plain}?` : `does ${who} have ${rawAt(i)}?` };
+      }
+    }
+    // a word against one of the value's, of the same one (near a word the two share)
+    const named = new Set(names.flatMap((n) => content(n)));
+    const shared = new Set(bs.filter((w, k) => w.length >= 3 && !STOPW.has(b[k]) && !NEGATORS.has(w) && (own.has(w) || named.has(w))));
+    for (const [i, w] of bs.entries()) {
+      const against = ANT.get(w);
+      if (!against || ![...against].some((x) => vs.includes(x)) || vs.includes(w)) continue;
+      if (vs.length > 1 && !bs.slice(Math.max(0, i - 6), i + 7).some((x) => x !== w && shared.has(x))) continue;
+      const m = mark(i);
+      if (m) return { span: m, q: `is ${who} ${rawAt(i)}?` };
+    }
+    // another number of the same thing (forty beds / thirty beds)
+    for (const [i, w] of bs.entries()) {
+      if (!NUMBER.test(w) || own.has(w)) continue;
+      const next = bs[i + 1];
+      if (next && own.has(next) && vs.some((x) => NUMBER.test(x)) && mark(i + 1)) {
+        const span = sentence.slice(sentence.toLowerCase().indexOf(b[i]), sentence.toLowerCase().indexOf(b[i]) + b[i].length + 1 + (b[i + 1] || '').length).trim();
+        return { span, q: `does ${who} have ${span.toLowerCase()}?` };
+      }
+    }
+    return null;
+  }
+
+  /* ---------- 4 · the editor: merge, order, profile ---------- */
+
+  // Facts of one entry that say the same thing: the same family and value
+  // words that overlap by 0.6 or more → one fact, the earliest wording, every
+  // source. → the facts, merged
+  function overlap(a, b) {
+    const x = new Set(content(a));
+    const y = new Set(content(b));
+    if (!x.size || !y.size) return 0;
+    let n = 0;
+    for (const w of x) if (inBag(w, y)) n++;
+    return n / Math.min(x.size, y.size);
+  }
+  // Every content word of a profile sentence stands in its facts (their
+  // values, labels and quotes), is a function word, or names the entry.
+  // (Round 2: the facts' values and labels only, not their quotes: a quote
+  // holds words about others, and a profile drew on them.)
+  function profileOk(sentence, facts, e) {
+    const allowed = new Set(content([...facts.map((f) => `${f.label || (C.ATTRS[f.attr] || {}).label || ''} ${f.value} ${f.as || ''}`), e.name, ...(e.aliases || [])].join(' ')));
+    // every name in it is the entry's or in a cited value
+    const caps = (sentence.match(/(?<=\S\s+)\p{Lu}[\p{L}'’-]+/gu) || []).map((w) => stem(norm(w).replace(/['’]s$/, '')));
+    if (caps.some((w) => !allowed.has(w))) return false;
+    const extra = new Set(['also', 'who', 'whose', 'which', 'where', 'there', 'here', 'has', 'have', 'is', 'was', 'are', 'were', 'and', 'person', 'place', 'group', 'thing', 'one', 'year', 'old', 'named', 'called', 'known']);
+    const words = content(sentence).filter((w) => !extra.has(w) && !STOPW.has(w));
+    if (!words.length) return false;
+    if (/["“”«»]/.test(sentence) || sentence.split(/\s+/).length > 36) return false;
+    return words.every((w) => inBag(w, allowed));
+  }
+
+  /* ---------- reading one chapter ---------- */
+
+  // A pool of `n` at a time over `items`; `fn(item, i)`; stops between items
+  async function pool(items, n, fn, stop) {
+    const out = new Array(items.length);
+    let next = 0;
+    const run = async () => {
+      while (next < items.length) {
+        if (stop && stop()) return;
+        const i = next++;
+        out[i] = await fn(items[i], i);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.max(1, Math.min(n || 1, items.length)) }, run));
+    return out;
+  }
+
+  // One chapter (or notes page) read the editor's way. Proposals go into
+  // `entries` (new ones made as needed) the way canon.js's accept() puts
+  // them: open facts with their passages, `verified` marks the ones the
+  // reader said yes to (the engine's gates read it), traits as proposals.
+  // → { calls, dropped: [{ entity, label, value, why }], told }
+  const KIND = { cast: 'cast', dossier: 'dossier', verdict: 'verify', profile: 'profile' };
+  async function readChapter({ src, paras, entries, reader, cache, names, stop, tell, suspect, sexOf: sexKnown, timed = null, narrator = null }) {
+    const ch = chapterModel(paras);
+    ch.notes = !!(src.notes || src.notebook);
+    const book = `${src.book}, ${src.label}`;
+    const dropped = [];
+    let calls = 0;
+    const ask = async (bucket, key, fn) => {
+      if (cache[bucket] && cache[bucket][key] !== undefined) return cache[bucket][key];
+      const t0 = Date.now();
+      const r = await fn();
+      if (timed) timed(KIND[bucket], Date.now() - t0);
+      calls++;
+      (cache[bucket] = cache[bucket] || {})[key] = r === undefined ? null : r;
+      return r;
+    };
+    const H = (...xs) => textHash(JSON.stringify([reader.id, EDITOR_PROMPT, ...xs]));
+    // 1 · cast
+    const near = entries.filter((e) => !e.locked && mentions(ch.text, mentionIndex([e])).length);
+    const known = near.slice(0, 40).map((e) => ({ name: e.name, kind: e.kind, aliases: e.aliases }));
+    if (tell) tell({ phase: 'cast' });
+    const found = writtenNames(ch, names);
+    const castAnswer = await ask('cast', H('cast', ch.text, known, found), () => reader.cast({ text: ch.paras.map((p) => `¶${p.pi + 1} ${p.text}`).join('\n'), known, names: found }));
+    if (stop && stop()) return { calls, dropped, stopped: true };
+    const answer = Array.isArray(castAnswer) ? { cast: castAnswer, setting: '' } : castAnswer || { cast: [], setting: '' };
+    const cast = castGate({ proposals: answer.cast || [], setting: answer.setting, ch, entries: entries.filter((e) => !e.locked), names });
+    // known entries the chapter names, if the reader left them out
+    for (const e of near) {
+      if (cast.some((c) => c.entry === e)) continue;
+      cast.push({ key: cast.length, name: e.name, kind: e.kind, aliases: [...e.aliases], in: '', proper: /^\p{Lu}/u.test(e.name), wanted: [], entry: e });
+    }
+    // the narrator of a story told in the first person (never of the writer's notes)
+    let me = narrator ? cast.find((c) => c.entry === narrator) || null : null;
+    if (!me && !src.notes && !src.notebook && (narrator || firstPerson(ch))) {
+      const nn = narrator ? { name: narrator.name, aliases: narrator.aliases } : narratorNames(ch, cast, names && names.lower);
+      me = nn.name ? cast.find((c) => c.kind === 'person' && [c.name, ...c.aliases].some((n) => norm(n) === norm(nn.name))) || null : null;
+      if (!me) { me = { key: cast.length, name: nn.name || 'the narrator', kind: 'person', aliases: [], in: '', proper: !!nn.name && nn.name !== 'the narrator', wanted: [], entry: narrator || null }; cast.push(me); }
+      for (const a of nn.aliases || []) {
+        const other = cast.find((c) => c !== me && !c.gone && [c.name, ...c.aliases].some((n) => norm(n) === norm(a)));
+        if (other && other.kind === 'person') mergeCast(cast, me, other);
+        else if (!other && !me.aliases.some((x) => norm(x) === norm(a)) && norm(a) !== norm(me.name)) me.aliases.push(a);
+      }
+    }
+    if (me) me.narrator = true;
+    for (let i = cast.length - 1; i >= 0; i--) if (cast[i].gone) cast.splice(i, 1);
+    cast.forEach((c, i) => { c.key = i; });
+    const hits = chapterHits(ch, cast);
+    const hinted = sexHints(ch, hits, cast);
+    const sexOf = (key) => { const c = cast[key]; return (c && c.entry && sexKnown && sexKnown(c.entry)) || hinted.get(key) || null; };
+    // 2 · packs, 3 · dossiers
+    const jobs = [];
+    for (const c of cast) {
+      if (c.kind === 'rule' && !c.proper) continue;
+      const pack = packFor(ch, hits, cast, c, sexOf);
+      if (!pack.some((x) => x.why === 'name')) continue;
+      for (const part of packParts(pack)) jobs.push({ c, part });
+    }
+    const ctx = { ch, text: ch.text, suspect, cast, hits };
+    const proposals = [];
+    let done = 0;
+    await pool(jobs, reader.parallel || 1, async ({ c, part }) => {
+      if (tell) tell({ phase: 'dossier', name: c.name, n: ++done, of: jobs.length });
+      const facts = await ask('dossier', H('dossier', c.name, c.kind, c.aliases, part.text, !!c.narrator), () => reader.dossier({ name: c.name, kind: c.kind, aliases: c.aliases, text: part.text, n: part.lines.length, ...(c.narrator ? { narrator: true } : {}) }));
+      for (const x of facts || []) {
+        const gt = gateFact(x, part, c, ctx);
+        if (gt.why) { dropped.push({ entity: c.name, label: x && x.a, value: x && x.v, why: gt.why }); continue; }
+        proposals.push({ c, part, ...gt });
+      }
+    }, stop);
+    if (stop && stop()) return { calls, dropped, stopped: true };
+    // what an introduction gives, read by code (round 2: appearance was
+    // mostly missing): "She was nineteen, narrow and quick, with a shaved
+    // head and a burn scar…", "He was a short, bald man with half-moon
+    // spectacles", "a big freckled girl from the farm domes with green eyes".
+    // Each still passes the gates and the reader, like a dossier's.
+    for (const { c, part } of jobs) {
+      if (c.kind !== 'person') continue;
+      for (const l of part.lines) {
+        if (!['name', 'chain'].includes(l.why)) continue;
+        for (const x of introFacts(l, c, hits[l.s.pi], ch.paras[l.s.pi])) {
+          if (proposals.some((p) => p.c === c && labelFamily(p.key) === labelFamily(keyOf(x.g, x.a)) && overlap(p.value, x.v) >= 0.5)) continue;
+          const gt = gateFact({ ...x, s: [l.n], x: 0 }, part, c, ctx);
+          if (gt.why) { dropped.push({ entity: c.name, label: x.a, value: x.v, why: 'intro: ' + gt.why }); continue; }
+          proposals.push({ c, part, ...gt, intro: true });
+        }
+      }
+    }
+    // 3 · the verifier: the claim against the paragraphs it cites
+    const passageOf = (p) => [...new Set(p.cited.map((l) => l.s.pi))].sort((a, b) => a - b).map((pi) => ch.paras[pi].text).join('\n\n');
+    // the rest of the cast named in a fact's paragraphs (outside speech), nearest its sentences first
+    const othersIn = (p) => {
+      const at = Math.min(...p.cited.map((l) => l.s.start));
+      const seen = [];
+      for (const pi of [...new Set(p.cited.map((l) => l.s.pi))]) {
+        const talk = ch.paras[pi].talk;
+        for (const h of [...hits[pi]].sort((a, b) => Math.abs(a.start - at) - Math.abs(b.start - at))) {
+          if (h.key === p.c.key || talk.some(([a, b]) => h.start < b && h.end > a)) continue;
+          const o = cast[h.key];
+          if (o && !seen.includes(o.name) && norm(o.name) !== norm(p.c.name)) seen.push(o.name);
+        }
+      }
+      return seen.slice(0, 4);
+    };
+    // (ordered by passage, so a passage asked about twice is read once)
+    const order = proposals.map((p, i) => ({ p, i, passage: passageOf(p) })).sort((a, b) => a.passage.localeCompare(b.passage) || a.i - b.i);
+    let checked = 0;
+    await pool(order, reader.parallel || 1, async ({ p, passage }) => {
+      if (tell) tell({ phase: 'verify', n: ++checked, of: order.length });
+      const claim = { name: p.c.name, kind: p.c.kind, label: p.label || p.key, value: p.value, passage, ...(p.setting ? { setting: true } : {}) };
+      const first = await ask('verdict', H('verify', claim), () => reader.verify(claim));
+      p.verdict = first;
+      // read between the lines: asked again, whether it is stated, not guessed
+      if (p.verdict === 'yes' && p.interpretive) p.verdict = await ask('verdict', H('stated', claim), () => reader.verify({ ...claim, strict: true }));
+      // others in the passage: whose is it? A choice, not a yes (a reader
+      // that says yes to anything picks one name, and it must be this one)
+      const others = othersIn(p);
+      if (p.verdict === 'yes' && others.length && typeof reader.whose === 'function') {
+        const options = [p.c.name, ...others].sort((a, b) => a.localeCompare(b));
+        const who = await ask('verdict', H('whose', claim, options), () => reader.whose({ ...claim, options }));
+        if (who !== p.c.name) p.verdict = 'no';
+      }
+      // and the other way round: is the claim wrong about it? (only "no" keeps it)
+      if (p.verdict === 'yes' && typeof reader.verify === 'function') {
+        const neg = await ask('verdict', H('negated', claim), () => reader.verify({ ...claim, negated: true }));
+        if (neg !== 'no') p.verdict = neg === 'yes' ? 'no' : 'unclear';
+      }
+      // tied by a pronoun or a paragraph, not a name: is it someone else's?
+      if (p.verdict === 'yes' && !p.strong && !others.length && !p.owned) {
+        const other = await ask('verdict', H('other', claim), () => reader.verify({ ...claim, other: true }));
+        if (other !== 'no') p.verdict = other === 'yes' ? 'no' : 'unclear';
+      }
+      // one moment, or lasting?
+      if (p.verdict === 'yes' && p.lasting) p.verdict = await ask('verdict', H('lasting', claim), () => reader.verify({ ...claim, lasting: true }));
+    }, stop);
+    if (stop && stop()) return { calls, dropped, stopped: true };
+    // into the entries: open facts (and what is only said) and trait proposals
+    const made = new Map();
+    const entryOf = (c) => {
+      if (c.entry) return c.entry;
+      if (made.has(c.key)) return made.get(c.key);
+      let e = [c.name, ...c.aliases].map((n) => findEntry(entries, n)).find(Boolean);
+      if (!e) {
+        let id = slug(c.name.replace(/^the\s+/i, ''));
+        for (let k = 2; entries.some((x) => x.id === id); k++) id = slug(c.name.replace(/^the\s+/i, '')) + '-' + k;
+        e = newEntry(c.name, c.kind, id);
+        entries.push(e);
+      }
+      for (const a of c.aliases) if (norm(a) !== norm(e.name) && !e.aliases.some((x) => norm(x) === norm(a))) e.aliases.push(a);
+      made.set(c.key, e);
+      return e;
+    };
+    const kept = [];
+    for (const p of proposals) {
+      if (p.verdict !== 'yes') { dropped.push({ entity: p.c.name, label: p.label, value: p.value, why: 'verifier: ' + (p.verdict || 'none') }); continue; }
+      const e = entryOf(p.c);
+      const sources = p.quotes.map((q) => ({ label: book, quote: q, book: src.bookId, ch: src.chId, ...(p.said ? { said: true } : {}) }));
+      const trait = ['sex', 'species', 'appearance.hair', 'appearance.eyes'].includes(p.key) ? traitOf(p.key, p.value, p.quotes.join(' ')) : null;
+      if (trait) {
+        kept.push({ e, f: { attr: trait.attr, value: trait.value, as: trait.as, state: 'unverified', sources }, trait: true, p });
+        continue;
+      }
+      // a trait the rules can't read (hair "cropped close"): an open fact under its own label
+      if (['sex', 'species'].includes(p.key)) { dropped.push({ entity: p.c.name, label: p.label, value: p.value, why: 'trait' }); continue; }
+      kept.push({ e, f: { attr: 'other', label: C.openLabel(p.key, p.label), value: p.value, as: '', state: 'unverified', sources }, p });
+    }
+    // a person the text calls by a role ("the weigher", "the warden") has
+    // that role: the text's own word, from the first sentence of narration
+    // that calls them so (code's, like the shelf's own kin)
+    for (const c of cast) {
+      if (c.kind !== 'person') continue;
+      const role = [c.name, ...c.aliases].find((n) => /^the\s+\p{Ll}[\p{Ll}-]+$/u.test(n) && !CROWD.has(n.slice(4)));
+      if (!role) continue;
+      const re = new RegExp(`(?<![\\p{L}])[Tt]he\\s+${escRe(role.slice(4))}(?![\\p{L}])`, 'u');
+      const s = ch.sents.find((x) => re.test(x.text) && !x.said && !ch.paras[x.pi].talk.some(([a, b]) => a < x.end && b > x.start));
+      const quote = s && gateQuote(fit(s.text, [stem(role.slice(4))]), ch.text);
+      if (!quote) continue;
+      const e = entryOf(c);
+      kept.push({ e, f: { attr: 'other', label: 'Role', value: role.slice(4), as: '', state: 'unverified', sources: [{ label: book, quote, book: src.bookId, ch: src.chId }] } });
+    }
+    // every cast member is an entry once something about it is kept, or the chapter names it often
+    for (const c of cast) {
+      if (c.entry || made.has(c.key)) continue;
+      const n = hits.reduce((k, ph) => k + ph.filter((h) => h.key === c.key && h.via !== 'head').length, 0);
+      if (n >= 2 && (c.proper || ['person', 'creature', 'place', 'group'].includes(c.kind))) entryOf(c);
+    }
+    return { calls, dropped, kept, cast, ch, narrator: me ? (me.entry || made.get(me.key) || null) : null };
+  }
+
+  return { EDITOR_PROMPT, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
+};

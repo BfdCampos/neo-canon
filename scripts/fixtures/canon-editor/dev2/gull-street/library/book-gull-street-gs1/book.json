@@ -1,0 +1,18 @@
+{
+  "id": "book-gull-street-gs1",
+  "title": "Gull Street",
+  "subtitle": "",
+  "series": "The Gale Cases",
+  "author": "A. N. Writer",
+  "wordGoal": 0,
+  "created": "2026-10-17T09:00:00.000Z",
+  "modified": "2026-10-17T09:00:00.000Z",
+  "chapterOrder": [
+    "c1",
+    "c2"
+  ],
+  "tabNames": {
+    "notes": "Notes",
+    "outline": "Outline"
+  }
+}

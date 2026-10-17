@@ -1,0 +1,751 @@
+{
+ "about": "dev2 · The Orchard at Lisle (Lisle shelf). Two points of view, and the writer's notebook (Lisle Notes: People) whose eye colour and kin side the prose contradicts: both belong in Needs You as Which is right?, neither kept as a fact. An Ideas page is left out of Canon and must leave no trace. Months, a holiday, a weekday and a city in passing. Ch 2 holds an open-fact slip (never drinks → drank a full glass). Written by the builder for round 2. needs: the Which is right? questions a run must raise.",
+ "set": "dev2/lisle",
+ "shelf": "Lisle",
+ "book": "book-the-orchard-li1",
+ "chapters": {
+  "n1": "People",
+  "n2": "Ideas",
+  "c1": "Ch 1",
+  "c2": "Ch 2"
+ },
+ "notEntities": [
+  "September",
+  "Lyon",
+  "Friday",
+  "Easter",
+  "Maybe",
+  "What"
+ ],
+ "entities": [
+  {
+   "id": "ivo-marchetti",
+   "name": "Ivo Marchetti",
+   "kind": "person",
+   "aliases": [
+    "Ivo",
+    "Marchetti"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "role",
+     "value": "foreman of the Lisle orchard",
+     "quote": "Ivo was the foreman",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Ivo Marchetti: thirty-four, foreman of the Lisle orchard."
+     ],
+     "alt": [
+      "foreman"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "thirty-four",
+     "quote": "Ivo Marchetti: thirty-four, foreman of the Lisle orchard.",
+     "ch": "n1",
+     "weight": "must",
+     "alt": [
+      "34"
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "male",
+     "quote": "a long, stooped man",
+     "ch": "c1",
+     "weight": "must",
+     "hard": true,
+     "alt": [
+      "man",
+      "brother"
+     ]
+    },
+    {
+     "attr": "appearance.build",
+     "value": "long, stooped",
+     "quote": "a long, stooped man",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "long",
+      "stooped",
+      "tall"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "rubs the bridge of his nose when he is tired",
+     "quote": "a habit of rubbing the bridge of his nose when he was tired",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "He rubbed the bridge of his nose."
+     ],
+     "alt": [
+      "rubs the bridge of his nose",
+      "rubbing his nose"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "has never touched a drop of the cider",
+     "quote": "He had never touched a drop of the cider",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Never drinks."
+     ],
+     "alt": [
+      "never drinks",
+      "never touched a drop"
+     ]
+    },
+    {
+     "attr": "skill",
+     "value": "can tell a good year from a bad one by the smell of the press-house",
+     "quote": "he could tell a good year from a bad one by the smell of the press-house",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "tell a good year from a bad one"
+     ]
+    },
+    {
+     "attr": "relationship.kin",
+     "value": "brother of Tamsin",
+     "quote": "His younger sister Tamsin was coming home on the Friday train.",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Tamsin Marchetti, Ivo’s elder sister."
+     ],
+     "alt": [
+      "Tamsin",
+      "sister Tamsin"
+     ]
+    },
+    {
+     "attr": "possession",
+     "value": "Clem, his grey mare",
+     "quote": "Clem, his grey mare, was waiting at the gate",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Clem: Ivo’s grey mare."
+     ],
+     "alt": [
+      "Clem",
+      "grey mare"
+     ]
+    },
+    {
+     "attr": "history",
+     "value": "the pickers have come every year since he was a boy",
+     "quote": "as they had every year since Ivo Marchetti was a boy",
+     "ch": "c1",
+     "weight": "nice",
+     "alt": [
+      "since he was a boy"
+     ]
+    },
+    {
+     "attr": "personality",
+     "value": "the good one",
+     "quote": "She was the clever one, their mother used to say; Ivo was the good one.",
+     "ch": "c2",
+     "weight": "nice",
+     "said": true
+    }
+   ],
+   "traps": [
+    {
+     "attr": "appearance.eyes",
+     "value": "brown",
+     "why": "the notes against the prose: Which is right?, not a fact"
+    },
+    {
+     "attr": "appearance.eyes",
+     "value": "green",
+     "why": "the prose against the notes: Which is right?, not a fact"
+    },
+    {
+     "attr": "appearance.other",
+     "value": "wooden leg",
+     "why": "the Ideas page, left out of Canon"
+    },
+    {
+     "attr": "habit",
+     "value": "drinks cider",
+     "why": "Ch 2's slip"
+    }
+   ]
+  },
+  {
+   "id": "tamsin-marchetti",
+   "name": "Tamsin Marchetti",
+   "kind": "person",
+   "aliases": [
+    "Tamsin"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "His younger sister Tamsin was coming home on the Friday train.",
+     "ch": "c1",
+     "weight": "must",
+     "hard": true,
+     "also": [
+      "Tamsin Marchetti, Ivo’s elder sister."
+     ],
+     "alt": [
+      "sister"
+     ]
+    },
+    {
+     "attr": "relationship.kin",
+     "value": "sister of Ivo",
+     "quote": "His younger sister Tamsin was coming home on the Friday train.",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Tamsin Marchetti, Ivo’s elder sister."
+     ],
+     "alt": [
+      "Ivo",
+      "Ivo's sister",
+      "sister"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "thirty",
+     "quote": "at thirty she was still not married",
+     "ch": "c2",
+     "weight": "must",
+     "alt": [
+      "30"
+     ]
+    },
+    {
+     "attr": "location.home",
+     "value": "has lived in the city for ten years",
+     "quote": "she had lived in the city for ten years",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Lives in the city, comes home for the harvest."
+     ],
+     "alt": [
+      "the city",
+      "lives in the city"
+     ]
+    },
+    {
+     "attr": "routine",
+     "value": "comes home every harvest",
+     "quote": "She came every harvest",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Lives in the city, comes home for the harvest."
+     ],
+     "alt": [
+      "home for the harvest",
+      "every harvest"
+     ]
+    },
+    {
+     "attr": "appearance.hair",
+     "value": "dark, her mother's",
+     "quote": "Tamsin had their mother’s dark hair",
+     "ch": "c2",
+     "weight": "must",
+     "alt": [
+      "dark hair",
+      "dark"
+     ]
+    },
+    {
+     "attr": "personality",
+     "value": "her father's temper",
+     "quote": "their father’s temper",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "temper"
+     ]
+    },
+    {
+     "attr": "state",
+     "value": "not married",
+     "quote": "at thirty she was still not married",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "unmarried"
+     ]
+    },
+    {
+     "attr": "opinion",
+     "value": "says she hates apples",
+     "quote": "said she hated apples",
+     "ch": "c1",
+     "weight": "nice",
+     "said": true
+    },
+    {
+     "attr": "personality",
+     "value": "the clever one",
+     "quote": "She was the clever one, their mother used to say",
+     "ch": "c2",
+     "weight": "nice",
+     "said": true
+    }
+   ],
+   "traps": [
+    {
+     "attr": "relationship.kin",
+     "value": "married to Sander",
+     "why": "the Ideas page, left out of Canon"
+    },
+    {
+     "attr": "relationship.kin",
+     "value": "elder sister",
+     "why": "the notes against the prose: Which is right?"
+    },
+    {
+     "attr": "relationship.kin",
+     "value": "younger sister",
+     "why": "the prose against the notes: Which is right?"
+    },
+    {
+     "attr": "state",
+     "value": "has a cold",
+     "why": "one moment"
+    }
+   ]
+  },
+  {
+   "id": "sander",
+   "name": "Sander",
+   "kind": "person",
+   "aliases": [
+    "old Sander"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "occupation",
+     "value": "has made the cider at Lisle for forty years",
+     "quote": "old Sander, who had made the cider at Lisle for forty years",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Sander: the cider-maker, deaf in one ear."
+     ],
+     "alt": [
+      "cider-maker",
+      "makes the cider"
+     ]
+    },
+    {
+     "attr": "appearance.other",
+     "value": "deaf in his left ear",
+     "quote": "was deaf in his left ear",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Sander: the cider-maker, deaf in one ear."
+     ],
+     "alt": [
+      "deaf in one ear",
+      "deaf"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "old",
+     "quote": "old Sander, who had made the cider at Lisle for forty years",
+     "ch": "c1",
+     "weight": "should"
+    },
+    {
+     "attr": "sex",
+     "value": "male",
+     "quote": "‘Your sister’ll want the big room,’ he said.",
+     "ch": "c1",
+     "weight": "should",
+     "hard": true,
+     "alt": [
+      "he"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "relationship.kin",
+     "value": "married to Tamsin",
+     "why": "the Ideas page, left out of Canon"
+    }
+   ]
+  },
+  {
+   "id": "clem",
+   "name": "Clem",
+   "kind": "creature",
+   "aliases": [],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "Clem, his grey mare, was waiting at the gate",
+     "ch": "c1",
+     "weight": "must",
+     "hard": true,
+     "also": [
+      "Clem: Ivo’s grey mare."
+     ],
+     "alt": [
+      "mare"
+     ]
+    },
+    {
+     "attr": "species",
+     "value": "horse",
+     "quote": "Clem, his grey mare, was waiting at the gate",
+     "ch": "c1",
+     "weight": "must",
+     "hard": true,
+     "alt": [
+      "mare"
+     ]
+    },
+    {
+     "attr": "appearance.hair",
+     "value": "grey",
+     "quote": "Clem, his grey mare, was waiting at the gate",
+     "ch": "c1",
+     "weight": "must",
+     "hard": true,
+     "also": [
+      "Clem: Ivo’s grey mare."
+     ],
+     "alt": [
+      "grey mare"
+     ]
+    },
+    {
+     "attr": "possession",
+     "value": "Ivo's",
+     "quote": "Clem, his grey mare, was waiting at the gate",
+     "ch": "c1",
+     "weight": "must",
+     "also": [
+      "Clem: Ivo’s grey mare."
+     ],
+     "alt": [
+      "Ivo",
+      "Ivo Marchetti",
+      "owner Ivo"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "sex",
+     "value": "male",
+     "why": "the Ideas page's stallion, left out of Canon"
+    }
+   ]
+  },
+  {
+   "id": "lisle",
+   "name": "Lisle",
+   "kind": "place",
+   "aliases": [
+    "the orchard",
+    "the Lisle orchard",
+    "orchard"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "routine",
+     "value": "the pickers come in the last week of September every year",
+     "quote": "The pickers came to Lisle in the last week of September, as they had every year",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "pickers every September",
+      "last week of September"
+     ]
+    },
+    {
+     "attr": "location",
+     "value": "runs down the south slope of the valley to the river",
+     "quote": "The orchard ran down the south slope of the valley to the river",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "south slope of the valley",
+      "down to the river"
+     ]
+    },
+    {
+     "attr": "description",
+     "value": "nine hundred trees, mostly russets",
+     "quote": "nine hundred trees, mostly russets",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "900 trees",
+      "russets",
+      "nine hundred trees"
+     ]
+    },
+    {
+     "attr": "history",
+     "value": "rows planted by Ivo's grandfather",
+     "quote": "in rows that his grandfather had planted",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "grandfather planted"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "description",
+     "value": "stone barn with a tin roof",
+     "why": "the press-house's"
+    },
+    {
+     "attr": "description",
+     "value": "smells of apples and wet stone",
+     "why": "the press-house's"
+    }
+   ]
+  },
+  {
+   "id": "the-press-house",
+   "name": "the press-house",
+   "kind": "place",
+   "aliases": [
+    "press-house",
+    "the barn"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "location",
+     "value": "at the bottom of the orchard, by the water",
+     "quote": "At the bottom, by the water, stood the press-house",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "by the water",
+      "at the bottom"
+     ]
+    },
+    {
+     "attr": "description",
+     "value": "a stone barn with a tin roof",
+     "quote": "a stone barn with a tin roof",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "stone barn",
+      "tin roof"
+     ]
+    },
+    {
+     "attr": "location.part",
+     "value": "a great oak press that takes four men to turn",
+     "quote": "a great oak press that took four men to turn",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "oak press",
+      "four men to turn"
+     ]
+    },
+    {
+     "attr": "atmosphere",
+     "value": "smells of apples and wet stone",
+     "quote": "The barn smelt of apples and wet stone.",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "apples and wet stone"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "description",
+     "value": "nine hundred trees",
+     "why": "the orchard's"
+    }
+   ]
+  },
+  {
+   "id": "the-dunne-family",
+   "name": "the Dunne family",
+   "kind": "group",
+   "aliases": [
+    "Dunne",
+    "the Dunnes"
+   ],
+   "weight": "nice",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "origin",
+     "value": "from the coast",
+     "quote": "the Dunne family from the coast",
+     "ch": "c1",
+     "weight": "nice"
+    }
+   ],
+   "traps": []
+  },
+  {
+   "id": "lisle-halt",
+   "name": "Lisle Halt",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": [],
+   "traps": []
+  }
+ ],
+ "keyPoints": [
+  {
+   "ch": "c1",
+   "who": [
+    "ivo-marchetti"
+   ],
+   "did": "Ivo ticked off the pickers at the orchard gate",
+   "quote": "He stood at the orchard gate with the list and ticked them off",
+   "weight": "must"
+  },
+  {
+   "ch": "c1",
+   "who": [
+    "ivo-marchetti",
+    "clem"
+   ],
+   "did": "Ivo rode Clem down the rows in the evening light",
+   "quote": "he rode her down the rows in the evening light to see how much was left to pick",
+   "weight": "should"
+  },
+  {
+   "ch": "c2",
+   "who": [
+    "tamsin-marchetti"
+   ],
+   "did": "Tamsin got off the train at Lisle Halt",
+   "quote": "Tamsin got off the train at Lisle Halt with one bag and a cold.",
+   "weight": "must"
+  },
+  {
+   "ch": "c2",
+   "who": [
+    "tamsin-marchetti"
+   ],
+   "did": "Tamsin walked down to the press-house",
+   "quote": "That evening she walked down to the press-house.",
+   "weight": "should"
+  },
+  {
+   "ch": "c2",
+   "who": [
+    "ivo-marchetti"
+   ],
+   "did": "Ivo drank a full glass of the new cider at supper",
+   "quote": "At supper Ivo drank a full glass of the new cider, and nobody remarked on it.",
+   "weight": "must"
+  }
+ ],
+ "slips": [
+  {
+   "ch": "c2",
+   "kind": "open",
+   "entity": "ivo-marchetti",
+   "attr": "habit",
+   "sentence": "At supper Ivo drank a full glass of the new cider, and nobody remarked on it.",
+   "span": "drank a full glass of the new cider",
+   "against": {
+    "ch": "c1",
+    "quote": "He had never touched a drop of the cider"
+   },
+   "weight": "must"
+  }
+ ],
+ "decoys": [
+  {
+   "ch": "c2",
+   "sentence": "‘It’s the harvest,’ Ivo said.",
+   "why": "speech"
+  },
+  {
+   "ch": "c2",
+   "sentence": "He rubbed the bridge of his nose.",
+   "why": "agrees"
+  },
+  {
+   "ch": "c2",
+   "sentence": "The platform was empty except for her brother and the grey mare, and Ivo looked older than he had at Easter.",
+   "why": "agrees"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Tamsin had their mother’s dark hair and their father’s temper, and at thirty she was still not married, which the village found more interesting than anything she did.",
+   "why": "younger than Ivo, as the prose has it: the notes' elder is a question, not a slip"
+  },
+  {
+   "ch": "n2",
+   "sentence": "What if Tamsin is secretly married to Sander?",
+   "why": "the Ideas page, left out of Canon"
+  },
+  {
+   "ch": "n2",
+   "sentence": "Clem could be a stallion instead.",
+   "why": "the Ideas page, left out of Canon"
+  }
+ ],
+ "needs": [
+  {
+   "entity": "ivo-marchetti",
+   "attr": "appearance.eyes",
+   "values": [
+    "brown",
+    "green"
+   ],
+   "why": "Lisle Notes: Brown eyes. Ch 1: Ivo was the foreman, a long, stooped man with green eyes"
+  },
+  {
+   "entity": "tamsin-marchetti",
+   "attr": "relationship.kin",
+   "values": [
+    "elder",
+    "younger"
+   ],
+   "why": "Lisle Notes: Ivo’s elder sister. Ch 1: His younger sister Tamsin"
+  }
+ ]
+}
