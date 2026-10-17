@@ -206,6 +206,8 @@
         // "wrote that…" is); "could say it in their sleep" is what they can do
         if (/^writ|^wrote/i.test(m[0]) && !/^\s*(?:that\b|[,:]?\s*[“"‘])/i.test(rest)) continue;
         if (/\b(?:could|can|would)\s+$/i.test(s.text.slice(0, m.index)) && /^\s+it\b/i.test(rest)) continue;
+        // "could tell a good year from a bad one" is knowing, not telling
+        if (/^tell/i.test(m[0]) && /\b(?:could|can|couldn['’]t|can['’]t|cannot)\s+(?:always\s+|never\s+)?$/i.test(s.text.slice(0, m.index)) && !/^\s+(?:him|her|them|me|us|you)\b/i.test(rest)) continue;
         // "She was the clever one, their mother used to say; …": the clause
         // before the speaker is what was said
         if (/^\s*(?:[.!?…;]|$)/u.test(rest) && /[^”"’'],\s*(?:\p{L}+\s+){1,4}(?:used to |would |had |always )?$/u.test(s.text.slice(0, m.index))) {

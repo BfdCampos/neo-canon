@@ -261,6 +261,16 @@ module.exports = function canonEditor(C) {
       }
     }
     personMerges(cast);
+    // a name the text calls an animal is a creature, whatever the reader said
+    // ("Clem, his grey mare"; "a collie bitch called Moss")
+    for (const c of cast) {
+      if (c.gone || c.kind !== 'person' || !c.proper) continue;
+      const n = escRe(c.name.replace(/^the\s+/i, ''));
+      const re = new RegExp(`(?<![\\p{L}])${n}(?:\\s*[,:—–]\\s*(?:the|a|an|his|her|their|\\p{Lu}\\p{L}+['’]s)\\s+(?:[\\p{L}-]+\\s+){0,2}([\\p{Ll}]+)\\b)|(?:([\\p{Ll}]+)\\s+(?:called|named)\\s+${n}(?![\\p{L}]))`, 'u');
+      const m = re.exec(text);
+      const w = m && (m[1] || m[2]);
+      if (w && ((SEX_WORDS[w] && SEX_WORDS[w][2]) || SPECIES[w])) c.kind = 'creature';
+    }
     // the name the text gives a role is its name: "His name … was Anselm"
     for (const t of ties.filter((y) => y.given)) {
       const c = cast.find((y) => !y.gone && [y.name, ...y.aliases].some((n) => bare(n) === bare(t.name)));
@@ -818,9 +828,9 @@ module.exports = function canonEditor(C) {
     if (/^(?:not (?:specified|stated|given|described|mentioned|known)|unknown|unspecified|none|n\/a|nothing|unclear)$/i.test(value)) return { why: 'empty' };
     // where someone (or something) is now is the scene, not the bible ("already in the line",
     // "under the weigher's arm"); only a place has a location of its own, a person a home
-    if (c.kind !== 'place' && c.kind !== 'group' && (labelFamily(key) === 'location' || /(?:^|\s)(?:position|where|whereabouts|place|spot|location)$/i.test(label)) && key !== 'location.home' && !/\b(?:lives?|lived|living|sleeps?|slept|home|works?|worked|born)\b/i.test(value + ' ' + label)) return { why: 'once' };
+    if (c.kind !== 'place' && c.kind !== 'group' && (labelFamily(key) === 'location' || /(?:^|\s)(?:where|whereabouts|place|spot|location)$/i.test(label)) && key !== 'location.home' && !/\b(?:lives?|lived|living|sleeps?|slept|home|works?|worked|born)\b/i.test(value + ' ' + label)) return { why: 'once' };
     // one deed is the story's ("tried not to look", "passed the infirmary"), not a lasting fact
-    if (['other', 'state', 'location'].includes(labelFamily(key)) && /^(?:tried|passed|went|came|walked|ran|sat|stood|looked|turned|took|gave|got|said|told|asked|saw|heard|felt|made|drank|ate|pressed|glanced|stepped|smiled|nodded|laughed|cried|whispered|opened|closed|left|arrived|picked|put|held|reached|watched|waited|wrote|read)\b/i.test(value) && !HABITUAL.test(value)) return { why: 'once' };
+    if (['other', 'state', 'location', 'appearance', 'personality'].includes(labelFamily(key)) && /^(?:tried|rubbed|tucked|wiped|shook|lifted|raised|dropped|pulled|pushed|threw|passed|went|came|walked|ran|sat|stood|looked|turned|took|gave|got|said|told|asked|saw|heard|felt|made|drank|ate|pressed|glanced|stepped|smiled|nodded|laughed|cried|whispered|opened|closed|left|arrived|picked|put|held|reached|watched|waited|wrote|read)\b/i.test(value) && !HABITUAL.test(value)) return { why: 'once' };
     // a sentence pinned to one moment ("By noon the Sare was over the meadows", "That night…")
     // tells the scene, not how the thing is
     const MOMENT = /(?<![\p{L}])(?:by noon|by nightfall|by evening|by morning|that (?:morning|evening|night|afternoon|day|week|year)|this (?:morning|evening)|tonight|today|yesterday|at (?:supper|dinner|breakfast|dawn|dusk|noon|midnight)|at \S+ o['’]clock|for a moment|for once|just then|suddenly|by then)(?![\p{L}])/iu;
@@ -1350,7 +1360,7 @@ module.exports = function canonEditor(C) {
     for (const c of cast) {
       if (c.entry || made.has(c.key)) continue;
       const n = hits.reduce((k, ph) => k + ph.filter((h) => h.key === c.key && h.via !== 'head').length, 0);
-      if (n >= 2 && (c.proper || ['person', 'creature', 'place', 'group'].includes(c.kind))) entryOf(c);
+      if ((n >= 2 && (c.proper || ['person', 'creature', 'place', 'group'].includes(c.kind))) || (n >= 1 && c.proper && c.kind === 'creature')) entryOf(c);
     }
     return { calls, dropped, kept, cast, ch, narrator: me ? (me.entry || made.get(me.key) || null) : null };
   }
