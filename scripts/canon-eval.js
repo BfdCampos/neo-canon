@@ -259,7 +259,8 @@ async function evalFixture(name, reader, tier) {
 
 async function main() {
   const which = arg('fixture', 'all');
-  const fixtures = which === 'all' ? ['canon', 'canon-heldout'] : [which];
+  // (several fixture folders at once, comma-separated: one model load)
+  const fixtures = which === 'all' ? ['canon', 'canon-heldout'] : which.split(',').filter(Boolean);
   const model = arg('model', 'quick') === 'fake' ? { tier: 'fake', file: 'fake' } : findModel(arg('model', 'quick'));
   const threads = +arg('threads', Math.max(1, os.cpus().length - 2));
   const memoFile = arg('memo', path.join(os.tmpdir(), 'neo-canon-eval', path.basename(model.file) + '.memo.json'));

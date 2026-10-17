@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-sh",
+      "name": "Saltmarsh",
+      "bookIds": [
+        "book-the-salt-house-sh1"
+      ],
+      "canonId": "canon-saltmarsh-shelf-sh"
+    }
+  ]
+}

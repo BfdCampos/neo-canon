@@ -1,0 +1,153 @@
+{
+  "about": "dev2 · The Doctor at Brennock (Brennock shelf). Containers and what they hold: a town and its river in one sentence; a house and the surgery and waiting room in it; a hall and the gallery upstairs; a car by make and by model. People by title, epithet and first name (Dr Haddon, the doctor, the Old Man, Arthur; the vicar). Cities, a month and a weekday in passing. Ch 2 holds a car-colour slip, a building's material slip and a misspelt town; decoys agree. Written by the builder for round 2.",
+  "set": "dev2/brennock",
+  "shelf": "Brennock",
+  "book": "book-the-doctor-br1",
+  "chapters": { "c1": "Ch 1", "c2": "Ch 2" },
+  "notEntities": ["April", "Thursdays", "Thursday", "Leeds", "Durham", "Someone", "Mrs", "Dr", "Reverend", "Rover", "P6"],
+  "entities": [
+    {
+      "id": "brennock", "name": "Brennock", "kind": "place", "aliases": ["the town"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "description", "value": "a grey slate town", "quote": "Brennock was a grey slate town that climbed the hill above the Sare in three steep streets.", "ch": "c1", "weight": "must", "alt": ["grey slate", "slate town"] },
+        { "attr": "location", "value": "climbs the hill above the Sare in three steep streets", "quote": "Brennock was a grey slate town that climbed the hill above the Sare in three steep streets.", "ch": "c1", "weight": "must", "alt": ["above the Sare", "three steep streets", "on a hill"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "brown and fast", "why": "the river's" },
+        { "attr": "description", "value": "sandstone hall", "why": "the Corn Exchange's" }
+      ]
+    },
+    {
+      "id": "the-sare", "name": "the Sare", "kind": "place", "aliases": ["Sare", "the river"], "weight": "must", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "a river, brown and fast below the bridge", "quote": "The river was brown and fast below the bridge", "ch": "c1", "weight": "must", "also": ["By noon the Sare was over the meadows and into the mill yard, brown and fast, carrying fence posts."], "alt": ["brown and fast", "river"] },
+        { "attr": "history", "value": "in a wet April it comes over the meadows as far as the mill", "quote": "in a wet April it came over the meadows as far as the mill", "ch": "c1", "weight": "should", "alt": ["floods the meadows", "over the meadows"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "grey slate town", "why": "Brennock's" },
+        { "attr": "description", "value": "three steep streets", "why": "Brennock's" }
+      ]
+    },
+    {
+      "id": "dr-haddon", "name": "Dr Haddon", "kind": "person", "aliases": ["Haddon", "the doctor", "the Old Man", "Arthur", "Doctor Haddon"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "occupation", "value": "the town's doctor for twenty-two years", "quote": "Dr Haddon had been the town’s doctor for twenty-two years.", "ch": "c1", "weight": "must", "alt": ["doctor", "the town's doctor"] },
+        { "attr": "sex", "value": "male", "quote": "He was a short, bald man with half-moon spectacles", "ch": "c1", "weight": "must", "hard": true, "alt": ["man"] },
+        { "attr": "appearance.height", "value": "short", "quote": "He was a short, bald man with half-moon spectacles", "ch": "c1", "weight": "must" },
+        { "attr": "appearance.hair", "value": "bald", "quote": "He was a short, bald man with half-moon spectacles", "ch": "c1", "weight": "must" },
+        { "attr": "appearance.other", "value": "half-moon spectacles", "quote": "He was a short, bald man with half-moon spectacles", "ch": "c1", "weight": "must", "also": ["His half-moon spectacles were spotted with rain."], "alt": ["spectacles", "glasses"] },
+        { "attr": "manner.speech", "value": "a voice too big for him", "quote": "a voice too big for him", "ch": "c1", "weight": "should", "alt": ["big voice", "loud voice"] },
+        { "attr": "routine", "value": "drives to the surgery down Bridge Street every morning at eight", "quote": "every morning at eight he drove his old Rover, a green P6 with a cracked windscreen, down Bridge Street to the surgery", "ch": "c1", "weight": "must", "alt": ["every morning at eight", "drives to the surgery"] },
+        { "attr": "possession", "value": "an old Rover, a green P6 with a cracked windscreen", "quote": "his old Rover, a green P6 with a cracked windscreen", "ch": "c1", "weight": "must", "alt": ["green Rover", "Rover P6", "old Rover", "green P6"] },
+        { "attr": "origin", "value": "born in Leeds", "quote": "He had been born in Leeds and spoke of it as if it were abroad.", "ch": "c1", "weight": "must", "alt": ["Leeds"] },
+        { "attr": "routine", "value": "holds a clinic at the Corn Exchange on Thursdays", "quote": "On Thursdays the doctor held a clinic at the Corn Exchange", "ch": "c1", "weight": "must", "alt": ["Thursday clinic", "clinic at the Corn Exchange"] },
+        { "attr": "relationship.kin", "value": "married to Constance", "quote": "His wife, Constance, was a head taller than him", "ch": "c1", "weight": "must", "alt": ["Constance", "wife Constance", "husband of Constance"] },
+        { "attr": "name", "value": "his patients call him the Old Man", "quote": "The doctor’s patients called him the Old Man.", "ch": "c1", "weight": "should", "alt": ["the Old Man"] },
+        { "attr": "name", "value": "Arthur, to Constance", "quote": "Constance called him Arthur, and nobody else did.", "ch": "c1", "weight": "should", "alt": ["Arthur"] }
+      ],
+      "traps": [
+        { "attr": "appearance.height", "value": "tall", "why": "Constance's" },
+        { "attr": "appearance.hair", "value": "red", "why": "Lyle's" },
+        { "attr": "origin", "value": "Durham", "why": "Lyle's" },
+        { "attr": "possession", "value": "blue Rover", "why": "Ch 2's slip" }
+      ]
+    },
+    {
+      "id": "constance-haddon", "name": "Constance Haddon", "kind": "person", "aliases": ["Constance", "Mrs Haddon"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "relationship.kin", "value": "Dr Haddon's wife", "quote": "His wife, Constance, was a head taller than him", "ch": "c1", "weight": "must", "alt": ["wife", "married to Dr Haddon", "Haddon"] },
+        { "attr": "sex", "value": "female", "quote": "His wife, Constance, was a head taller than him", "ch": "c1", "weight": "must", "hard": true, "alt": ["wife"] },
+        { "attr": "appearance.height", "value": "a head taller than her husband", "quote": "His wife, Constance, was a head taller than him, and fair", "ch": "c1", "weight": "must", "also": ["tall and fair and furious"], "alt": ["tall", "a head taller"] },
+        { "attr": "appearance", "value": "fair", "quote": "His wife, Constance, was a head taller than him, and fair", "ch": "c1", "weight": "should", "also": ["tall and fair and furious"] },
+        { "attr": "routine", "value": "sings in the choir at St Ida's", "quote": "she sang in the choir at St Ida’s", "ch": "c1", "weight": "should", "alt": ["choir"] },
+        { "attr": "role", "value": "runs the surgery's books and all its patients", "quote": "She ran the surgery’s books and all of its patients", "ch": "c1", "weight": "must", "alt": ["runs the surgery's books", "runs the surgery"] },
+        { "attr": "personality", "value": "the town is more afraid of her than of him", "quote": "the town was more afraid of her than of him", "ch": "c1", "weight": "should", "alt": ["feared", "formidable"] }
+      ],
+      "traps": [
+        { "attr": "appearance.hair", "value": "bald", "why": "the doctor's" },
+        { "attr": "appearance.height", "value": "short", "why": "the doctor's" }
+      ]
+    },
+    {
+      "id": "the-surgery", "name": "the surgery", "kind": "place", "aliases": ["surgery"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "location", "value": "the front half of the Haddons' house on Bridge Street", "quote": "The surgery was the front half of the Haddons’ house on Bridge Street", "ch": "c1", "weight": "must", "alt": ["front half of the Haddons' house", "on Bridge Street"] },
+        { "attr": "description", "value": "in a narrow red-brick building with a brass plate by the door", "quote": "a narrow red-brick building with a brass plate by the door", "ch": "c1", "weight": "must", "alt": ["red-brick", "brass plate"] },
+        { "attr": "location.part", "value": "a waiting room with six hard chairs and a fish tank, always too warm", "quote": "Its waiting room had six hard chairs and a fish tank, and it was always too warm.", "ch": "c1", "weight": "should", "alt": ["waiting room", "six hard chairs", "fish tank"] }
+      ],
+      "traps": [{ "attr": "description", "value": "sandstone", "why": "the Corn Exchange's" }]
+    },
+    {
+      "id": "the-corn-exchange", "name": "the Corn Exchange", "kind": "place", "aliases": ["Corn Exchange"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "description", "value": "a sandstone hall on the market square", "quote": "the Corn Exchange, a sandstone hall on the market square", "ch": "c1", "weight": "must", "alt": ["sandstone hall", "sandstone", "on the market square"] },
+        { "attr": "description", "value": "a clock tower that runs ten minutes slow", "quote": "with a clock tower that ran ten minutes slow", "ch": "c1", "weight": "must", "alt": ["clock tower", "ten minutes slow"] },
+        { "attr": "location.part", "value": "its Long Gallery, upstairs", "quote": "The clinic was in its Long Gallery, upstairs", "ch": "c1", "weight": "should", "alt": ["Long Gallery"] },
+        { "attr": "location", "value": "on the high side of the square; the water never reached it", "quote": "The red-brick Corn Exchange stood on the high side of the square, and the water never reached it.", "ch": "c2", "weight": "nice", "alt": ["high side of the square"] },
+        { "attr": "history", "value": "opened for the families from the low streets in the flood", "quote": "The Corn Exchange was opened for the families from the low streets.", "ch": "c2", "weight": "nice", "alt": ["opened for the families"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "cold panelled room hung with portraits", "why": "the Long Gallery's" },
+        { "attr": "description", "value": "tall windows on the north side", "why": "the Long Gallery's" },
+        { "attr": "description", "value": "red-brick", "why": "Ch 2's slip; the Haddons' house is red brick" }
+      ]
+    },
+    {
+      "id": "the-long-gallery", "name": "the Long Gallery", "kind": "place", "aliases": ["Long Gallery"], "weight": "must", "profile": false,
+      "facts": [
+        { "attr": "location", "value": "upstairs in the Corn Exchange", "quote": "The clinic was in its Long Gallery, upstairs", "ch": "c1", "weight": "must", "alt": ["upstairs", "in the Corn Exchange"] },
+        { "attr": "description", "value": "a cold panelled room hung with portraits of aldermen", "quote": "a cold panelled room hung with portraits of aldermen", "ch": "c1", "weight": "must", "alt": ["panelled", "portraits of aldermen", "cold"] },
+        { "attr": "description", "value": "tall windows on the north side", "quote": "where the light came in through tall windows on the north side", "ch": "c1", "weight": "should", "alt": ["tall windows"] },
+        { "attr": "function", "value": "the doctor's Thursday clinic", "quote": "The clinic was in its Long Gallery, upstairs", "ch": "c1", "weight": "should", "alt": ["clinic"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "sandstone hall", "why": "the Corn Exchange's" },
+        { "attr": "description", "value": "clock tower", "why": "the Corn Exchange's" }
+      ]
+    },
+    {
+      "id": "amos-lyle", "name": "Amos Lyle", "kind": "person", "aliases": ["Lyle", "the Reverend Amos Lyle", "the vicar", "Reverend Lyle", "the Reverend Lyle", "Amos"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "role", "value": "the vicar", "quote": "The vicar, the Reverend Amos Lyle, came to the Thursday clinic for his chest.", "ch": "c1", "weight": "must", "alt": ["vicar", "Reverend"] },
+        { "attr": "state", "value": "comes to the Thursday clinic for his chest", "quote": "came to the Thursday clinic for his chest", "ch": "c1", "weight": "should", "alt": ["bad chest", "his chest"] },
+        { "attr": "sex", "value": "male", "quote": "He was a young, anxious man with red hair", "ch": "c1", "weight": "must", "hard": true, "alt": ["man"] },
+        { "attr": "age", "value": "young", "quote": "He was a young, anxious man with red hair", "ch": "c1", "weight": "must" },
+        { "attr": "personality", "value": "anxious", "quote": "He was a young, anxious man with red hair", "ch": "c1", "weight": "must" },
+        { "attr": "appearance.hair", "value": "red", "quote": "He was a young, anxious man with red hair", "ch": "c1", "weight": "must", "hard": true, "alt": ["red hair"] },
+        { "attr": "origin", "value": "newly come from Durham", "quote": "newly come from Durham", "ch": "c1", "weight": "must", "alt": ["Durham", "from Durham"] },
+        { "attr": "habit", "value": "coughs through every sermon", "quote": "he coughed through every sermon", "ch": "c1", "weight": "should", "alt": ["coughs"] },
+        { "attr": "state", "value": "will not last a winter", "quote": "Mrs Haddon said he would not last a winter.", "ch": "c1", "weight": "nice", "said": true }
+      ],
+      "traps": [
+        { "attr": "origin", "value": "born in Leeds", "why": "the doctor's" },
+        { "attr": "appearance.hair", "value": "bald", "why": "the doctor's" }
+      ]
+    },
+    {
+      "id": "the-rover", "name": "the Rover", "kind": "thing", "aliases": ["Rover", "the P6", "P6"], "weight": "should", "profile": false,
+      "facts": [{ "attr": "description", "value": "an old green P6 with a cracked windscreen", "quote": "his old Rover, a green P6 with a cracked windscreen", "ch": "c1", "weight": "must", "alt": ["green P6", "cracked windscreen", "green"] }],
+      "traps": [{ "attr": "description", "value": "blue", "why": "Ch 2's slip" }]
+    },
+    { "id": "bridge-street", "name": "Bridge Street", "kind": "place", "aliases": [], "weight": "nice", "profile": false, "facts": [], "traps": [] },
+    { "id": "st-idas", "name": "St Ida’s", "kind": "place", "aliases": ["St Ida's"], "weight": "nice", "profile": false, "facts": [], "traps": [] }
+  ],
+  "keyPoints": [
+    { "ch": "c2", "who": ["brennock", "the-sare"], "did": "The flood came in the second week of April", "quote": "The flood came in the second week of April.", "weight": "must" },
+    { "ch": "c2", "who": ["dr-haddon"], "did": "Dr Haddon left the Rover at the water and walked", "quote": "Dr Haddon drove his blue Rover down Bridge Street as far as the water would let him, then left it and walked.", "weight": "must" },
+    { "ch": "c2", "who": ["the-corn-exchange"], "did": "The Corn Exchange was opened for the families from the low streets", "quote": "The Corn Exchange was opened for the families from the low streets.", "weight": "should" },
+    { "ch": "c2", "who": ["constance-haddon"], "did": "Constance ran it all from a trestle table", "quote": "Constance Haddon ran it all from a trestle table", "weight": "should" },
+    { "ch": "c2", "who": ["amos-lyle"], "did": "The Reverend Lyle carried sandbags from first light until dark", "quote": "carried sandbags from first light until dark", "weight": "must" }
+  ],
+  "slips": [
+    { "ch": "c2", "kind": "open", "entity": "dr-haddon", "attr": "possession", "sentence": "Dr Haddon drove his blue Rover down Bridge Street as far as the water would let him, then left it and walked.", "span": "blue", "to": "green", "against": { "ch": "c1", "quote": "his old Rover, a green P6 with a cracked windscreen" }, "weight": "must" },
+    { "ch": "c2", "kind": "open", "entity": "the-corn-exchange", "attr": "description", "sentence": "The red-brick Corn Exchange stood on the high side of the square, and the water never reached it.", "span": "red-brick", "to": "sandstone", "against": { "ch": "c1", "quote": "the Corn Exchange, a sandstone hall on the market square" }, "weight": "must" },
+    { "ch": "c2", "kind": "name", "entity": "brennock", "attr": "name", "sentence": "In Brennoch that week, the Reverend Lyle, who was supposed to be dying, carried sandbags from first light until dark.", "span": "Brennoch", "to": "Brennock", "weight": "must" }
+  ],
+  "decoys": [
+    { "ch": "c2", "sentence": "By noon the Sare was over the meadows and into the mill yard, brown and fast, carrying fence posts.", "why": "agrees" },
+    { "ch": "c2", "sentence": "His half-moon spectacles were spotted with rain.", "why": "agrees" },
+    { "ch": "c2", "sentence": "Constance Haddon ran it all from a trestle table, tall and fair and furious.", "why": "agrees" },
+    { "ch": "c2", "sentence": "They slept in the Long Gallery under the aldermen, and someone lit a fire in the grate.", "why": "agrees" }
+  ],
+  "needs": []
+}

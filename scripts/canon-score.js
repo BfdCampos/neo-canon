@@ -423,7 +423,35 @@ function score({ answers, run, texts, slips, reviewed }) {
     else profiles.notes.push(`${a.name}: ${uncited.length} sentence(s) without a citation, ${new Set(badRefs).size} citation(s) not verbatim or missing`);
   }
 
-  return { entities, facts, precision, keyPoints, slips: slipScore, profiles };
+  // junk: entries the sheet says are no one (a month, a language, "Someone")
+  const strip = (x) => N(x).replace(/^(?:the|a|an)\s+/, '');
+  const notE = new Set((answers.notEntities || []).map(strip));
+  entities.junk = run.entries.filter((e) => !ent(e) && notE.has(strip(e.name))).map((e) => e.name);
+
+  // Needs You: the writer's notes against the prose, asked as "Which is
+  // right?" (facts left `disagree`), every value the sheet lists among them
+  const needs = { want: (answers.needs || []).length, found: 0, missed: [] };
+  for (const n of answers.needs || []) {
+    const asked = (byAnswer.get(n.entity) || []).flatMap((e) => e.facts.filter((f) => f.state === 'disagree'));
+    const has = (v) => asked.some((f) => bag(`${f.value} ${f.as || ''} ${f.label || ''}`).has(canonWord(stem(N(v)))));
+    if (asked.length >= 2 && n.values.every(has)) needs.found++;
+    else needs.missed.push(`${n.entity} · ${n.attr}: ${n.values.join(' / ')}`);
+  }
+  // a profile sentence is supported when its content words are in the
+  // entry's kept facts (values, labels, quotes) or name the entry
+  for (const a of wantProfile.concat(answers.entities.filter((x) => !x.profile))) {
+    for (const e of byAnswer.get(a.id) || []) {
+      const p = readProfile(e.raw);
+      if (!p) continue;
+      const allowed = new Set([...content([e.name, ...(e.aliases || [])].join(' ')), ...e.facts.filter(kept).flatMap((f) => content(`${Canon.labelOf(f)} ${f.value} ${f.as || ''} ${f.sources.map((x) => x.quote).join(' ')}`))].map(canonWord));
+      for (const sen of p.sentences) {
+        const extra = content(sen.replace(/\[\d+\]/g, '')).map(canonWord).filter((w) => !allowed.has(w) && !/^\d+$/.test(w) && !['also', 'who', 'whose', 'which', 'where', 'person', 'place', 'one', 'year', 'old', 'named', 'called', 'known', 'year', 'years'].includes(w));
+        profiles.sentences = (profiles.sentences || 0) + 1;
+        if (extra.length) (profiles.unsupported = profiles.unsupported || []).push(`${e.name}: "${sen}" (${extra.join(', ')})`);
+      }
+    }
+  }
+  return { entities, facts, precision, keyPoints, slips: slipScore, profiles, needs };
 }
 
 /* ---------- output ---------- */
@@ -440,7 +468,9 @@ function table(name, s) {
     ['precision', `${s.precision.supported}/${s.precision.supported + s.precision.wrong.length}`, pct(s.precision.value) + `  (${s.precision.wrong.length} wrong, ${s.precision.review.length} to review; lower bound ${pct(s.precision.lower).trim()})`],
     ['key points', frac(s.keyPoints), `must ${frac(s.keyPoints.must)}  (${s.keyPoints.produced} produced)`],
     ['slips', s.slips ? frac(s.slips) : '-', s.slips ? `${s.slips.false.length} false, ${s.slips.worthALook.length} worth a look` : 'no slips file'],
-    ['profiles', `${s.profiles.present}/${s.profiles.want}`, `${s.profiles.cited} fully cited`]
+    ['profiles', `${s.profiles.present}/${s.profiles.want}`, `${s.profiles.cited} fully cited; ${(s.profiles.unsupported || []).length} of ${s.profiles.sentences || 0} sentences unsupported`],
+    ['needs you', s.needs.want ? frac({ found: s.needs.found, of: s.needs.want }) : '-', 'Which is right? (notes against prose)'],
+    ['junk entries', String(s.entities.junk.length), s.entities.junk.join(', ')]
   ];
   return [`${name}`, ...rows.map(([a, b, c]) => `  ${a.padEnd(15)}${String(b).padEnd(8)}${c}`)].join('\n');
 }
@@ -478,6 +508,8 @@ function main() {
     list('missed key points', s.keyPoints.missed);
     if (s.slips) { list('missed slips', s.slips.missed); list('false slips', s.slips.false); list('worth a look', s.slips.worthALook); }
     list('profiles', s.profiles.notes);
+    list('profile sentences not supported by the entry\'s kept facts', s.profiles.unsupported);
+    list('Which is right? not asked', s.needs.missed);
   }
   if (arg('json')) fs.writeFileSync(arg('json'), JSON.stringify({ answers: answersFile, run: positional[0], ...s, precision: { ...s.precision, review: s.precision.review.map((r) => r.line) } }, null, 2));
 }
