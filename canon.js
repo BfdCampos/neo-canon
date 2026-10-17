@@ -1619,6 +1619,12 @@
     if (whole) return whole;
     const parts = entries.filter((e) => e.kind === 'person' && nameParts(e.name).some((p) => norm(p) === n));
     if (parts.length === 1) return parts[0];
+    // a full name, to the one person called by its given name alone ("Constance Haddon" → "Constance")
+    const ws = n.split(/\s+/);
+    if (ws.length > 1) {
+      const by = entries.filter((e) => e.kind === 'person' && [e.name, ...e.aliases].some((a) => { const w = norm(stripTitles(a)); return w === ws[0] && !/\s/.test(w); }));
+      if (by.length === 1) return by[0];
+    }
     // a place's plural and singular are one place ("the Downs", "the Down")
     const one = (x) => { const y = norm(stripTitles(x)).replace(/^the\s+/, ''); return y.length > 4 && /[^s]s$/.test(y) ? y.slice(0, -1) : y; };
     const places = entries.filter((e) => e.kind === 'place' && [e.name, ...e.aliases].some((a) => one(a) === one(name)));
@@ -2298,6 +2304,7 @@
     sources.forEach((src, order) => {
       const me = narrators[src.bookId] && byId.get(narrators[src.bookId]) ? narrators[src.bookId] : null;
       let carry = null; // the last one named in the narration of the paragraphs before
+      let carryOnly = false; // (and the only one that paragraph named)
       sourceParas(src.html).forEach((p, pi) => {
         const talk = talkSpans(p.text);
         const free = (a, b) => !talk.some(([x, y]) => a < y && b > x);
@@ -2337,7 +2344,7 @@
                 return { id: subj.id, strong: !!k0 };
               }
             }
-            if (!inS.some((m) => m.start < w.start) && !every.some((m) => m.end <= w.start) && carry && (!world.get(carry).sex || world.get(carry).sex.value === PRONOUNS[w.lw])) return { id: carry, strong: false };
+            if (!inS.some((m) => m.start < w.start) && !every.some((m) => m.end <= w.start) && carry && (!world.get(carry).sex || world.get(carry).sex.value === PRONOUNS[w.lw])) return { id: carry, strong: carryOnly && !!world.get(carry).sex };
             return null;
           };
           for (let i = 0; i < ws.length; i++) {
@@ -2396,7 +2403,7 @@
           }
         });
         const named = every.filter((m) => !(narrators[src.bookId] && m.id === narrators[src.bookId]));
-        if (named.length) carry = named[named.length - 1].id;
+        if (named.length) { carry = named[named.length - 1].id; carryOnly = new Set(named.map((m) => m.id)).size === 1; }
       });
     });
     return out.sort((x, y) => x.pos - y.pos || x.sat - y.sat);

@@ -748,7 +748,7 @@ module.exports = function canonEditor(C) {
     if (cited.some((l) => !l.why)) return { why: 'tied' };
     // the words it's about, and the value's words in the text
     const own = new Set([c.name, ...c.aliases].flatMap((n) => content(n)));
-    const valueWords = content(value).filter((w) => !own.has(w));
+    const valueWords = content(value).filter((w) => g === 'sex' || !own.has(w));
     const text = cited.map((l) => l.s.text).join(' ');
     const bag = new Set(content(text));
     // 3 grounded: half the value's words (all its names and numbers) in the sentences
@@ -803,6 +803,10 @@ module.exports = function canonEditor(C) {
     if (c.kind !== 'place' && c.kind !== 'group' && (labelFamily(key) === 'location' || /(?:^|\s)(?:position|where|whereabouts|place|spot|location)$/i.test(label)) && key !== 'location.home' && !/\b(?:lives?|lived|living|sleeps?|slept|home|works?|worked|born)\b/i.test(value + ' ' + label)) return { why: 'once' };
     // one deed is the story's ("tried not to look", "passed the infirmary"), not a lasting fact
     if (['other', 'state', 'location'].includes(labelFamily(key)) && /^(?:tried|passed|went|came|walked|ran|sat|stood|looked|turned|took|gave|got|said|told|asked|saw|heard|felt|made|drank|ate|pressed|glanced|stepped|smiled|nodded|laughed|cried|whispered|opened|closed|left|arrived|picked|put|held|reached|watched|waited|wrote|read)\b/i.test(value) && !HABITUAL.test(value)) return { why: 'once' };
+    // a sentence pinned to one moment ("By noon the Sare was over the meadows", "That night…")
+    // tells the scene, not how the thing is
+    const MOMENT = /(?<![\p{L}])(?:by noon|by nightfall|by evening|by morning|that (?:morning|evening|night|afternoon|day|week|year)|this (?:morning|evening)|tonight|today|yesterday|at (?:supper|dinner|breakfast|dawn|dusk|noon|midnight)|at \S+ o['’]clock|for a moment|for once|just then|suddenly|by then)(?![\p{L}])/iu;
+    if (['other', 'state', 'location', 'description', 'appearance', 'atmosphere'].includes(labelFamily(key)) && MOMENT.test(cited.map((l) => l.s.text).join(' ')) && !HABITUAL.test(value)) return { why: 'once' };
     // a past role is history, not who they are now
     if (labelFamily(key) === 'role' && PAST_ROLE.test(clauses.join(' ')) && !ONGOING.test(clauses.join(' '))) { g = 'history'; key = 'history'; }
     // a habit or routine is what is done more than once: the words must say so
@@ -858,6 +862,13 @@ module.exports = function canonEditor(C) {
     const rest = head ? text.slice(head.end - s.start) : text.replace(/^\s*\S+/, '');
     const m = /^\s+(?:was|is)\s+(.+?)[.!?]*$/u.exec(rest);
     if (!m) return [];
+    // a place's or thing's: "Brennock was a grey slate town that climbed…", "Dock Three was the station’s only way out"
+    if (c.kind !== 'person') {
+      if (!head) return [];
+      const np = /^((?:a|an|the)\s+[^,;:—–]+?)(?=\s+(?:that|which|who|where|whose|with|and|but)\s|[,;:—–]|$)/u.exec(m[1]);
+      if (!np || np[1].split(/\s+/).length > 12 || np[1].split(/\s+/).length < 2) return [];
+      return [{ g: 'description', a: 'what it is', v: np[1] }].filter((x) => !(phits || []).some((h) => h.key !== c.key && h.start >= s.start && h.end <= s.end && x.v.includes(para.text.slice(h.start, h.end))));
+    }
     const out = [];
     const add = (g, a, v) => { v = v.replace(/^[\s,]+|[\s,]+$/g, ''); if (v && v.split(/\s+/).length <= 12 && !out.some((x) => x.v === v)) out.push({ g, a, v }); };
     // the head: "a short, bald man of sixty", "nineteen, narrow and quick", "the chief engineer, a heavy man"
@@ -1212,7 +1223,7 @@ module.exports = function canonEditor(C) {
     // spectacles", "a big freckled girl from the farm domes with green eyes".
     // Each still passes the gates and the reader, like a dossier's.
     for (const { c, part } of jobs) {
-      if (c.kind !== 'person') continue;
+      if (!['person', 'place', 'thing', 'group'].includes(c.kind)) continue;
       for (const l of part.lines) {
         if (!['name', 'chain'].includes(l.why)) continue;
         for (const x of introFacts(l, c, hits[l.s.pi], ch.paras[l.s.pi])) {
@@ -1252,7 +1263,9 @@ module.exports = function canonEditor(C) {
       // others in the passage: whose is it? A choice, not a yes (a reader
       // that says yes to anything picks one name, and it must be this one)
       const others = othersIn(p);
-      if (p.verdict === 'yes' && others.length && typeof reader.whose === 'function') {
+      // (asked too when the sentence's grammar didn't say it is this one's: a
+      // place named only as where something else is — "the Haddons’ house on Bridge Street")
+      if (p.verdict === 'yes' && (others.length || (!p.owned && !['person', 'creature'].includes(p.c.kind))) && typeof reader.whose === 'function') {
         const options = [p.c.name, ...others].sort((a, b) => a.localeCompare(b));
         const who = await ask('verdict', H('whose', claim, options), () => reader.whose({ ...claim, options }));
         if (who !== p.c.name) p.verdict = 'no';
