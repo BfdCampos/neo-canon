@@ -125,8 +125,8 @@ test('Read the Shelf, the editor\'s way: open facts verified by the reader, trai
     const lines = factLines(hesper);
     for (const want of ['Age: fifteen · verified', 'Height: tallest girl in her year · verified', 'Hair: fair (fair as wet straw) · verified', 'Haircut: cropped close to the skull · verified',
       'Origin: born on the third floor, in the room with the green tiles · verified', 'Sex: female · verified']) assert.ok(lines.includes(want), want + '\n' + lines.join('\n'));
-    // the same habit twice is one fact; the warden's "too tall" is hers, never Hesper's truth
-    assert.equal(lines.filter((l) => /hands still/.test(l)).length, 1);
+    // "She kept her hands still" says nothing of how often: no habit (round 2); the warden's "too tall" is hers, never Hesper's truth
+    assert.equal(lines.filter((l) => /Habit: .*hands still/.test(l)).length, 0);
     assert.ok(lines.includes('Height: too tall · unverified'));
     // a guess (asked twice: not stated), a dragon, a job nobody wrote, Ch 2's black hair: none of them
     assert.ok(!lines.some((l) => /furious|dragon|king|black/.test(l)), lines.join('\n'));

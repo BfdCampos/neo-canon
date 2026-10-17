@@ -3348,7 +3348,7 @@
   const REFERS_SYSTEM = 'You read a paragraph of a novel and say who or what one word in one of its sentences refers to. Choose only from the options given. If the word means someone or something not in the options, or you cannot tell, say so.';
   const ELSE = 'someone or something else';
   const NOT_SAID = 'the sentence does not say';
-  const SAME_EVENT_SYSTEM = 'You compare two passages of a novel. Answer yes if B tells of the very same event as A (the same act, at the same time, perhaps with a different doer named), no if B tells of another event (another time, or someone else doing something of the same kind), unclear if you cannot tell.';
+  const SAME_EVENT_SYSTEM = 'You compare two passages of a novel. Answer yes if B tells of the very same event as A (the same act, perhaps with a different doer named; B may look back on it later, as something that had happened), no if B tells of another event (another time, or someone else doing something of the same kind), unclear if you cannot tell.';
   const WHO_SYSTEM = 'You read one sentence of a novel and say who did something in it, according to that sentence alone. Choose from the options. If the sentence only says someone remembers, imagines, plans or claims it, or does not say who, choose that the sentence does not say.';
   const ALONE_SYSTEM = 'You answer one question about a sentence of a novel, from that sentence alone. Answer yes or no if the sentence says; unclear if it does not, or if it only pretends, remembers or supposes.';
   const UNSURE = 'cannot tell';

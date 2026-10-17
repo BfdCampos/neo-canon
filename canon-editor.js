@@ -650,7 +650,7 @@ module.exports = function canonEditor(C) {
   }
   // what is done more than once, in so many words (round 2: "all" and "any"
   // made one moment a habit)
-  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|kept|keeps|keep|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|since)(?![\p{L}])/iu;
+  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|since)(?![\p{L}])/iu;
   // a role that was, not one that is: "had been a soldier", "used to be",
   // "formerly" (but "had been the town's doctor for twenty-two years" still is)
   const PAST_ROLE = /(?<![\p{L}])(?:had been|used to be|was once|once was|formerly|former|ex-|retired|until)(?![\p{L}])/iu;
@@ -796,6 +796,13 @@ module.exports = function canonEditor(C) {
     // polarity: "not one of the Spared" isn't "one of the Spared"
     const clauses = cited.map((l) => clauseOf(l.s, grounded));
     if (localNeg(clauses.join(' '), grounded) !== negated(value) && !(negated(value) && /less|out\b|\bun/i.test(value))) return { why: 'polarity' };
+    // no value at all: "not specified", "unknown", "none"
+    if (/^(?:not (?:specified|stated|given|described|mentioned|known)|unknown|unspecified|none|n\/a|nothing|unclear)$/i.test(value)) return { why: 'empty' };
+    // where someone (or something) is now is the scene, not the bible ("already in the line",
+    // "under the weigher's arm"); only a place has a location of its own, a person a home
+    if (c.kind !== 'place' && c.kind !== 'group' && (labelFamily(key) === 'location' || /(?:^|\s)(?:position|where|whereabouts|place|spot|location)$/i.test(label)) && key !== 'location.home' && !/\b(?:lives?|lived|living|sleeps?|slept|home|works?|worked|born)\b/i.test(value + ' ' + label)) return { why: 'once' };
+    // one deed is the story's ("tried not to look", "passed the infirmary"), not a lasting fact
+    if (['other', 'state', 'location'].includes(labelFamily(key)) && /^(?:tried|passed|went|came|walked|ran|sat|stood|looked|turned|took|gave|got|said|told|asked|saw|heard|felt|made|drank|ate|pressed|glanced|stepped|smiled|nodded|laughed|cried|whispered|opened|closed|left|arrived|picked|put|held|reached|watched|waited|wrote|read)\b/i.test(value) && !HABITUAL.test(value)) return { why: 'once' };
     // a past role is history, not who they are now
     if (labelFamily(key) === 'role' && PAST_ROLE.test(clauses.join(' ')) && !ONGOING.test(clauses.join(' '))) { g = 'history'; key = 'history'; }
     // a habit or routine is what is done more than once: the words must say so
@@ -979,7 +986,9 @@ module.exports = function canonEditor(C) {
     // an age said otherwise: "twenty-nine years of him" against "twenty-six"
     if (canonLabel(f.label || '') === 'age' || f.attr === 'age') {
       const had = agesIn(f.value).concat(numberOf(f.value.trim()) != null ? [{ n: numberOf(f.value.trim()) }] : []);
-      const now = UNREAL.test(sentence) ? [] : agesIn(sentence);
+      // ("Hesper's was 41": a number of hers, not her age; "was N" needs her, or her he or she, as its subject)
+      const subj = (x) => { const before = sentence.slice(0, x.start); if (!/(?:was|is)\s+$/i.test(before)) return true; const w = (before.replace(/\s*(?:was|is)\s+$/i, '').match(/([\p{L}'’]+)$/u) || [])[1] || ''; return !/['’]s$/.test(w) && (/^(?:he|she)$/i.test(w) || names.some((n) => content(n).includes(stem(norm(w))))); };
+      const now = UNREAL.test(sentence) ? [] : agesIn(sentence).filter(subj);
       if (had.length && now.length && !now.some((x) => had.some((y) => y.n === x.n))) {
         const x = now[0];
         return { span: sentence.slice(x.start, x.end), q: `is ${who} ${sentence.slice(x.start, x.end)} years old?` };
@@ -1048,7 +1057,9 @@ module.exports = function canonEditor(C) {
       const bNeg = near(bs, i);
       if (fNeg !== bNeg && mark(i)) {
         // (a "never" in the fact's own words: asked the plain way round, "has Ivo touched a drop of the cider?")
-        const plain = negated(f.value) ? f.value.replace(/(?<![\p{L}])(?:never|not|no longer|n't)(?![\p{L}])\s*/giu, '').replace(/\s+/g, ' ').trim() : '';
+        // (only a deed: "has never touched a drop" → "has touched a drop"; "not one window" stays "does it have windows?")
+        const plainRaw = negated(f.value) ? f.value.replace(/(?<![\p{L}])(?:never|not|no longer|n't)(?![\p{L}])\s*/giu, '').replace(/\s+/g, ' ').trim() : '';
+        const plain = /^(?:has|have|had|does|did|is|was|will|would|\p{L}+ed)\s/u.test(plainRaw) ? plainRaw : '';
         return { span: mark(i), q: plain ? `is this so of ${who}: ${plain}?` : `does ${who} have ${rawAt(i)}?` };
       }
     }
