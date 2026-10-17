@@ -1070,8 +1070,10 @@
       const w = words[k];
       if (!COLOURS[w.lw]) continue;
       const prev = words[k - 1];
-      if (['a', 'an', 'the', 'her', 'his', 'its', 'their', 'some', 'with', 'of'].includes(prev.lw)) return null;
       const next = words[k + 1];
+      // "her eyes were the brown of strong tea": the colour itself, likened
+      if (prev.lw === 'the' && next && next.lw === 'of' && k - 1 === from) return w;
+      if (['a', 'an', 'the', 'her', 'his', 'its', 'their', 'some', 'with', 'of'].includes(prev.lw)) return null;
       const gap = next ? text.slice(w.end, next.start) : '';
       if (!next || /[,;:.!?—–]/.test(gap) || ['as', 'and', 'or', 'like', 'now'].includes(next.lw)) return w;
       return null;

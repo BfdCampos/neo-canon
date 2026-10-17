@@ -160,8 +160,15 @@ module.exports = function canonEditor(C) {
       for (const s of p.sents) {
         for (const m of s.text.matchAll(/(?<![\p{L}\p{N}'’-])(\p{Lu}[\p{Ll}'’-]+(?:\s+(?:of\s+(?:the\s+)?)?\p{Lu}[\p{Ll}'’-]+)*)/gu)) {
           const lead = s.text.slice(0, m.index);
-          if (!/[\p{L}\p{N}]/u.test(lead) || /[“"‘«:]\s*$/.test(lead)) continue; // a sentence's (or a quotation's) first word
           const w = m[1].replace(/['’]s$/, '');
+          // a sentence's (or a quotation's) first word is capitalised anyway: not a
+          // name unless two capitalised words neither of which the shelf writes in lower case
+          if (!/[\p{L}\p{N}]/u.test(lead) || /[“"‘«:]\s*$/.test(lead)) {
+            const ws = w.split(/\s+/);
+            if (ws.length < 2 || ws.some((x) => lower.has(x.toLowerCase()) || LEADERS.has(x.toLowerCase()) || TITLES.has(x.toLowerCase()))) continue;
+          }
+          // (a number the text uses as a name, mid-sentence: "Nine")
+          if (!w.includes(' ') && NUMBER.test(w.toLowerCase().split('-')[0]) && /[\p{L}\p{N}]/u.test(lead)) { out.set(w, (out.get(w) || 0) + 1); continue; }
           if (w.split(/\s+/).length === 1 && (lower.has(w.toLowerCase()) || TITLES.has(w.toLowerCase()) || PRONOUNS[w.toLowerCase()] || /^I$/.test(w))) continue;
           if (nonEntity(w) || /s['’]$/.test(w)) continue;
           out.set(w, (out.get(w) || 0) + 1);
@@ -217,6 +224,13 @@ module.exports = function canonEditor(C) {
     // children called him Brother Ink", "His name … was Anselm"): each tie
     // joins the name to the words the text last used for that one ("the
     // weigher"). Names the reader offered as aliases count only when so tied.
+    // someone the reader left out whom the text names by a number ("Teodora
+    // Kask had been Nine for three years"): a person, and the number theirs
+    for (const m of text.matchAll(/(?<![\p{L}'’-])(\p{Lu}[\p{Ll}'’-]+(?:\s+\p{Lu}[\p{Ll}'’-]+){0,2})\s+(?:had been|has been|was|is|became)\s+((?:One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty|Thirty|Forty|Fifty|Sixty|Seventy|Eighty|Ninety)(?:-[a-z]+)?)(?![\p{L}-])/gu)) {
+      const who = m[1];
+      if (nameKind(who, text, lower, 'person') !== 'proper' || LEADERS.has(who.split(/\s+/)[0].toLowerCase()) || find(who) || find(m[2])) continue;
+      cast.push({ key: cast.length, name: who, kind: 'person', aliases: [], in: '', proper: true, wanted: [m[2]] });
+    }
     // a name the reader gave only as another's alias is its own one until
     // the text ties the two ("Old Man", aliases "Dr Haddon")
     for (const c of [...cast]) {
@@ -360,7 +374,8 @@ module.exports = function canonEditor(C) {
   function mergeCast(cast, into, from) {
     for (const a of [from.name, ...from.aliases]) if (!into.aliases.some((x) => norm(x) === norm(a)) && norm(a) !== norm(into.name)) into.aliases.push(a);
     // (a name before a role, and a person's own name before an epithet: "Dr Haddon", not "the Old Man")
-    if ((!into.proper && from.proper) || (into.kind === 'person' && /^the\s/i.test(into.name) && !/^the\s/i.test(from.name) && from.proper)) { const was = into.name; into.name = from.name; into.aliases = [was, ...into.aliases.filter((x) => norm(x) !== norm(from.name))]; into.proper = true; }
+    const numberName = (n) => NUMBER.test(norm(n).split('-')[0]);
+    if ((!into.proper && from.proper) || (into.kind === 'person' && /^the\s/i.test(into.name) && !/^the\s/i.test(from.name) && from.proper) || (numberName(into.name) && !numberName(from.name) && from.proper)) { const was = into.name; into.name = from.name; into.aliases = [was, ...into.aliases.filter((x) => norm(x) !== norm(from.name))]; into.proper = true; }
     if (!into.in && from.in) into.in = from.in;
     from.gone = true;
     from.name = '\u0000';
