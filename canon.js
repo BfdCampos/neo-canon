@@ -3501,7 +3501,7 @@
       // no; anything else: unclear.
       // Every deed (round 2: a deed of one kind too) must also be told as
       // the very same event, asked with both passages.
-      async contradicts({ a, who, did, sentence, question, others = [] }) {
+      async contradicts({ a, who, did, sentence, question, others = [], kind = null }) {
         if (tier === 'quick') return 'unasked';
         const q = question || ('who ' + String(did || '').replace(new RegExp('^\\s*' + String(who).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), ''));
         const options = [...new Set([who, ...others.slice(0, 3)])].concat(ELSE, NOT_SAID);
@@ -3516,7 +3516,9 @@
         if ((await choose(a)) !== who) return 'unclear';
         // (round 2: always the very same event, a deed of one kind too)
         const r = await safe({ system: SAME_EVENT_SYSTEM, user: `A: "${a}"\nB: "${sentence}"\nIs B about the same event as A?`, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
-        return r && r.a === 'yes' ? 'yes' : 'no';
+        // (one distinctive thing, given by one and then by another, that the
+        // reader won't call one event: worth a look, never a slip)
+        return r && r.a === 'yes' ? 'yes' : kind ? 'unclear' : 'no';
       },
       tier,
       // the editor's reading (READING.md), for the readers that do it

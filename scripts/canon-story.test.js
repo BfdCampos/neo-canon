@@ -206,8 +206,8 @@ test('the local reader asks for events, and asks each passage on its own who did
   // two people sitting on beds are two events: no
   const two = Canon.localReader({ id: 'c', tier: 'careful', ask: async (m) => (/same event/.test(m.user) ? { a: 'no' } : { a: who(m.user) }) });
   assert.equal(await two.contradicts({ a: REACHED, label: 'x', who: 'John', did: 'John reached through a red vortex', sentence: SWAP, paragraph: SWAP, others: ['Dave'] }), 'no');
-  // a deed of one kind done to one thing (a crust given) is asked as the same event too (round 2)
-  assert.equal(await two.contradicts({ a: REACHED, label: 'x', who: 'John', did: 'John gave the crust', sentence: SWAP, paragraph: SWAP, others: ['Dave'], kind: 'gave', question: 'who gave the crust' }), 'no');
+  // a deed of one kind done to one thing (a crust given) is asked as the same event too (round 2): not one, worth a look
+  assert.equal(await two.contradicts({ a: REACHED, label: 'x', who: 'John', did: 'John gave the crust', sentence: SWAP, paragraph: SWAP, others: ['Dave'], kind: 'gave', question: 'who gave the crust' }), 'unclear');
   assert.equal(await reader.contradicts({ a: REACHED, label: 'x', who: 'John', did: 'John gave the crust', sentence: SWAP, paragraph: SWAP, others: ['Dave'], kind: 'gave', question: 'who gave the crust' }), 'yes');
   // B gives it to John too, or doesn't say: no
   const same = Canon.localReader({ id: 'c', tier: 'careful', ask: async () => ({ a: 'John' }) });
