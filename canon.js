@@ -3024,10 +3024,13 @@
               // else gives the attribute a value, like the narration's she and he)
               if (!ws.length) {
                 const weak = [];
+                let byRule = false;
                 for (const x of firm) {
-                  if (await pronounTrait(e, f, x, paraOf(x), entries, freshTraits.has(f) ? reader : null, meta.refs)) weak.push(where(x));
+                  const how = await pronounTrait(e, f, x, paraOf(x), entries, freshTraits.has(f) ? reader : null, meta.refs);
+                  if (how) weak.push(where(x));
+                  if (how === 'rule') byRule = true;
                 }
-                if (weak.length) weakTraits.set(f, { e, ws: weak });
+                if (weak.length) weakTraits.set(f, { e, ws: weak, byRule });
               }
               pass(f, ws);
               // checked by the shelf's own words: they are its source too
@@ -3062,9 +3065,17 @@
         }
         // a pronoun's trait, where nothing else gives the attribute a value:
         // no value the text ties by its own words, none the writer kept
-        for (const [f, { e, ws }] of weakTraits) {
+        for (const [f, { e, ws, byRule }] of weakTraits) {
           const others = e.facts.filter((g) => g.attr === f.attr && g !== f && (gated.has(g) || g.state === 'yours'));
-          if (others.length || [...(evidence.get(e.id + '/' + f.attr) || new Map()).keys()].length) continue;
+          // (round 2: a pronoun the paragraph's own rules tie, said before any
+          // other value in the prose and none in the notes, is first said:
+          // "Her eyes were the brown of strong tea" before "Nine rubbed her green eyes")
+          const ev = evidence.get(e.id + '/' + f.attr) || new Map();
+          const evPos = [...ev.values()].flat().map((w) => ({ pos: (isNote(w.src) ? NOTE_AT : 0) + w.order * 1e4 + Math.max(0, sourceParas(w.src.html).findIndex((p) => norm(p.text).includes(norm(w.quote)))), note: isNote(w.src) }));
+          const otherPos = [...others.flatMap((g) => g.state === 'yours' ? [{ pos: -Infinity, note: true }] : gated.get(g) || []), ...evPos];
+          const mine = Math.min(...ws.map((w) => w.pos));
+          const first = byRule && otherPos.length && otherPos.every((w) => !w.note && w.pos > mine) && ![...ev.keys()].includes(norm(f.value));
+          if (!first && (others.length || [...ev.keys()].length)) continue;
           if (e.setAside.some((g) => g.attr === f.attr && norm(g.value) === norm(f.value))) continue;
           pass(f, ws);
         }

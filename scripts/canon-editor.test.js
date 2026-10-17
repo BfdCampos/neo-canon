@@ -156,7 +156,8 @@ test('Read the Shelf, the editor\'s way: open facts verified by the reader, trai
     assert.ok(factLines(L.entry('warden')).includes('Sex: female (woman) · verified'));
     // what was left out, and why, is in this device's cache
     const why = Object.values(L.cache().ed.dropped).flat().map((x) => x.why);
-    for (const w of ['cited', 'ungrounded', 'polarity', 'suspect', 'verifier: no']) assert.ok(why.includes(w), w);
+    // (Ch 2's "tucked her black hair": one action, left out before the slip check sees it)
+    for (const w of ['cited', 'ungrounded', 'polarity', 'once', 'verifier: no']) assert.ok(why.includes(w), w + ' ' + JSON.stringify([...new Set(why)]));
     // the reader's answer on "Her" is kept in canon.json, against the sentence
     assert.ok(Object.entries(JSON.parse(fs.readFileSync(path.join(L.dir, 'canon.json'), 'utf8')).refs).some(([k, v]) => k.startsWith('hesper|') && v === true));
   } finally { fs.rmSync(L.root, { recursive: true, force: true }); }

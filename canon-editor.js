@@ -751,6 +751,17 @@ module.exports = function canonEditor(C) {
     // house on Bridge Street, a narrow red-brick building" — the reader's
     // choice decides)
     const object = (x) => { let k = x.i - 1; while (k >= 0 && SKIP_DET.has(toks[k].lw)) k--; return k >= 0 && PREP.has(toks[k].lw) && toks[k].lw !== 'of'; };
+    // a sentence about something the cast doesn't hold, which names this one
+    // only as where it is ("The surgery was the front half of the Haddons’
+    // house on Bridge Street…"; "The back bedroom, which was mine, looked
+    // out…" in the Salt House's paragraph): someone else's (-1)
+    if (!before.some((x) => !x.poss && !object(x) && x.key !== undefined) && ['place', 'thing'].includes(c.kind)) {
+      const lead = /^[\s“"‘']*(?:[Tt]he|[Ii]ts|[Hh]is|[Hh]er|[Mm]y|[Tt]heir|[Oo]ur|\p{Lu}\p{L}*['’]s)\s+(?:[\p{Ll}-]+\s+){0,2}?([\p{Ll}-]+)(?:,[^,]{1,40},)?\s+(?:itself\s+)?(?:was|were|is|are|had|has|stood|looked|ran|lay)\b/u.exec(s.text);
+      const mine = cand.filter((x) => x.key === c.key);
+      const head = norm(c.name).split(/\s+/).pop();
+      if (lead && !inHit(toks[0]) && mine.every((x) => object(x)) && stem(norm(lead[1])) !== stem(head) && !c.aliases.some((a) => norm(a).split(/\s+/).pop() === norm(lead[1]))
+        && (mine.length || /^(?:room|hall|chamber|kitchen|cell|corridor|yard|office|attic|cellar|ward|dormitory|bedroom|surgery|parlour|study|garden|house|building|cottage|barn|shop|church|chapel|stable|loft|cabin|galley|hangar)$/.test(lead[1]))) return -1;
+    }
     if (near && near.key !== undefined && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s+(?:[\p{L}\p{N}'’-]+\s+){0,3}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) return object(near) ? null : near.key;
     // a possessive just before the claim, in its own phrase
     const poss = before.filter((x) => x.poss && ci - x.end <= 3 && !gapPunct(x.end, ci)).pop();
@@ -761,6 +772,32 @@ module.exports = function canonEditor(C) {
     // through tall windows")
     if (!subj) return near && near.key !== undefined && !object(near) && !/[;:]/.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start)) ? near.key : null;
     return subj.key === undefined ? null : subj.key;
+  }
+
+  const DYNAMIC = /^(?:\p{L}+ed|rode|ran|sat|stood|went|came|lay|slept|held|took|gave|saw|got|left|made|brought|caught|drove|fell|felt|found|heard|hid|kept|knelt|led|lit|met|put|read|said|sang|shook|spoke|swam|threw|told|thought|woke|wore|wrote|ate|drank|began|bent|bit|blew|broke|bought|built|chose|crept|dug|drew|flew|forgot|froze|grew|hung|hurt|knew|lost|meant|paid|rang|rose|sent|set|shut|slid|spent|split|spun|stole|struck|swept|swung|taught|tore|understood|wept|won)$/u;
+  // Is the claim in the predicate of one action ("was waiting", "slept",
+  // "rode"), after its verb? → true for the families a moment can't give
+  function actionPredicate(cited, words, c, key) {
+    const fam = labelFamily(key);
+    if (['role', 'habit', 'history', 'origin', 'age', 'sex', 'rule', 'membership', 'name'].includes(fam) || key === 'relationship.kin' || fam === 'species') return false;
+    if (c.kind === 'place' && !['location', 'state', 'relationship', 'possession', 'function'].includes(fam)) return false;
+    // (what is said stays what is said: never a moment)
+    if (cited.some((l) => l.s.said || (l.s.talk && l.s.talk.length))) return false;
+    return cited.every((l) => {
+      const toks = [...l.s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)].map((m) => ({ w: norm(m[0]), at: m.index }));
+      // the main verb: the first dynamic past, or "was|were" + -ing, outside a leading apposition
+      let vi = -1;
+      for (let i = 0; i < toks.length; i++) {
+        const before = l.s.text.slice(0, toks[i].at);
+        if ((before.match(/,/g) || []).length % 2 === 1) continue; // (inside ", his grey mare,")
+        if (['was', 'were'].includes(toks[i].w) && toks[i + 1] && /ing$/.test(toks[i + 1].w)) { vi = i + 1; break; }
+        if (['was', 'were', 'is', 'are', 'had', 'has', 'have'].includes(toks[i].w)) break;
+        if (DYNAMIC.test(toks[i].w) && i > 0 && !['to', 'the', 'a', 'an', 'his', 'her', 'their', 'its', 'had', 'has', 'have', 'would', 'used'].includes(toks[i - 1].w)) { vi = i; break; }
+      }
+      if (vi < 0) return false;
+      const ci = toks.findIndex((t, i) => i > 0 && words.some((w) => stem(t.w) === w));
+      return ci > vi;
+    });
   }
 
   // Cited, tied, grounded: the gates a proposal passes before the reader
@@ -842,12 +879,19 @@ module.exports = function canonEditor(C) {
     // a sentence pinned to one moment ("By noon the Sare was over the meadows", "That night…")
     // tells the scene, not how the thing is
     const MOMENT = /(?<![\p{L}])(?:by noon|by nightfall|by evening|by morning|that (?:morning|evening|night|afternoon|day|week|year)|this (?:morning|evening)|tonight|today|yesterday|at (?:supper|dinner|breakfast|dawn|dusk|noon|midnight)|at \S+ o['’]clock|for a moment|for once|just then|suddenly|by then)(?![\p{L}])/iu;
-    if (['other', 'state', 'location', 'description', 'appearance', 'atmosphere'].includes(labelFamily(key)) && MOMENT.test(cited.map((l) => l.s.text).join(' ')) && !HABITUAL.test(value)) return { why: 'once' };
+    const citedText = cited.map((l) => l.s.text).join(' ');
+    if (['other', 'state', 'location', 'description', 'appearance', 'atmosphere', 'habit', 'possession', 'relationship', 'personality', 'function'].includes(labelFamily(key)) && key !== 'relationship.kin' && MOMENT.test(citedText) && !HABITUAL.test(citedText.replace(MOMENT, ''))) return { why: 'once' };
+    // the predicate of one action ("Ada was waiting at the top of the Spine
+    // with two mugs", "They slept in the Long Gallery", "he rode her down the
+    // rows") is the scene; an apposition before the verb ("Clem, his grey
+    // mare, was waiting") still describes. Roles, routines, history, kin: not this.
+    if (actionPredicate(cited, grounded, c, key)) return { why: 'once' };
     // a past role is history, not who they are now
     if (labelFamily(key) === 'role' && PAST_ROLE.test(clauses.join(' ')) && !ONGOING.test(clauses.join(' '))) { g = 'history'; key = 'history'; }
     // a habit or routine is what is done more than once: the words must say so
     // (always, every, never, kept, the same…); one moment is the story's, not the bible's
-    if ((g === 'habit' || labelFamily(key) === 'habit') && !HABITUAL.test(value + ' ' + cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
+    // (the text's words, not the reader's value: "listens to pumps at night" from "That night Nine lay…")
+    if ((g === 'habit' || labelFamily(key) === 'habit') && !HABITUAL.test(cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
     // an appearance is how they look, not what they did ("slid the weight", "did not turn round")
     if (labelFamily(key) === 'appearance' && /^(?:did|was|were|went|tried|kept|got|had|has|made|took|gave|came|stood|sat|looked|turned|peered|slid|walked|ran|said|felt)\b/i.test(value)) return { why: 'once' };
     // a personality is a word or two, or a way they always are
