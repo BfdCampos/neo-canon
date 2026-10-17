@@ -678,7 +678,7 @@ module.exports = function canonEditor(C) {
   }
   // what is done more than once, in so many words (round 2: "all" and "any"
   // made one moment a habit)
-  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|since)(?![\p{L}])/iu;
+  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer)(?![\p{L}])/iu;
   // a role that was, not one that is: "had been a soldier", "used to be",
   // "formerly" (but "had been the town's doctor for twenty-two years" still is)
   const PAST_ROLE = /(?<![\p{L}])(?:had been|used to be|was once|once was|formerly|former|ex-|retired|until)(?![\p{L}])/iu;
@@ -763,7 +763,7 @@ module.exports = function canonEditor(C) {
       const mine = cand.filter((x) => x.key === c.key && !x.pron);
       const objectOf = (x) => { let k = x.i - 1; while (k >= 0 && SKIP_DET.has(toks[k].lw)) k--; return k >= 0 && PREP.has(toks[k].lw) || (k >= 0 && toks[k].lw === 'of'); };
       const head = norm(c.name).split(/\s+/).pop();
-      if (lead && !inHit(toks[0]) && mine.every((x) => objectOf(x)) && stem(norm(lead[1])) !== stem(head) && !c.aliases.some((a) => norm(a).split(/\s+/).pop() === norm(lead[1]))
+      if (lead && !(inHit(toks[0]) && inHit(toks[0]).via !== 'self') && mine.every((x) => objectOf(x)) && stem(norm(lead[1])) !== stem(head) && !c.aliases.some((a) => norm(a).split(/\s+/).pop() === norm(lead[1]))
         && (mine.length || /^(?:room|hall|chamber|kitchen|cell|corridor|yard|office|attic|cellar|ward|dormitory|bedroom|surgery|parlour|study|garden|house|building|cottage|barn|shop|church|chapel|stable|loft|cabin|galley|hangar)$/.test(lead[1]))) return -1;
     }
     if (near && near.key !== undefined && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s+(?:[\p{L}\p{N}'’-]+\s+){0,3}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) return object(near) ? null : near.key;
@@ -787,14 +787,22 @@ module.exports = function canonEditor(C) {
     if (c.kind === 'place' && !['location', 'state', 'relationship', 'possession', 'function'].includes(fam)) return false;
     // (what is said stays what is said: never a moment)
     if (cited.some((l) => l.s.said || (l.s.talk && l.s.talk.length))) return false;
+    if (key === 'location.home') return false;
     return cited.every((l) => {
-      const toks = [...l.s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)].map((m) => ({ w: norm(m[0]), at: m.index }));
+      // (the clause that holds the claim: "There was a new ribbon …, and Hesper tried not to look …")
+      const all = [...l.s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)].map((m) => ({ w: norm(m[0]), at: m.index }));
+      const at0 = all.findIndex((t, i) => i > 0 && words.some((w) => stem(t.w) === w));
+      let from = 0;
+      for (const m of l.s.text.matchAll(/(?:,\s+(?:and|but|so)\s+|;\s+|:\s+)/g)) if (at0 >= 0 && m.index < all[at0].at) from = m.index + m[0].length;
+      const toks = all.filter((t) => t.at >= from);
       // the main verb: the first dynamic past, or "was|were" + -ing, outside a leading apposition
       let vi = -1;
       for (let i = 0; i < toks.length; i++) {
         const before = l.s.text.slice(0, toks[i].at);
         if ((before.match(/,/g) || []).length % 2 === 1) continue; // (inside ", his grey mare,")
         if (['was', 'were'].includes(toks[i].w) && toks[i + 1] && /ing$/.test(toks[i + 1].w)) { vi = i + 1; break; }
+        // ("had felt", "had known": an action done before; "had a dog", "had been": not)
+        if (toks[i].w === 'had' && toks[i + 1] && (DYNAMIC.test(toks[i + 1].w) || ['known', 'seen', 'taken', 'given', 'gone', 'done', 'felt', 'heard', 'told'].includes(toks[i + 1].w)) && toks[i + 1].w !== 'been') { vi = i + 1; break; }
         if (['was', 'were', 'is', 'are', 'had', 'has', 'have'].includes(toks[i].w)) break;
         if (DYNAMIC.test(toks[i].w) && i > 0 && !['to', 'the', 'a', 'an', 'his', 'her', 'their', 'its', 'had', 'has', 'have', 'would', 'used'].includes(toks[i - 1].w)) { vi = i; break; }
       }
@@ -891,7 +899,7 @@ module.exports = function canonEditor(C) {
     // "under the weigher's arm"); only a place has a location of its own, a person a home
     if (c.kind !== 'place' && c.kind !== 'group' && (labelFamily(key) === 'location' || /(?:^|\s)(?:where|whereabouts|place|spot|location)$/i.test(label) || (c.kind !== 'person' && /(?:^|\s)position$/i.test(label))) && key !== 'location.home' && !/\b(?:lives?|lived|living|sleeps?|slept|home|works?|worked|born)\b/i.test(value + ' ' + label)) return { why: 'once' };
     // one deed is the story's ("tried not to look", "passed the infirmary"), not a lasting fact
-    if (['other', 'state', 'location', 'appearance', 'personality'].includes(labelFamily(key)) && /^(?:tried|rubbed|tucked|wiped|shook|lifted|raised|dropped|pulled|pushed|threw|passed|went|came|walked|ran|sat|stood|looked|turned|took|gave|got|said|told|asked|saw|heard|felt|made|drank|ate|pressed|glanced|stepped|smiled|nodded|laughed|cried|whispered|opened|closed|left|arrived|picked|put|held|reached|watched|waited|wrote|read)\b/i.test(value) && !HABITUAL.test(value)) return { why: 'once' };
+    if (['other', 'state', 'location', 'appearance', 'personality'].includes(labelFamily(key)) && /^(?:tries|tried|rubbed|tucked|wiped|shook|lifted|raised|dropped|pulled|pushed|threw|passed|went|came|walked|ran|sat|stood|looked|turned|took|gave|got|said|told|asked|saw|heard|felt|made|drank|ate|pressed|glanced|stepped|smiled|nodded|laughed|cried|whispered|opened|closed|left|arrived|picked|put|held|reached|watched|waited|wrote|read)\b/i.test(value) && !HABITUAL.test(value)) return { why: 'once' };
     // a sentence pinned to one moment ("By noon the Sare was over the meadows", "That night…")
     // tells the scene, not how the thing is
     const MOMENT = /(?<![\p{L}])(?:by noon|by nightfall|by evening|by morning|that (?:morning|evening|night|afternoon|day|week|year)|this (?:morning|evening)|tonight|today|yesterday|at (?:supper|dinner|breakfast|dawn|dusk|noon|midnight)|at \S+ o['’]clock|for a moment|for once|just then|suddenly|by then)(?![\p{L}])/iu;
