@@ -729,7 +729,9 @@ module.exports = function canonEditor(C) {
       if (h) {
         if (h === lastHit) { cand[cand.length - 1].end = i; cand[cand.length - 1].poss = t.poss || /^['’]s/.test(p.text.slice(h.end, h.end + 2)); return; }
         lastHit = h;
-        cand.push({ key: h.key, i, end: i, poss: t.poss || /^['’]s/.test(p.text.slice(h.end, h.end + 2)), self: h.via === 'self' });
+        // (the narrator's "my" owns, "me" is an object, like any pronoun)
+        if (h.via === 'self' && ['me', 'myself'].includes(t.lw)) return;
+        cand.push({ key: h.key, i, end: i, poss: t.poss || /^['’]s/.test(p.text.slice(h.end, h.end + 2)) || (h.via === 'self' && ['my', 'mine'].includes(t.lw)), self: h.via === 'self' });
         return;
       }
       lastHit = null;
@@ -1104,6 +1106,10 @@ module.exports = function canonEditor(C) {
     for (const n of nouns) {
       const i = bs.indexOf(n);
       if (i < 0) continue;
+      // (a noun, not a deed: "to look for samphire" against "not looking at you")
+      const qt = tokens(quote);
+      const qi0 = qt.map(stem).indexOf(n);
+      if (/(?:ing|ed)$/.test(b[i]) || (qi0 > 0 && ['to', 'would', 'could', 'did', 'does', 'do', 'will', 'can'].includes(qt[qi0 - 1])) || (i > 0 && ['to', 'would', 'could', 'did', 'does', 'do', 'will', 'can'].includes(b[i - 1]))) continue;
       const near = (arr, k) => arr.slice(Math.max(0, k - 4), k).some((w) => NEGATORS.has(w));
       const qi = qs.indexOf(n);
       const qTokens = tokens(quote).map(stem);

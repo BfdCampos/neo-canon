@@ -2309,7 +2309,8 @@
     const live = entries.filter((e) => !e.locked);
     const idx = mentionIndex(live);
     const byId = new Map(live.map((e) => [e.id, e]));
-    const sexOf = (e) => { const f = e.facts.find((h) => h.attr === 'sex' && ['verified', 'yours'].includes(h.state)); return f ? { value: f.value } : undefined; };
+    // (a sex read this time and not yet through the gates counts: the read's own kin runs before them)
+    const sexOf = (e) => { const f = e.facts.find((h) => h.attr === 'sex' && ['verified', 'yours', 'unverified'].includes(h.state) && h.sources.some((x) => x.written || (!x.said && !x.plan))); return f ? { value: f.value } : undefined; };
     const world = new Map(live.map((x) => [x.id, { e: x, rel: [], ...(sexOf(x) ? { sex: sexOf(x) } : {}) }]));
     const person = (id) => byId.get(id) && ['person', 'creature'].includes(byId.get(id).kind);
     const out = [];
@@ -2353,7 +2354,8 @@
                 if (others.length || /^\s*(?:in|on|at|by|to|from|with|for|after|before|when|as)\b/i.test(prev.text.slice(0, subj.start - prev.start))) break;
                 const k0 = world.get(subj.id).sex;
                 if (k0 && k0.value !== sex) break;
-                return { id: subj.id, strong: !!k0 };
+                // (sure when the sex agrees, or when no one else is named in the paragraph before it)
+                return { id: subj.id, strong: !!k0 || !every.some((m) => m.end <= w.start && m.id !== subj.id) };
               }
             }
             if (!inS.some((m) => m.start < w.start) && !every.some((m) => m.end <= w.start) && carry && (!world.get(carry).sex || world.get(carry).sex.value === PRONOUNS[w.lw])) return { id: carry, strong: carryOnly && !!world.get(carry).sex };
