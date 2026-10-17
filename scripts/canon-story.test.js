@@ -190,14 +190,20 @@ test('only an earlier key point counts; unclear or the quick reader is worth a l
   assert.deepEqual(own.slips.filter((s) => s.attr === 'event'), []);
 });
 
-test('the local reader asks for events and for the same deed in plain words', async () => {
+test('the local reader asks for events, and asks each passage on its own who did the deed', async () => {
   const asked = [];
-  const reader = Canon.localReader({ id: 'c', tier: 'careful', ask: async (m) => { asked.push(m); return m.schema === Canon.STORY_SCHEMA ? { v: [{ w: ['John'], d: 'John reached through a red vortex', p: '', q: REACHED }] } : { a: /different action/.test(m.user) ? 'no' : 'yes' }; } });
+  // (a reader shown both passages takes A's word for it: each is asked alone)
+  const who = (u) => /Sentence: "It was Dave/.test(u) ? 'Dave' : 'John';
+  const reader = Canon.localReader({ id: 'c', tier: 'careful', ask: async (m) => { asked.push(m); return m.schema === Canon.STORY_SCHEMA ? { v: [{ w: ['John'], d: 'John reached through a red vortex', p: '', q: REACHED }] } : { a: who(m.user) }; } });
   assert.deepEqual(await reader.events({ text: OWNER, known: [{ name: 'John', kind: 'person' }] }), [{ who: ['John'], did: 'John reached through a red vortex', where: '', quote: REACHED }]);
-  assert.equal(await reader.contradicts({ a: REACHED, label: 'The Door, Ch 1', who: 'John', did: 'John reached through a red vortex', sentence: SWAP, paragraph: SWAP }), 'yes');
-  assert.match(asked[1].user, /Does B say that someone other than John did what A says John did\?/);
-  // and the other way round: a reader that says yes to both is saying yes to anything
-  assert.match(asked[2].user, /Is B about a different action from the one in A/);
-  const yes = Canon.localReader({ id: 'c', tier: 'careful', ask: async () => ({ a: 'yes' }) });
-  assert.equal(await yes.contradicts({ a: REACHED, label: 'x', who: 'John', did: 'x', sentence: SWAP, paragraph: SWAP }), 'no');
+  assert.equal(await reader.contradicts({ a: REACHED, label: 'The Door, Ch 1', who: 'John', did: 'John reached through a red vortex', sentence: SWAP, paragraph: SWAP, others: ['Dave'] }), 'yes');
+  assert.match(asked[1].user, /^Sentence: "It was Dave[^"]*"\nAccording to this sentence, who reached through a red vortex\?$/);
+  assert.deepEqual(asked[1].schema.properties.a.enum, ['John', 'Dave', 'someone or something else', 'the sentence does not say']);
+  // and A, on its own, must give it to John
+  assert.match(asked[2].user, /^Sentence: "He reached his hand/);
+  // B gives it to John too, or doesn't say: no
+  const same = Canon.localReader({ id: 'c', tier: 'careful', ask: async () => ({ a: 'John' }) });
+  assert.equal(await same.contradicts({ a: REACHED, label: 'x', who: 'John', did: 'John reached', sentence: SWAP, paragraph: SWAP, others: ['Dave'] }), 'no');
+  const unsaid = Canon.localReader({ id: 'c', tier: 'careful', ask: async () => ({ a: 'the sentence does not say' }) });
+  assert.equal(await unsaid.contradicts({ a: REACHED, label: 'x', who: 'John', did: 'John reached', sentence: SWAP, paragraph: SWAP, others: ['Dave'] }), 'no');
 });

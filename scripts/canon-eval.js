@@ -87,8 +87,9 @@ function folderIO(lib, dir) {
     entries: () => fs.readdirSync(path.join(dir, 'entries')).filter((f) => f.endsWith('.md')).map((f) => ({ id: f.slice(0, -3), text: fs.readFileSync(path.join(dir, 'entries', f), 'utf8') })),
     saveEntry: (id, text) => fs.writeFileSync(path.join(dir, 'entries', id + '.md'), text),
     notSlips: () => json(path.join(dir, 'not-slips.json'), []),
-    cache: () => null,
-    saveCache: () => {},
+    // (kept in memory for the run, and written beside the Canon by --keep: what was dropped and why)
+    cache: () => folderIO.last || null,
+    saveCache: (c) => { folderIO.last = c; },
     knownWords
   };
 }
@@ -128,7 +129,7 @@ async function startReader(model, threads, memoFile, fresh) {
     stats.kinds = stats.kinds || {};
     const k = stats.kinds[kind] = stats.kinds[kind] || { n: 0, ms: 0 };
     k.n++; k.ms += r.ms;
-    memo[key] = { result: r.result, ms: r.ms };
+    memo[key] = { result: r.result, ms: r.ms, q: msg.user.slice(-600) }; // (the question's end, to read back)
     dirty++;
     save(); // (every answer: a run stopped part way keeps what it asked)
     return log(r.result);
@@ -213,6 +214,7 @@ async function evalFixture(name, reader, tier) {
   fs.cpSync(path.join(fixture, 'library'), lib, { recursive: true });
   const library = JSON.parse(fs.readFileSync(path.join(lib, 'library.json'), 'utf8'));
   const dir = path.join(lib, library.shelves[0].canonId);
+  folderIO.last = null;
   const io = folderIO(lib, dir);
   try {
     const before = reader.stats.modelMs;
@@ -237,6 +239,7 @@ async function evalFixture(name, reader, tier) {
       const keep = path.resolve(arg('keep'), path.basename(fixture));
       fs.rmSync(keep, { recursive: true, force: true });
       fs.cpSync(dir, path.join(keep, 'canon'), { recursive: true });
+      if (folderIO.last) fs.writeFileSync(path.join(keep, 'cache.json'), JSON.stringify(folderIO.last, null, 1));
       const pick = (s) => ({ bookId: s.bookId, chId: s.chId, entry: s.entry, name: s.name, attr: s.attr, sentence: s.sentence, span: s.span, to: s.to, strength: s.strength });
       fs.writeFileSync(path.join(keep, 'slips.json'), JSON.stringify({ model: tier, slips: slips.map(pick), worthALook: asks.map(pick) }, null, 2));
     }

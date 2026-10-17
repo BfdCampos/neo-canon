@@ -202,6 +202,10 @@
       if (HEARSAY.test(s.text)) { spans.push([s.start, s.end]); continue; }
       for (const m of s.text.matchAll(REPORT_VERB)) {
         const rest = s.text.slice(m.index + m[0].length);
+        // "wrote every number in a ledger" is writing, not a report (only
+        // "wrote that…" is); "could say it in their sleep" is what they can do
+        if (/^writ|^wrote/i.test(m[0]) && !/^\s*(?:that\b|[,:]?\s*[“"‘])/i.test(rest)) continue;
+        if (/\b(?:could|can|would)\s+$/i.test(s.text.slice(0, m.index)) && /^\s+it\b/i.test(rest)) continue;
         // "…,” Tom said." / "Tom said: “…”" / "said nothing": no reported clause
         if (/^\s*(?:[.!?…:;]|[“"‘'«„—–]|$|nothing\b|so\b|no\b|yes\b)/iu.test(rest)) continue;
         // "Pip, Tom said, was a gelding": the clause runs both ways. After
@@ -930,6 +934,8 @@
     return world;
   }
 
+  // the word to put back for a colour: the writer's own one word ("gray"), else the value ("fair", not "fair as wet straw")
+  const colourWord = (f) => (f.as && !/\s/.test(f.as.trim()) ? f.as.trim() : f.value);
   const keepCase = (like, w) => /^\p{Lu}/u.test(like) ? w[0].toUpperCase() + w.slice(1) : w;
   // after "her", a word it can own ("her ears"), not one that ends a phrase ("let her go")
   const NOT_OWNED = new Set(['and', 'or', 'but', 'nor', 'so', 'yet', 'to', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'of', 'off', 'up', 'down', 'out', 'over', 'into', 'onto', 'away', 'back', 'again', 'there', 'here', 'then', 'that', 'this', 'the', 'a', 'an', 'as', 'if', 'when', 'while', 'go', 'be', 'have', 'had', 'was', 'is', 'say', 'said', 'know', 'see', 'too', 'once', 'alone', 'home']);
@@ -1158,7 +1164,7 @@
           });
           const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver;
           const k = owner && world.get(owner.id);
-          if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, k[attr].as || k[attr].value) });
+          if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, colourWord(k[attr])) });
           // or, in a sentence naming no one, "his blue eyes" of the one person
           // the paragraph named before: strong when the entry's sex agrees,
           // close by; weak when its sex isn't known, or it's "their"
@@ -1167,7 +1173,7 @@
             const f = r && r.k[attr];
             const agree = r && r.k.sex && det.lw !== 'their' ? PRONOUNS[det.lw] === r.k.sex.value : null;
             if (f && agree !== false && COLOURS[c.lw] !== f.value) {
-              add({ kind: 'colour', strength: agree && !r.weak ? 'strong' : 'weak', id: r.id, attr, fact: f, start: c.start, end: c.end, to: keepCase(c.w, f.as || f.value), ref: { start: det.start, end: det.end }, initials: r.initials });
+              add({ kind: 'colour', strength: agree && !r.weak ? 'strong' : 'weak', id: r.id, attr, fact: f, start: c.start, end: c.end, to: keepCase(c.w, colourWord(f)), ref: { start: det.start, end: det.end }, initials: r.initials });
             }
           }
         }
@@ -1319,7 +1325,12 @@
         const fact = `${ev.ids[0]}/event/${textHash(norm(ev.quote)).split(':')[0]}`;
         const sentenceHash = textHash(norm(s.text));
         if (dismissed.has(fact + '|' + sentenceHash)) continue;
-        let said = await reader.contradicts({ a: ev.quote, label: ev.label, who: ev.names[0], did: ev.did, sentence: s.text, paragraph: p.text });
+        // the one question each passage is asked: who did it ("who gave the crust?")
+        const kind = deedKind(ev.words, heavy(plain).map(stemOf));
+        const thing = shared.length && (heavy(plain).find((w) => stemOf(w) === shared[0]) || shared[0]);
+        const question = kind && thing ? `who ${kind} the ${thing}` : 'who ' + ev.did.replace(new RegExp('^\\s*' + ev.names[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '');
+        const others = [...new Set(here.map((m) => byId.get(m.id).name))].filter((n) => n !== ev.names[0]);
+        let said = await reader.contradicts({ a: ev.quote, label: ev.label, who: ev.names[0], did: ev.did, sentence: s.text, paragraph: p.text, question, others });
         if (said === 'no') continue;
         // a sentence that names the doer too ("Dave remembered John…") is a
         // slip only on the reader's yes, never worth a look
@@ -1383,13 +1394,14 @@
         const e = byId.get(id);
         for (const o of open) {
           if (o.e.id !== id || o.pos >= pos) continue;
-          const span = Editor.clashCandidate(o.f, o.quote, s.text, [e.name, ...e.aliases]);
-          if (!span) continue;
+          const detail = Editor.clashDetail(o.f, o.quote, s.text, [e.name, ...e.aliases]);
+          if (!detail) continue;
+          const span = detail.span;
           const fact = factKey(o.e, o.f);
           const sentenceHash = textHash(norm(s.text));
           if (dismissed.has(fact + '|' + sentenceHash)) continue;
           const fact1 = `${labelOf(o.f)}: ${o.f.value}`;
-          const said = reader && typeof reader.clash === 'function' ? await reader.clash({ name: e.name, a: o.quote, label: o.label, fact: fact1, sentence: s.text, paragraph: p.text }) : null;
+          const said = reader && typeof reader.clash === 'function' ? await reader.clash({ name: e.name, a: o.quote, label: o.label, fact: fact1, sentence: s.text, paragraph: p.text, question: detail.q }) : null;
           if (!said || said === 'no') continue;
           const at = s.start + s.text.indexOf(span);
           out.push({
@@ -1882,6 +1894,8 @@
     ['hit', 'strike', 'struck', 'punch', 'punched', 'slap', 'slapped', 'kick', 'kicked', 'beat', 'beaten'], ['take', 'took', 'taken', 'steal', 'stole', 'stolen', 'grab', 'grabbed', 'snatch', 'snatched'],
     ['open', 'opened', 'unlock', 'unlocked', 'unbolt', 'unbolted'], ['kill', 'killed', 'murder', 'murdered', 'stab', 'stabbed', 'shot', 'shoot', 'drown', 'drowned'],
     ['find', 'found', 'discover', 'discovered'], ['write', 'wrote', 'written', 'sign', 'signed'], ['burn', 'burnt', 'burned', 'set fire']].map((g) => new Set(g.map(stemOf)));
+  const DEED_VERB = ['gave', 'struck', 'took', 'opened', 'killed', 'found', 'wrote', 'burnt'];
+  const deedKind = (a, b) => { const B = new Set(b); const i = DEEDS.findIndex((g) => [...a].some((w) => g.has(w)) && [...B].some((w) => g.has(w))); return i < 0 ? null : DEED_VERB[i]; };
   const sameDeed = (a, b) => { const B = new Set(b); return DEEDS.some((g) => [...a].some((w) => g.has(w)) && [...B].some((w) => g.has(w))); };
 
   // what nearly every story's paragraphs do and have: never what ties two deeds
@@ -1976,6 +1990,8 @@
   // naming no one, after one that names Pio alone: referent()). Never what
   // anyone says. → Map id → Map 'female'|'male' → [{ pos, note, quote, src, key }],
   // one per sentence, in reading order.
+  // after one of these, an owning his or her is the subject's own ("sat on her bed")
+  const OF_PLACE = new Set(['on', 'in', 'at', 'to', 'into', 'onto', 'from', 'with', 'by', 'over', 'under', 'behind', 'beside', 'across', 'through', 'against', 'around', 'off', 'up', 'down', 'of', 'and', 'was', 'were', 'is', 'for', 'about', 'between', 'near', 'past', 'toward', 'towards', 'inside', 'outside', 'upon', 'within', 'without']);
   function pronounEvidence(sources, entries) {
     const idx = mentionIndex(entries);
     const world = new Map(entries.map((x) => [x.id, { e: x, rel: [], ...(x.kind === 'person' || x.kind === 'creature' ? { sex: NO_VALUE } : {}) }]));
@@ -1985,8 +2001,15 @@
         const sents = sentences(p.text);
         for (const c of paraCandidates(p.text, idx, world, [])) {
           if (c.kind !== 'pronoun' || c.attr !== 'sex' || !world.get(c.id).sex) continue;
-          const value = PRONOUNS[p.text.slice(c.start, c.end).toLowerCase()];
+          const word = p.text.slice(c.start, c.end).toLowerCase();
+          const value = PRONOUNS[word];
           if (!value) continue;
+          // (an owning "her" after the entry may be another's: "The weigher
+          // took her right thumb"; a he or she, the sentence's subject, is not)
+          if (c.kind === 'pronoun' && c.strength === 'strong' && !['he', 'she'].includes(word)) {
+            const before = (p.text.slice(0, c.start).match(/([\p{L}'’]+)\s*$/u) || [])[1];
+            if (before && !OF_PLACE.has(before.toLowerCase())) continue;
+          }
           const s = sents[c.si];
           if (PLAN.test(s.text)) continue;
           const key = `${src.bookId}/${src.chId}/${pi}/${c.si}`;
@@ -2383,7 +2406,7 @@
         const avg = (k, guess) => pace[k].length ? pace[k].reduce((a, b) => a + b, 0) / pace[k].length : guess;
         const eta = () => {
           const unit = avg('event', avg('read', avg('dossier', 20000) / 5));
-          const ms = (left - calls > 0 ? (left - calls) * unit : 0) + plan.ch * avg('cast', unit * 8) + plan.dossiers * avg('dossier', unit * 5) + plan.verify * avg('verify', unit / 5) + plan.profile * avg('profile', unit * 1.5);
+          const ms = Math.max(0, left - pace.event.length - pace.read.length) * unit + plan.ch * avg('cast', unit * 8) + plan.dossiers * avg('dossier', unit * 5) + plan.verify * avg('verify', unit / 5) + plan.profile * avg('profile', unit * 1.5);
           return Math.round(ms / 1000);
         };
         let phase = { phase: 'read' };
@@ -2869,8 +2892,10 @@
         const id = (s) => typeof s === 'number' ? s : ((lines.find(([, t]) => norm(t).includes(norm(s))) || [])[0] || 999);
         return hits.flatMap((x) => x.facts.map((f) => ({ x: 0, ...f, s: [].concat(f.s).map(id) })));
       },
-      async verify({ name, value, strict }) {
+      async verify({ name, value, strict, other, lasting }) {
         const v = (answers.verify || {})[norm(name + '|' + value)];
+        if (other) return v === 'other' ? 'yes' : 'no';
+        if (lasting) return v === 'moment' ? 'no' : 'yes';
         return v === undefined ? 'yes' : strict && v === 'guess' ? 'no' : v === 'guess' ? 'yes' : v;
       },
       async profile({ name, facts }) {
@@ -2959,9 +2984,11 @@
     },
     required: ['v']
   };
-  const SAME_DEED_SYSTEM = 'You compare two passages of a novel. Passage A says a character did something. Answer yes only if passage B says, as true in the story, that someone else did that same thing. Answer no if B is about a different action, or B only remembers, mentions or watches A\'s character doing it, or someone in B only says or claims it. Answer unclear if you cannot tell.';
   const REFERS_SYSTEM = 'You read a paragraph of a novel and say who or what one word in one of its sentences refers to. Choose only from the options given. If the word means someone or something not in the options, or you cannot tell, say so.';
   const ELSE = 'someone or something else';
+  const NOT_SAID = 'the sentence does not say';
+  const WHO_SYSTEM = 'You read one sentence of a novel and say who did something in it, according to that sentence alone. Choose from the options. If the sentence only says someone remembers, imagines, plans or claims it, or does not say who, choose that the sentence does not say.';
+  const ALONE_SYSTEM = 'You answer one question about a sentence of a novel, from that sentence alone. Answer yes or no if the sentence says; unclear if it does not, or if it only pretends, remembers or supposes.';
   const UNSURE = 'cannot tell';
 
   // The editor's reading (docs/semantics/READING.md): a chapter's cast, one
@@ -3005,6 +3032,8 @@
     required: ['f']
   };
   const VERIFY_SYSTEM = 'You check one claim about a novel against a passage from it. Answer yes only if the passage itself states the claim, as true in the story, about the one named. Answer no if the passage says otherwise, or says it about someone or something else. Answer unclear if the passage does not say it, if only a character says it, or if it is only a guess.';
+  const OTHER_SYSTEM = 'You read a claim about one person, place or thing of a novel and the passage it comes from. Answer yes if in the passage the claim is really about someone or something else (another character, another place, an object). Answer no if it is about the one named. Answer unclear if you cannot tell.';
+  const LASTING_SYSTEM = 'You sort the facts of a story bible. Answer yes if the claim is something lasting about the one named (how they look, who or what they are, what they always or usually do, how a place is or how it works, what happened to them before). Answer no if it is only one action or one passing moment of the scene. Answer unclear if you cannot tell.';
   const STATED_SYSTEM = 'You check one claim about a novel against a passage from it. Answer yes only if the passage states it in so many words or shows it plainly. Answer no if it is only an impression, a guess or a reading between the lines. Answer unclear if you cannot tell.';
   const PROFILE_SYSTEM = [
     'You write the short introduction to one entry of a story bible, using only the numbered facts given.',
@@ -3015,8 +3044,6 @@
     properties: { p: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'object', properties: { t: { type: 'string' }, f: { type: 'array', minItems: 1, maxItems: 6, items: { type: 'integer' } } }, required: ['t', 'f'] } } },
     required: ['p']
   };
-  const CLASH_SYSTEM = 'You compare two passages of a novel about one person, place or thing. Passage A comes first; the story bible noted a fact from it. Answer yes only if passage B, as true in the story, says something about that same one that cannot be true if A is. Answer no if B agrees, is about something else, or describes an exception or a change that the story explains. Answer unclear if you cannot tell.';
-  const BOTH_SYSTEM = 'You compare two passages of a novel about one person, place or thing. Answer yes if both can be true of it at once (B is about something else, an exception, a change the story explains, or a matter of how it looks at that moment). Answer no only if they plainly cannot both be true. Answer unclear if you cannot tell.';
 
   // `tier`: the quick reader (Qwen2.5-1.5B) is never asked about relations:
   // measured, it answers yes to who owns, fathers or marries whom on almost
@@ -3079,16 +3106,23 @@
       },
       // does B give A's deed to someone else? The quick reader isn't asked:
       // the writer is (Worth a look)
-      async contradicts({ a, label, who, did, sentence }) {
+      // Asked of each passage on its own, a choice: who did it, by this
+      // sentence? (A small reader shown both passages takes A's word for
+      // it.) B names someone else and A the one Canon has: yes; B the same:
+      // no; anything else: unclear.
+      async contradicts({ a, who, did, sentence, question, others = [] }) {
         if (tier === 'quick') return 'unasked';
-        // asked twice, the second the other way round: the same deed, given
-        // to someone else (yes), and not a different deed (no)
-        const user = (q) => `A (${label}): "${a}"\nIn A: ${did}.\n\nB: "${sentence}"\n\n${q}`;
-        const r = await safe({ system: SAME_DEED_SYSTEM, user: user(`Does B say that someone other than ${who} did what A says ${who} did?`), schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
-        const first = (r && r.a) || 'unclear';
-        if (first !== 'yes') return first;
-        const o = await safe({ system: SAME_DEED_SYSTEM, user: user(`Is B about a different action from the one in A (${did})?`), schema: ANSWER_SCHEMA, maxTokens: 12 }, null);
-        return o && o.a === 'no' ? 'yes' : o && o.a === 'yes' ? 'no' : 'unclear';
+        const q = question || ('who ' + String(did || '').replace(new RegExp('^\\s*' + String(who).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), ''));
+        const options = [...new Set([who, ...others.slice(0, 3)])].concat(ELSE, NOT_SAID);
+        const choose = async (text) => {
+          const r = await safe({ system: WHO_SYSTEM, user: `Sentence: "${text}"\nAccording to this sentence, ${q}?`, schema: { type: 'object', properties: { a: { enum: options } }, required: ['a'] }, maxTokens: 24, compact: true }, null);
+          return r && r.a;
+        };
+        const inB = await choose(sentence);
+        if (inB === who) return 'no';
+        if (inB === NOT_SAID || !inB) return 'no';
+        if (inB === ELSE) return 'unclear';
+        return (await choose(a)) === who ? 'yes' : 'unclear';
       },
       tier,
       // the editor's reading (READING.md), for the readers that do it
@@ -3108,9 +3142,14 @@
         const r = await safe({ system: dossierSystem(kind), user: `Sentences about ${name} (${kind}${also.length ? ', also called ' + also.join(', ') : ''}):\n${text}\n\nFacts about ${name} as JSON.`, schema: DOSSIER_SCHEMA, maxTokens: 900, compact: true }, null);
         return (r && r.f) || [];
       },
-      async verify({ name, label, value, passage, strict = false }) {
-        const user = `Passage:\n${passage}\n\nClaim about ${name}: ${label}: ${value}\n` + (strict ? `Is this stated, rather than guessed, about ${name}?` : `Does the passage state this about ${name}?`);
-        const r = await safe({ system: strict ? STATED_SYSTEM : VERIFY_SYSTEM, user, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
+      // `setting`: the chapter happens there, so its routines need not name it;
+      // `other`: is it really someone else's; `lasting`: or one moment
+      async verify({ name, label, value, passage, strict = false, setting = false, other = false, lasting = false }) {
+        const about = setting ? `${name} (where this passage takes place)` : name;
+        const q = strict ? `Is this stated, rather than guessed, about ${name}?` : other ? `Is this really about someone or something other than ${name}?`
+          : lasting ? `Is this something lasting about ${name}, not one passing moment?` : setting ? `Does the passage state this as how things are or are done in ${name}?` : `Does the passage state this about ${name}?`;
+        const user = `Passage:\n${passage}\n\nClaim about ${about}: ${label}: ${value}\n${q}`;
+        const r = await safe({ system: strict ? STATED_SYSTEM : other ? OTHER_SYSTEM : lasting ? LASTING_SYSTEM : VERIFY_SYSTEM, user, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
         return (r && r.a) || 'unclear';
       },
       async profile({ name, kind, facts }) {
@@ -3120,14 +3159,15 @@
       },
       // does B say otherwise of a kept fact? asked both ways: yes, and then
       // no to "can both be true"; the quick reader isn't asked (worth a look)
-      async clash({ name, a, label: where, fact, sentence }) {
+      async clash({ a, sentence, question }) {
         if (tier === 'quick') return 'unasked';
-        const user = (q) => `A (${where}): "${a}"\nThe story bible has, from A: ${name} — ${fact}.\n\nB (later): "${sentence}"\n\n${q}`;
-        const r = await safe({ system: CLASH_SYSTEM, user: user(`Does B contradict A about ${name}?`), schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
-        const first = (r && r.a) || 'unclear';
-        if (first !== 'yes') return first;
-        const o = await safe({ system: BOTH_SYSTEM, user: user(`Can A and B both be true of ${name}?`), schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
-        return o && o.a === 'no' ? 'yes' : o && o.a === 'yes' ? 'no' : 'unclear';
+        if (!question) return 'no';
+        const one = async (text) => { const r = await safe({ system: ALONE_SYSTEM, user: `Sentence: "${text}"\nAccording to this sentence, ${question}`, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null); return (r && r.a) || 'unclear'; };
+        const inB = await one(sentence);
+        if (inB === 'unclear') return 'no';
+        const inA = await one(a);
+        if (inA === 'unclear') return 'unclear';
+        return inA !== inB ? 'yes' : 'no';
       },
       async pick() { return null; },
       abort() {}

@@ -254,13 +254,15 @@ test('the reader\'s prompts: a cast, a dossier by sentence numbers, a yes or no,
     if (m.schema === Canon.CAST_SCHEMA) return { c: [{ n: 'Hesper', k: 'person', a: [] }], s: '' };
     if (m.schema === Canon.DOSSIER_SCHEMA) return { f: [{ g: 'age', a: 'age', v: 'fifteen', s: [1], x: 0 }] };
     if (m.schema === Canon.PROFILE_SCHEMA) return { p: [{ t: 'Hesper is fifteen.', f: [1] }] };
-    return { a: /contradict/.test(m.user) ? 'yes' : /both be true/.test(m.user) ? 'no' : 'yes' };
+    // each passage alone: A has no windows, B has
+    return { a: /Sentence: "not one window/.test(m.user) ? 'no' : 'yes' };
   } });
   assert.equal(reader.editor, true);
   assert.deepEqual(await reader.cast({ text: '¶1 Hesper was fifteen.', known: [] }), { cast: [{ name: 'Hesper', kind: 'person', aliases: [] }], setting: '' });
   assert.deepEqual(await reader.dossier({ name: 'Hesper', kind: 'person', aliases: [], text: '[1] Hesper was fifteen.' }), [{ g: 'age', a: 'age', v: 'fifteen', s: [1], x: 0 }]);
   assert.equal(await reader.verify({ name: 'Hesper', label: 'Age', value: 'fifteen', passage: 'Hesper was fifteen.' }), 'yes');
-  assert.equal(await reader.clash({ name: 'the Long Room', a: 'not one window', label: 'U, Ch 1', fact: 'Description: no windows', sentence: 'high windows' }), 'yes');
+  assert.equal(await reader.clash({ name: 'the Long Room', a: 'not one window', label: 'U, Ch 1', fact: 'Description: no windows', sentence: 'high windows', question: 'does the Long Room have windows?' }), 'yes');
+  assert.match(asked[asked.length - 1].user, /^Sentence: "not one window"\nAccording to this sentence, does the Long Room have windows\?$/);
   assert.ok(asked.every((m) => m.compact));
   // the passage first, so a passage asked about twice is read once
   assert.match(asked.find((m) => /Claim about/.test(m.user)).user, /^Passage:\nHesper was fifteen\./);
