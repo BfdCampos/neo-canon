@@ -2935,11 +2935,16 @@
         const id = (s) => typeof s === 'number' ? s : ((lines.find(([, t]) => norm(t).includes(norm(s))) || [])[0] || 999);
         return hits.flatMap((x) => x.facts.map((f) => ({ x: 0, ...f, s: [].concat(f.s).map(id) })));
       },
-      async verify({ name, value, strict, other, lasting }) {
+      async verify({ name, value, strict, other, lasting, negated }) {
         const v = (answers.verify || {})[norm(name + '|' + value)];
         if (other) return v === 'other' ? 'yes' : 'no';
+        if (negated) return ['no', 'other', 'unclear'].includes(v) ? 'yes' : 'no';
         if (lasting) return v === 'moment' ? 'no' : 'yes';
         return v === undefined ? 'yes' : strict && v === 'guess' ? 'no' : v === 'guess' ? 'yes' : v;
+      },
+      async whose({ name, value }) {
+        const v = (answers.verify || {})[norm(name + '|' + value)];
+        return v === 'other' ? 'someone or something else' : name;
       },
       async profile({ name, facts }) {
         this.calls++;
@@ -3078,6 +3083,8 @@
   const VERIFY_SYSTEM = 'You check one claim about a novel against a passage from it. Answer yes only if the passage itself states the claim, as true in the story, about the one named. Answer no if the passage says otherwise, or says it about someone or something else. Answer unclear if the passage does not say it, if only a character says it, or if it is only a guess.';
   const OTHER_SYSTEM = 'You read a claim about one person, place or thing of a novel and the passage it comes from. Answer yes if in the passage the claim is really about someone or something else (another character, another place, an object). Answer no if it is about the one named. Answer unclear if you cannot tell.';
   const LASTING_SYSTEM = 'You sort the facts of a story bible. Answer yes if the claim is something lasting about the one named (how they look, who or what they are, what they always or usually do, how a place is or how it works, what happened to them before). Answer no if it is only one action or one passing moment of the scene. Answer unclear if you cannot tell.';
+  const NEGATED_SYSTEM = 'You check one claim about a novel against a passage from it. Answer yes if the claim is wrong about the one named: the passage says it of someone or something else, says otherwise, has only a character say it, or does not say it at all. Answer no if the passage itself states it, as true in the story, about the one named. Answer unclear if you cannot tell.';
+  const WHOSE_SYSTEM = 'You read a passage of a novel and a claim taken from it, and say who or what the claim describes, according to the passage. Choose only from the options. If it describes someone or something not in the options, or you cannot tell, say so.';
   const STATED_SYSTEM = 'You check one claim about a novel against a passage from it. Answer yes only if the passage states it in so many words or shows it plainly. Answer no if it is only an impression, a guess or a reading between the lines. Answer unclear if you cannot tell.';
   const PROFILE_SYSTEM = [
     'You write the short introduction to one entry of a story bible, using only the numbered facts given.',
@@ -3195,13 +3202,20 @@
       },
       // `setting`: the chapter happens there, so its routines need not name it;
       // `other`: is it really someone else's; `lasting`: or one moment
-      async verify({ name, label, value, passage, strict = false, setting = false, other = false, lasting = false }) {
+      async verify({ name, label, value, passage, strict = false, setting = false, other = false, lasting = false, negated = false }) {
         const about = setting ? `${name} (where this passage takes place)` : name;
         const q = strict ? `Is this stated, rather than guessed, about ${name}?` : other ? `Is this really about someone or something other than ${name}?`
-          : lasting ? `Is this something lasting about ${name}, not one passing moment?` : setting ? `Does the passage state this as how things are or are done in ${name}?` : `Does the passage state this about ${name}?`;
+          : lasting ? `Is this something lasting about ${name}, not one passing moment?` : negated ? `Is this claim wrong about ${name}?`
+            : setting ? `Does the passage state this as how things are or are done in ${name}?` : `Does the passage state this about ${name}?`;
         const user = `Passage:\n${passage}\n\nClaim about ${about}: ${label}: ${value}\n${q}`;
-        const r = await safe({ system: strict ? STATED_SYSTEM : other ? OTHER_SYSTEM : lasting ? LASTING_SYSTEM : VERIFY_SYSTEM, user, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
+        const r = await safe({ system: strict ? STATED_SYSTEM : other ? OTHER_SYSTEM : lasting ? LASTING_SYSTEM : negated ? NEGATED_SYSTEM : VERIFY_SYSTEM, user, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
         return (r && r.a) || 'unclear';
+      },
+      // whose is the claim? a choice among the ones the passage names
+      async whose({ label, value, passage, options = [] }) {
+        const opts = [...options, ELSE, UNSURE];
+        const r = await safe({ system: WHOSE_SYSTEM, user: `Passage:\n${passage}\n\nClaim: ${label}: ${value}\nWho or what is this claim about, in the passage?\nOptions: ${opts.join('; ')}`, schema: { type: 'object', properties: { a: { enum: opts } }, required: ['a'] }, maxTokens: 24, compact: true }, null);
+        return (r && r.a) || UNSURE;
       },
       async profile({ name, kind, facts }) {
         this.calls++;

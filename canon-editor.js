@@ -634,6 +634,69 @@ module.exports = function canonEditor(C) {
     const from = Math.max(0, Math.min(ws.length - 30, (at < 0 ? 0 : at) - 8));
     return ws.slice(from, from + 30).join(' ').replace(/^[,;:\s]+|[,;:\s]+$/g, '');
   }
+  // Whose is the claim in this sentence? (round 2: a fact must be tied to
+  // its entity by the sentence's grammar, not by standing near it.) The
+  // claim's first word is owned by a possessive just before it ("her green
+  // eyes", "my father's grey eyes", "Mara's brother"), else by the clause's
+  // subject: the last one named before it who is not the object of a
+  // preposition ("above the Sare", "below her", "at Saltby") — or, when
+  // a name follows "called"/"named" just after the claim ("a collie bitch
+  // called Moss"), that one. A pronoun opening a sentence the pack tied to
+  // `c` is `c`'s. → a cast key, or null when the sentence doesn't say.
+  const PREP = new Set(['in', 'on', 'at', 'by', 'to', 'from', 'with', 'without', 'for', 'into', 'onto', 'over', 'under', 'above', 'below', 'beneath', 'beside', 'behind', 'near', 'past', 'through', 'across', 'along', 'around', 'among', 'between', 'toward', 'towards', 'off', 'up', 'down', 'than', 'like', 'about', 'after', 'before', 'beyond', 'inside', 'outside', 'upon', 'within', 'against', 'except', 'as']);
+  const SKIP_DET = new Set(['the', 'a', 'an', 'old', 'young', 'little', 'poor', 'dear', 'all', 'both', 'each', 'his', 'her', 'their', 'its', 'my', 'our', 'your']);
+  const POSS_PRON = new Set(['his', 'her', 'its', 'their', 'my']);
+  const SUBJ_PRON = new Set(['he', 'she', 'it', 'they', 'i']);
+  function claimOwner(l, words, c, ctx) {
+    const s = l.s;
+    const p = ctx.ch.paras[s.pi];
+    const hits = ((ctx.hits || [])[s.pi] || []).filter((h) => h.start >= s.start && h.end <= s.end && !p.talk.some(([a, b]) => h.start < b && h.end > a));
+    const toks = [...s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)].map((m) => ({ w: m[0], lw: norm(m[0]).replace(/['’]s$/, ''), poss: /['’]s$/.test(m[0]), start: s.start + m.index, end: s.start + m.index + m[0].length }));
+    if (!toks.length) return null;
+    const inHit = (t) => hits.find((h) => h.start < t.end && h.end > t.start);
+    // the claim: the first of its words in the sentence, outside any name
+    const want = new Set(words);
+    const ci = toks.findIndex((t) => !inHit(t) && !STOPW.has(t.lw) && (want.has(stem(t.lw)) || inBag(stem(t.lw), want)));
+    if (ci < 0) return null;
+    // the one each word stands for
+    const cand = [];
+    let lastHit = null;
+    toks.forEach((t, i) => {
+      const h = inHit(t);
+      if (h) {
+        if (h === lastHit) { cand[cand.length - 1].end = i; cand[cand.length - 1].poss = t.poss || /^['’]s/.test(p.text.slice(h.end, h.end + 2)); return; }
+        lastHit = h;
+        cand.push({ key: h.key, i, end: i, poss: t.poss || /^['’]s/.test(p.text.slice(h.end, h.end + 2)), self: h.via === 'self' });
+        return;
+      }
+      lastHit = null;
+      if (POSS_PRON.has(t.lw) || SUBJ_PRON.has(t.lw) || ['him', 'them', 'me'].includes(t.lw)) {
+        // (a sentence the pack tied to c by its opening pronoun: that pronoun is c's)
+        const key = i === 0 && ['chain', 'para'].includes(l.why) ? c.key : undefined;
+        cand.push({ key, i, end: i, poss: POSS_PRON.has(t.lw) && !(t.lw === 'her' && toks[i + 1] && PREP.has(toks[i + 1].lw)), pron: true });
+      }
+    });
+    // the object of a preposition is no owner ("above the Sare", "below her")
+    const object = (x) => { let k = x.i - 1; while (k >= 0 && SKIP_DET.has(toks[k].lw) && !(k === x.i - 1 && POSS_PRON.has(toks[k].lw) && false)) k--; return k >= 0 && PREP.has(toks[k].lw) && toks[k].lw !== 'of'; };
+    const gapPunct = (a, b) => /[,;:—–()]/.test(s.text.slice(toks[a].end - s.start, toks[b].start - s.start));
+    // "a black-and-white collie bitch called Moss"
+    for (const x of cand) if (x.i > ci && x.i - ci <= 6 && x.key !== undefined && /^(?:called|named)$/.test((toks[x.i - 1] || {}).lw || '')) return x.key;
+    const before = cand.filter((x) => x.end < ci);
+    // an apposition: "at the Corn Exchange, a sandstone hall"; "its Long
+    // Gallery, upstairs, a cold panelled room"
+    const near = before[before.length - 1];
+    if (near && near.key !== undefined && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s+(?:[\p{L}\p{N}'’-]+\s+){0,3}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) return near.key;
+    // a possessive just before the claim, in its own phrase
+    const poss = before.filter((x) => x.poss && ci - x.end <= 3 && !gapPunct(x.end, ci)).pop();
+    if (poss) return poss.key === undefined ? null : poss.key;
+    const subj = before.filter((x) => !x.poss && !object(x) && !(x.pron && !['he', 'she', 'it', 'they', 'i'].includes(toks[x.i].lw))).pop();
+    // (no subject: the last one named before it, in the same clause run —
+    // "its Long Gallery, … a cold panelled room …, where the light came in
+    // through tall windows")
+    if (!subj) return near && near.key !== undefined && !/[;:]/.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start)) ? near.key : null;
+    return subj.key === undefined ? null : subj.key;
+  }
+
   // Cited, tied, grounded: the gates a proposal passes before the reader
   // is asked about it. → { why } or { quote, said, key, label, value, ... }
   function gateFact(x, part, c, ctx) {
@@ -681,6 +744,15 @@ module.exports = function canonEditor(C) {
       if (cited.some((l) => l.why !== 'name' && personal(l.s.text))) return { why: 'someone else' };
     }
     if (labelFamily(keyOf(g, label)) === 'appearance' && namesOther(value)) return { why: 'someone else' };
+    // whose the claim is, by the sentence's grammar: a fact about someone
+    // or something else in the same sentence is theirs (the town's slate
+    // filed on its river; one person's eye patch on the group they lead)
+    let owned = false;
+    if (ctx.hits && !['relationship', 'location', 'membership', 'possession'].includes(g) && !['residents', 'members', 'possession'].includes(key)) {
+      const owners = cited.map((l) => claimOwner(l, grounded, c, ctx));
+      if (owners.some((k) => k != null && k !== c.key)) return { why: 'someone else' };
+      owned = owners.some((k) => k === c.key);
+    }
     // the setting's own: how it works (its routines and rules, who belongs),
     // from a clause that names no one and nothing else of the cast
     const bySetting = cited.some((l) => l.why === 'setting');
@@ -707,7 +779,7 @@ module.exports = function canonEditor(C) {
     if (bySetting && quotes.some((q) => namesOther(q) || others.some((o) => o.kind === 'place' && o.name.split(/\s+/).length > 1 && new RegExp(`(?<![\\p{L}])${o.name.split(/\s+/).pop()}s?(?![\\p{L}])`, 'iu').test(q)))) return { why: 'setting' };
     // not from a sentence a slip stands on (a later value that differs)
     if (cited.some((l) => ctx.suspect && ctx.suspect.has(l.s.id))) return { why: 'suspect' };
-    return { g, key, label, value, quotes, cited, said, interpretive: interpretive && ratio < 0.5, strong: cited.every((l) => l.why === 'name'),
+    return { g, key, label, value, quotes, cited, said, interpretive: interpretive && ratio < 0.5, strong: cited.every((l) => l.why === 'name'), owned,
       setting: bySetting, lasting: LASTING.has(g) || ['habit', 'routine', 'custom', 'state', 'possession', 'personality'].includes(labelFamily(key)) || ['habit', 'routine', 'custom', 'state', 'possession'].includes(key) };
   }
   // is the clause `q` of sentence `s` talk (speech, or reported)
@@ -930,7 +1002,7 @@ module.exports = function canonEditor(C) {
       if (!pack.some((x) => x.why === 'name')) continue;
       for (const part of packParts(pack)) jobs.push({ c, part });
     }
-    const ctx = { ch, text: ch.text, suspect, cast };
+    const ctx = { ch, text: ch.text, suspect, cast, hits };
     const proposals = [];
     let done = 0;
     await pool(jobs, reader.parallel || 1, async ({ c, part }) => {
@@ -945,6 +1017,20 @@ module.exports = function canonEditor(C) {
     if (stop && stop()) return { calls, dropped, stopped: true };
     // 3 · the verifier: the claim against the paragraphs it cites
     const passageOf = (p) => [...new Set(p.cited.map((l) => l.s.pi))].sort((a, b) => a - b).map((pi) => ch.paras[pi].text).join('\n\n');
+    // the rest of the cast named in a fact's paragraphs (outside speech), nearest its sentences first
+    const othersIn = (p) => {
+      const at = Math.min(...p.cited.map((l) => l.s.start));
+      const seen = [];
+      for (const pi of [...new Set(p.cited.map((l) => l.s.pi))]) {
+        const talk = ch.paras[pi].talk;
+        for (const h of [...hits[pi]].sort((a, b) => Math.abs(a.start - at) - Math.abs(b.start - at))) {
+          if (h.key === p.c.key || talk.some(([a, b]) => h.start < b && h.end > a)) continue;
+          const o = cast[h.key];
+          if (o && !seen.includes(o.name) && norm(o.name) !== norm(p.c.name)) seen.push(o.name);
+        }
+      }
+      return seen.slice(0, 4);
+    };
     // (ordered by passage, so a passage asked about twice is read once)
     const order = proposals.map((p, i) => ({ p, i, passage: passageOf(p) })).sort((a, b) => a.passage.localeCompare(b.passage) || a.i - b.i);
     let checked = 0;
@@ -955,8 +1041,21 @@ module.exports = function canonEditor(C) {
       p.verdict = first;
       // read between the lines: asked again, whether it is stated, not guessed
       if (p.verdict === 'yes' && p.interpretive) p.verdict = await ask('verdict', H('stated', claim), () => reader.verify({ ...claim, strict: true }));
+      // others in the passage: whose is it? A choice, not a yes (a reader
+      // that says yes to anything picks one name, and it must be this one)
+      const others = othersIn(p);
+      if (p.verdict === 'yes' && others.length && typeof reader.whose === 'function') {
+        const options = [p.c.name, ...others].sort((a, b) => a.localeCompare(b));
+        const who = await ask('verdict', H('whose', claim, options), () => reader.whose({ ...claim, options }));
+        if (who !== p.c.name) p.verdict = 'no';
+      }
+      // and the other way round: is the claim wrong about it? (only "no" keeps it)
+      if (p.verdict === 'yes' && typeof reader.verify === 'function') {
+        const neg = await ask('verdict', H('negated', claim), () => reader.verify({ ...claim, negated: true }));
+        if (neg !== 'no') p.verdict = neg === 'yes' ? 'no' : 'unclear';
+      }
       // tied by a pronoun or a paragraph, not a name: is it someone else's?
-      if (p.verdict === 'yes' && !p.strong) {
+      if (p.verdict === 'yes' && !p.strong && !others.length && !p.owned) {
         const other = await ask('verdict', H('other', claim), () => reader.verify({ ...claim, other: true }));
         if (other !== 'no') p.verdict = other === 'yes' ? 'no' : 'unclear';
       }
@@ -1017,5 +1116,5 @@ module.exports = function canonEditor(C) {
     return { calls, dropped, kept, cast, ch, narrator: me ? (me.entry || made.get(me.key) || null) : null };
   }
 
-  return { EDITOR_PROMPT, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
+  return { EDITOR_PROMPT, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
 };
