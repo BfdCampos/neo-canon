@@ -206,6 +206,12 @@
         // "wrote that…" is); "could say it in their sleep" is what they can do
         if (/^writ|^wrote/i.test(m[0]) && !/^\s*(?:that\b|[,:]?\s*[“"‘])/i.test(rest)) continue;
         if (/\b(?:could|can|would)\s+$/i.test(s.text.slice(0, m.index)) && /^\s+it\b/i.test(rest)) continue;
+        // "She was the clever one, their mother used to say; …": the clause
+        // before the speaker is what was said
+        if (/^\s*(?:[.!?…;]|$)/u.test(rest) && /[^”"’'],\s*(?:\p{L}+\s+){1,4}(?:used to |would |had |always )?$/u.test(s.text.slice(0, m.index))) {
+          spans.push([s.start, s.start + m.index + m[0].length]);
+          break;
+        }
         // "…,” Tom said." / "Tom said: “…”" / "said nothing": no reported clause
         if (/^\s*(?:[.!?…:;]|[“"‘'«„—–]|$|nothing\b|so\b|no\b|yes\b)/iu.test(rest)) continue;
         // "Pip, Tom said, was a gelding": the clause runs both ways. After

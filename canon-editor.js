@@ -625,7 +625,13 @@ module.exports = function canonEditor(C) {
     }
     return false;
   }
-  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|kept|keeps|keep|the same|again and again|by height|the way it|habit|rules?|allowed|nobody|no one|all|any)(?![\p{L}])/iu;
+  // what is done more than once, in so many words (round 2: "all" and "any"
+  // made one moment a habit)
+  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|kept|keeps|keep|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|since)(?![\p{L}])/iu;
+  // a role that was, not one that is: "had been a soldier", "used to be",
+  // "formerly" (but "had been the town's doctor for twenty-two years" still is)
+  const PAST_ROLE = /(?<![\p{L}])(?:had been|used to be|was once|once was|formerly|former|ex-|retired|until)(?![\p{L}])/iu;
+  const ONGOING = /(?<![\p{L}])(?:for (?:\S+\s+){0,2}(?:years?|months?|weeks?|decades?)|since)(?![\p{L}])/iu;
   // at most 30 words (the quote gate's limit): the 30 around the value's words
   function fit(text, words) {
     const ws = text.split(/\s+/);
@@ -724,7 +730,7 @@ module.exports = function canonEditor(C) {
     const caps = (value.match(/(?<![\p{L}])\p{Lu}[\p{L}'’-]+/gu) || []).filter((w, i) => i > 0 || !STOPW.has(w.toLowerCase()));
     if (caps.some((w) => !norm(text).includes(norm(w.replace(/['’]s$/, ''))) && !own.has(stem(norm(w))))) return { why: 'invented' };
     if (valueWords.filter((w) => NUMBER.test(w)).some((w) => !inBag(w, bag))) return { why: 'invented' };
-    const key = keyOf(g, label);
+    let key = keyOf(g, label);
     // about someone (or something) else: a place's, group's or thing's fact
     // whose label or value names another of the cast ("Weigher's nickname"
     // on the Weighhouse), or names itself ("not one of the Spared" is
@@ -764,6 +770,8 @@ module.exports = function canonEditor(C) {
     // polarity: "not one of the Spared" isn't "one of the Spared"
     const clauses = cited.map((l) => clauseOf(l.s, grounded));
     if (localNeg(clauses.join(' '), grounded) !== negated(value) && !(negated(value) && /less|out\b|\bun/i.test(value))) return { why: 'polarity' };
+    // a past role is history, not who they are now
+    if (labelFamily(key) === 'role' && PAST_ROLE.test(clauses.join(' ')) && !ONGOING.test(clauses.join(' '))) { g = 'history'; key = 'history'; }
     // a habit or routine is what is done more than once: the words must say so
     // (always, every, never, kept, the same…); one moment is the story's, not the bible's
     if ((g === 'habit' || labelFamily(key) === 'habit') && !HABITUAL.test(value + ' ' + cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
@@ -915,8 +923,13 @@ module.exports = function canonEditor(C) {
   }
   // Every content word of a profile sentence stands in its facts (their
   // values, labels and quotes), is a function word, or names the entry.
+  // (Round 2: the facts' values and labels only, not their quotes: a quote
+  // holds words about others, and a profile drew on them.)
   function profileOk(sentence, facts, e) {
-    const allowed = new Set(content([...facts.map((f) => `${f.label || ''} ${f.value} ${f.as || ''} ${(f.sources || []).map((s) => s.quote).join(' ')}`), e.name, ...(e.aliases || [])].join(' ')));
+    const allowed = new Set(content([...facts.map((f) => `${f.label || (C.ATTRS[f.attr] || {}).label || ''} ${f.value} ${f.as || ''}`), e.name, ...(e.aliases || [])].join(' ')));
+    // every name in it is the entry's or in a cited value
+    const caps = (sentence.match(/(?<=\S\s+)\p{Lu}[\p{L}'’-]+/gu) || []).map((w) => stem(norm(w).replace(/['’]s$/, '')));
+    if (caps.some((w) => !allowed.has(w))) return false;
     const extra = new Set(['also', 'who', 'whose', 'which', 'where', 'there', 'here', 'has', 'have', 'is', 'was', 'are', 'were', 'and', 'person', 'place', 'group', 'thing', 'one', 'year', 'old', 'named', 'called', 'known']);
     const words = content(sentence).filter((w) => !extra.has(w) && !STOPW.has(w));
     if (!words.length) return false;
