@@ -3090,6 +3090,20 @@
                 e.facts.splice(e.facts.indexOf(f), 1);
                 continue;
               }
+              // a later value of the same thing that says otherwise ("his blue
+              // Rover" after "a green P6"): not a fact, the pass's slip; the
+              // writer's notes against the prose: both wait as Which is right?
+              const fq = (f.sources.find(live) || {}).quote || '';
+              const clashWith = keep.find((g) => labelFamily(factKind(g)) === labelFamily(k) && Editor.clashDetail(g, (g.sources.find(live) || {}).quote || '', fq, [e.name, ...e.aliases]));
+              if (clashWith) {
+                const gw = where(clashWith.sources.find(live) || {});
+                const fw = where(f.sources.find(live) || {});
+                if (gw && fw && gw.note !== fw.note) { clashWith.state = 'disagree'; f.state = 'disagree'; keep.push(f); continue; }
+                const x = f.sources.find(live) || {};
+                dropped[factKey(e, f) + '|' + textHash(norm(x.quote || ''))] = { entry: e.name, attr: f.attr, value: f.value, quote: x.quote || '', why: 'later' };
+                e.facts.splice(e.facts.indexOf(f), 1);
+                continue;
+              }
               if (k === 'age' && keep.some((g) => factKind(g) === 'age')) {
                 const x = f.sources.find(live) || {};
                 dropped[factKey(e, f) + '|' + textHash(norm(x.quote || ''))] = { entry: e.name, attr: f.attr, value: f.value, quote: x.quote || '', why: 'later' };
