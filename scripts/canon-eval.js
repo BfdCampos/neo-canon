@@ -240,7 +240,7 @@ async function evalFixture(name, reader, tier) {
       fs.rmSync(keep, { recursive: true, force: true });
       fs.cpSync(dir, path.join(keep, 'canon'), { recursive: true });
       if (folderIO.last) fs.writeFileSync(path.join(keep, 'cache.json'), JSON.stringify(folderIO.last, null, 1));
-      const pick = (s) => ({ bookId: s.bookId, chId: s.chId, entry: s.entry, name: s.name, attr: s.attr, sentence: s.sentence, span: s.span, to: s.to, strength: s.strength });
+      const pick = (s) => ({ bookId: s.bookId, chId: s.chId, entry: s.entry, name: s.name, attr: s.attr, value: s.value, as: s.as, sentence: s.sentence, span: s.span, to: s.to, strength: s.strength });
       fs.writeFileSync(path.join(keep, 'slips.json'), JSON.stringify({ model: tier, slips: slips.map(pick), worthALook: asks.map(pick) }, null, 2));
     }
     if (flag('dump')) for (const x of io.entries()) console.error(x.text);

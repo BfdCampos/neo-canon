@@ -332,7 +332,8 @@
         found.push({ id: m.id, start: at, end, via: m.via });
       }
     }
-    return found.sort((a, b) => a.start - b.start);
+    // (a part of one name written right after another's is theirs: "Constance Haddon" is no "Haddon")
+    return found.filter((x) => x.via !== 'part' || !found.some((y) => y !== x && y.id !== x.id && y.end <= x.start && /^\s+$/.test(text.slice(y.end, x.start)))).sort((a, b) => a.start - b.start);
   }
 
   /* ---------- links, backlinks and the world's graph (IDE.md §2) ---------- */

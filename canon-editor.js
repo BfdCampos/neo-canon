@@ -1336,7 +1336,11 @@ module.exports = function canonEditor(C) {
     // into the entries: open facts (and what is only said) and trait proposals
     const made = new Map();
     const entryOf = (c) => {
-      if (c.entry) return c.entry;
+      if (c.entry) {
+        // (the names this chapter used for it are its names too: "Constance Haddon" for "Constance")
+        for (const a of [c.name, ...c.aliases]) if (c.proper && norm(a) !== norm(c.entry.name) && !c.entry.aliases.some((x) => norm(x) === norm(a)) && /^\p{Lu}/u.test(a.replace(/^the\s+/i, ''))) c.entry.aliases.push(a);
+        return c.entry;
+      }
       if (made.has(c.key)) return made.get(c.key);
       let e = [c.name, ...c.aliases].map((n) => findEntry(entries, n)).find(Boolean);
       if (!e) {
