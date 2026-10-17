@@ -848,8 +848,71 @@ module.exports = function canonEditor(C) {
   const clashCandidate = (f, quote, sentence, names = []) => (clashDetail(f, quote, sentence, names) || {}).span || null;
   // …and the one question each passage is asked on its own, whose answers
   // must differ: "does the Long Room have windows?", "is the weigher stout?"
+  // a number written as words or digits: "twenty-six" → 26, "forty" → 40
+  const UNITS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
+  const TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+  function numberOf(w) {
+    const t = String(w || '').toLowerCase();
+    if (/^\d+$/.test(t)) return +t;
+    const [a, b] = t.split('-');
+    if (UNITS[a] !== undefined && !b) return UNITS[a];
+    if (TENS[a] !== undefined && (!b || UNITS[b] !== undefined)) return TENS[a] + (b ? UNITS[b] : 0);
+    return null;
+  }
+  // how old a sentence says someone is: "twenty-nine years", "aged sixty",
+  // "a woman of sixty", "was nineteen" → [{ n, start, end }]
+  function agesIn(text) {
+    const out = [];
+    const NUM = '(\\d+|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-(?:one|two|three|four|five|six|seven|eight|nine))?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)';
+    for (const re of [new RegExp(`(?<![\\p{L}-])${NUM}[- ]years?(?:[- ]old)?(?![\\p{L}])`, 'giu'), new RegExp(`(?<![\\p{L}])(?:aged|was|is|of)\\s+${NUM}(?![\\p{L}-])(?!\\s+(?:years?\\s+(?:ago|before|later|since)|times|of|minutes|hours|days|weeks|months|men|women|people|feet|miles|yards|metres|pounds))`, 'giu')]) {
+      for (const m of text.matchAll(re)) {
+        const n = numberOf(m[1]);
+        if (n == null || n > 120) continue;
+        const at = m.index + m[0].indexOf(m[1]);
+        if (!out.some((x) => x.start === at)) out.push({ n, start: at, end: at + m[1].length });
+      }
+    }
+    return out;
+  }
+  // words of one kind that can't both hold: colours, and what a thing is built of
+  const MATERIAL = { sandstone: 'sandstone', brick: 'brick', 'red-brick': 'brick', stone: 'stone', timber: 'timber', wooden: 'timber', wood: 'timber', slate: 'slate', concrete: 'concrete', granite: 'granite', marble: 'marble', glass: 'glass', iron: 'iron', steel: 'steel', thatch: 'thatch', thatched: 'thatch', flint: 'flint', cob: 'cob', limestone: 'limestone' };
+  const classOf = (w) => (COLOURS[w] ? ['colour', COLOURS[w]] : MATERIAL[w] ? ['material', MATERIAL[w]] : null);
   function clashDetail(f, quote, sentence, names = []) {
     const who = names[0] || 'it';
+    // an age said otherwise: "twenty-nine years of him" against "twenty-six"
+    if (canonLabel(f.label || '') === 'age' || f.attr === 'age') {
+      const had = agesIn(f.value).concat(numberOf(f.value.trim()) != null ? [{ n: numberOf(f.value.trim()) }] : []);
+      const now = agesIn(sentence).filter((x) => !UNREAL.test(sentence));
+      if (had.length && now.length && !now.some((x) => had.some((y) => y.n === x.n))) {
+        const x = now[0];
+        return { span: sentence.slice(x.start, x.end), q: `is ${who} ${sentence.slice(x.start, x.end)} years old?` };
+      }
+    }
+    // a colour or a material said otherwise of the same thing: "his blue
+    // Rover" against "a green P6", "the red-brick Corn Exchange" against
+    // "a sandstone hall" (the value's own word, before any "with" or "on")
+    {
+      const vtoks = tokens(f.value.split(/\s(?:with|on|in|at|by|of|and|that|which|where)\s/i)[0]);
+      const vclass = vtoks.map(classOf).filter(Boolean);
+      if (vclass.length) {
+        const heads = new Set([...content(f.value), ...names.flatMap((n) => content(n))].filter((w) => !classOf(w)));
+        const raw = [...sentence.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)];
+        for (let i = 0; i < raw.length - 1; i++) {
+          const w = norm(raw[i][0]);
+          const k = classOf(w);
+          if (!k || vclass.some((x) => x[0] === k[0] && x[1] === k[1]) || !vclass.some((x) => x[0] === k[0])) continue;
+          const next = raw.slice(i + 1, i + 3).map((m) => stem(norm(m[0]).replace(/['’]s$/, '')));
+          const noun = next.findIndex((x) => heads.has(x));
+          if (noun < 0) continue;
+          const at = raw[i].index;
+          const a = Math.max(sentence.lastIndexOf(',', at), sentence.lastIndexOf(';', at)) + 1;
+          if (UNREAL.test(sentence.slice(a, at + raw[i][0].length + 20))) continue;
+          const nounStem = next[noun];
+          const thing = names.find((n) => content(n).includes(nounStem)) || 'the ' + raw[i + 1 + noun][0].replace(/['’]s$/, '');
+          return { span: raw[i][0], q: `is ${thing} ${raw[i][0]}?` };
+        }
+      }
+    }
     const rawAt = (i) => { const raw = [...sentence.matchAll(/[\p{L}\p{N}'’-]+/gu)]; const j = raw.findIndex((m) => stem(norm(m[0]).replace(/['’]s$/, '')) === stem(tokens(sentence)[i] || '')); return j < 0 ? null : raw[j][0].replace(/['’]s$/, ''); };
     const b = tokens(sentence);
     const bs = b.map(stem);
@@ -886,7 +949,11 @@ module.exports = function canonEditor(C) {
       const qTokens = tokens(quote).map(stem);
       const fNeg = near(qTokens, qTokens.indexOf(n)) || (negated(f.value) && qi >= 0);
       const bNeg = near(bs, i);
-      if (fNeg !== bNeg && mark(i)) return { span: mark(i), q: `does ${who} have ${rawAt(i)}?` };
+      if (fNeg !== bNeg && mark(i)) {
+        // (a "never" in the fact's own words: asked the plain way round, "has Ivo touched a drop of the cider?")
+        const plain = negated(f.value) ? f.value.replace(/(?<![\p{L}])(?:never|not|no longer|n't)(?![\p{L}])\s*/giu, '').replace(/\s+/g, ' ').trim() : '';
+        return { span: mark(i), q: plain ? `is this so of ${who}: ${plain}?` : `does ${who} have ${rawAt(i)}?` };
+      }
     }
     // a word against one of the value's, of the same one (near a word the two share)
     const named = new Set(names.flatMap((n) => content(n)));
