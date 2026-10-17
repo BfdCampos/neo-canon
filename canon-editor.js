@@ -836,7 +836,7 @@ module.exports = function canonEditor(C) {
     if (/^(?:not (?:specified|stated|given|described|mentioned|known)|unknown|unspecified|none|n\/a|nothing|unclear)$/i.test(value)) return { why: 'empty' };
     // where someone (or something) is now is the scene, not the bible ("already in the line",
     // "under the weigher's arm"); only a place has a location of its own, a person a home
-    if (c.kind !== 'place' && c.kind !== 'group' && (labelFamily(key) === 'location' || /(?:^|\s)(?:where|whereabouts|place|spot|location)$/i.test(label)) && key !== 'location.home' && !/\b(?:lives?|lived|living|sleeps?|slept|home|works?|worked|born)\b/i.test(value + ' ' + label)) return { why: 'once' };
+    if (c.kind !== 'place' && c.kind !== 'group' && (labelFamily(key) === 'location' || /(?:^|\s)(?:where|whereabouts|place|spot|location)$/i.test(label) || (c.kind !== 'person' && /(?:^|\s)position$/i.test(label))) && key !== 'location.home' && !/\b(?:lives?|lived|living|sleeps?|slept|home|works?|worked|born)\b/i.test(value + ' ' + label)) return { why: 'once' };
     // one deed is the story's ("tried not to look", "passed the infirmary"), not a lasting fact
     if (['other', 'state', 'location', 'appearance', 'personality'].includes(labelFamily(key)) && /^(?:tried|rubbed|tucked|wiped|shook|lifted|raised|dropped|pulled|pushed|threw|passed|went|came|walked|ran|sat|stood|looked|turned|took|gave|got|said|told|asked|saw|heard|felt|made|drank|ate|pressed|glanced|stepped|smiled|nodded|laughed|cried|whispered|opened|closed|left|arrived|picked|put|held|reached|watched|waited|wrote|read)\b/i.test(value) && !HABITUAL.test(value)) return { why: 'once' };
     // a sentence pinned to one moment ("By noon the Sare was over the meadows", "That night…")
