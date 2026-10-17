@@ -223,3 +223,19 @@ Acceptance (§10) on dev with Careful: M2 entity recall must 7/7 (the Weighhouse
 What the runs changed (each a commit): naming ties joined through the words the text used ("the weigher" ↔ "Brother Ink" ↔ "Anselm"); the setting only an institution or building, never a room, and only its routines and rules; polarity read beside the value's own words; a habit must be said to recur; a fact tied by a pronoun or a paragraph asked whether it is really someone else's, and a habit or state whether it lasts; a person called by a role has that role; the slip questions asked of each passage alone ("does the Long Room have windows?", "who gave the crust?"), because a small reader shown both took A's word for it, and a deed of no one kind (two people sitting) asked whether it is the same event; "wrote every number" and "could say it" are no reports; an owning "her" after "took" is not the subject's.
 
 Still missed with Careful (dev): the Weighhouse's six routines (its sentences name no one and nothing of it; asked as the setting, the verifier says no), Hesper's membership of the Spared and the inked 41 (two sentences apart), her "getting less", the Long Room's smell, the Spared's custom, the two "friend" facts (kept as "nearest thing she had to a friend", which the sheet's matcher doesn't take for "friend"). Story so far is unchanged (5/10).
+
+## 12. Round 2: the held-out evaluation, and what changed
+
+The evaluation lead ran Careful on six stories the builder had never seen (`/tmp` only, never opened by the builder; their brief gives failure *types*, no text). On unseen prose the dev numbers did not hold: must recall 37%, reviewed precision ~55–72%, slips 1/17 with 9 false, an unsupported sentence in every profile, and a crash (`swapPronoun`: "He's" was in no table). The fixes are rules in code, each written against a failure type rather than a story (ACCURACY.md rules 12–20), and measured on **dev2**: five new stories the builder wrote for the types (`scripts/fixtures/canon-editor/dev2/`: a first-person narrator named once in speech with kin on both sides; an institution with a numbered nickname, surnames and an epithet; a dialogue-heavy crime with lies, reported speech and mixed quotes; a writer's notebook the prose contradicts and an ideas page left out of Canon; a town and its river, a house and its surgery, a hall and its gallery, a car by make and model). Each sheet adds `notEntities` (what must not become an entry) and `needs` (the Which is right? questions a run must raise); `canon-score.js` counts both, and every profile sentence's words against the entry's kept facts.
+
+| Failure type (held-out brief) | What decides now |
+|---|---|
+| Crash in the pronoun swap | every form swaps or nothing does; `scripts/canon-fuzz.test.js` runs every text-level function, Read the Shelf and the pass over generated sentences with a reader that answers anything |
+| Identity drift (aliases on the wrong one, nickname vs name, plural places, epithets) | only the text's own ties join two names (rule 12); the reader's alias alone makes its own entry |
+| Junk entities; no entry for the narrator | `nonEntity`; the narrator entry (rule 13) |
+| Attribution by co-occurrence | `claimOwner` (rule 14); the verifier's choice among the ones named (rule 15) |
+| Contradictions never meet; both values kept | kin by rule (16), open facts by slot (17), first said first kept, notes against prose to Needs You |
+| One-off events as habits, past roles as present, said as true | rule 18; a moment ("By noon…", "already in the line") is the scene's |
+| False slips (sex, deeds, quotes) | rule 19; an exception told as one is no slip |
+| Unsupported profile sentences | rule 20 |
+| Too few trait proposals | introductions read by code (`introFacts`: "a short, bald man with half-moon spectacles", "Brennock was a grey slate town"), each still through the gates and the reader; the dossier names each kind's checklist |
