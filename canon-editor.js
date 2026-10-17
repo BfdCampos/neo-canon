@@ -527,6 +527,15 @@ module.exports = function canonEditor(C) {
       if (namesOther(label + ' ' + value)) return { why: 'someone else' };
       if ([c.name, ...c.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && norm(value).includes(b); })) return { why: 'someone else' };
     }
+    // a place's, group's or thing's sentence found by its paragraph (not its
+    // name) that is about a person ("Hesper had been born…", "his neck")
+    // is that person's; and how anyone looks is never another of the cast
+    if (c.kind !== 'person' && c.kind !== 'creature' && !['relationship', 'location'].includes(g) && cited.some((l) => l.why !== 'name')) {
+      const people = others.filter((o) => ['person', 'creature'].includes(o.kind));
+      const personal = (t) => /(?<![\p{L}])(?:he|she|his|her|him|hers)(?![\p{L}])/iu.test(t) || people.some((o) => [o.name, ...o.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && new RegExp(`(?<![\\p{L}])${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(norm(t)); }));
+      if (cited.some((l) => l.why !== 'name' && personal(l.s.text))) return { why: 'someone else' };
+    }
+    if (labelFamily(keyOf(g, label)) === 'appearance' && namesOther(value)) return { why: 'someone else' };
     // the setting's own: how it works (its routines and rules, who belongs),
     // from a clause that names no one and nothing else of the cast
     const bySetting = cited.some((l) => l.why === 'setting');
