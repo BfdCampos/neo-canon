@@ -2809,7 +2809,8 @@
             const lines = [];
             for (const x of got.answer || []) {
               const used = [...new Set((x.f || []).map((n) => facts.find((y) => y.n === +n)).filter(Boolean))];
-              const t = String(x.t || '').replace(/\s*\[[\d,\s]*\]\s*/g, ' ').replace(/\s+/g, ' ').trim().replace(/[.!]+$/, '');
+              // (the reader's own marks of its ids, "(2,4)", "f: [1][2]", come off)
+              const t = String(x.t || '').replace(/\s*(?:\b[fF]\s*:\s*)?(?:\[[\d,\s]*\]|\((?:\d+\s*,?\s*)+\))/g, ' ').replace(/\s+/g, ' ').trim().replace(/[.!\s]+$/, '').replace(/\s*\b[fF]\s*:?$/, '');
               if (!used.length || !t || !Editor.profileOk(t, used.map((y) => y.f), e)) continue;
               const refs = [];
               for (const y of used) {
