@@ -558,6 +558,7 @@ module.exports = function canonEditor(C) {
     const living = new Set(cast.filter((x) => ['person', 'creature'].includes(x.kind)).map((x) => x.key));
     const add = (s, why) => { if (!out.has(s.id) || (out.get(s.id) === 'setting' && why !== 'setting')) out.set(s.id, why); };
     let carry = []; // the ones a paragraph opening with a pronoun may mean: the last named before it, latest last
+    let chained = null; // the last sentence tied to c by its pronoun
     for (const p of ch.paras) {
       const ph = hits[p.pi];
       for (const [si, s] of p.sents.entries()) {
@@ -576,7 +577,9 @@ module.exports = function canonEditor(C) {
             let who = null;
             for (let i = seen.length - 1; i >= 0; i--) { const k = sexOf(seen[i].key); if (!k || k === sex) { who = seen[i].key; break; } }
             if (who == null && !seen.length && si === 0) for (let i = carry.length - 1; i >= 0; i--) { const k = sexOf(carry[i]); if (!k || k === sex) { who = carry[i]; break; } }
-            if (who === c.key && !here.some((h) => living.has(h.key) && h.via !== 'self' && h.start < pos)) { add(s, 'chain'); continue; }
+            // (the pronoun goes on from the sentence before it, which was hers: "She was nineteen… Her eyes were…")
+            if (who == null && !seen.length && si > 0 && chained === p.sents[si - 1].id) who = c.key;
+            if (who === c.key && !here.some((h) => living.has(h.key) && h.via !== 'self' && h.start < pos)) { add(s, 'chain'); chained = s.id; continue; }
           }
         } else {
           // a place's (or group's, thing's) paragraph: after it's named,
@@ -908,7 +911,7 @@ module.exports = function canonEditor(C) {
     // an appearance is how they look, not what they did ("slid the weight", "did not turn round")
     if (labelFamily(key) === 'appearance' && /^(?:did|was|were|went|tried|kept|got|had|has|made|took|gave|came|stood|sat|looked|turned|peered|slid|walked|ran|said|felt)\b/i.test(value)) return { why: 'once' };
     // a personality is a word or two, or a way they always are
-    if (g === 'personality' && value.split(/\s+/).length > 4 && !HABITUAL.test(value + ' ' + cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
+    if (g === 'personality' && !x.intro && value.split(/\s+/).length > 4 && !HABITUAL.test(value + ' ' + cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
     // the quote: the cited sentence (its clause), as the writer wrote it
     const quotes = cited.map((l, i) => gateQuote(clauses[i], ctx.text) || gateQuote(l.s.text, ctx.text)).filter(Boolean);
     if (quotes.length !== cited.length) return { why: 'quote' };
@@ -1327,7 +1330,7 @@ module.exports = function canonEditor(C) {
         if (!['name', 'chain'].includes(l.why)) continue;
         for (const x of introFacts(l, c, hits[l.s.pi], ch.paras[l.s.pi])) {
           if (proposals.some((p) => p.c === c && labelFamily(p.key) === labelFamily(keyOf(x.g, x.a)) && overlap(p.value, x.v) >= 0.5)) continue;
-          const gt = gateFact({ ...x, s: [l.n], x: 0 }, part, c, ctx);
+          const gt = gateFact({ ...x, s: [l.n], x: 0, intro: true }, part, c, ctx);
           if (gt.why) { dropped.push({ entity: c.name, label: x.a, value: x.v, why: 'intro: ' + gt.why }); continue; }
           proposals.push({ c, part, ...gt, intro: true });
         }
