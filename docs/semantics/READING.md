@@ -131,18 +131,21 @@ The worker (`canon-worker.js`) gains `sequences`: the context is created with `s
 
 Qwen3-8B and 14B are hybrid-thinking models: the worker loads them with `QwenChatWrapper({ thoughts: 'discourage' })` (and the grammar leaves no room for a think block). Context 8,192 for the cast pass, 4,096 for the rest.
 
-## 6. Time budget (estimates; M1 measures them)
+## 6. Time budget (measured on the dev chapter, M1)
 
-Per 1,300-word chapter (≈ 1,800 tokens, ~10 entities, ~120 proposed facts):
+The dev shelf (*The Weighhouse*, 1,670 words in two chapters), model time summed over every call, 4-core CPU VM with no GPU, 4 threads, one sequence; cold load not included (Careful 4B: 251 s from a cold disk, 15 s warm). See §11 for the Thorough run.
 
-| Pass | Calls | 4-core CPU, Careful 4B (~50 tok/s in, ~8 tok/s out; measured ~20 s/call today) | RTX 3080, Thorough 8B, 4 sequences |
+| Pass | Calls (dev) | Careful 4B, CPU, measured | RTX 3080, Thorough 8B, 4 sequences (estimate; the owner measures) |
 |---|---|---|---|
-| Cast | 1 | ~1.5 min | ~5 s |
-| Dossiers | ~10 (×2 on GPU) | ~10 min | ~25 s |
-| Verify | ~120 (grouped on CPU: ~25) | ~5 min | ~20 s |
-| Editor + profiles | ~10 | ~3 min | ~10 s |
-| Slips (later chapter) | ~10–30 | ~3 min | ~10 s |
-| **Total** | | **~20 min a chapter** | **~1–1.5 min a chapter** |
+| Cast | 2 (one a chapter) | 62 s a call | ~5 s |
+| Dossiers | 20 (13 entities, long packs in two parts) | 46 s a call (13–170 s) | ~25 s |
+| Verifier and the referent / "someone else" / "lasting" questions | 142 | 2.1 s a call (a passage asked about twice is read once) | ~15 s |
+| Story so far (events, as before) | 35 | 8.1 s a call | ~10 s |
+| Profiles | 10 | 17 s a call | ~10 s |
+| The pass (slips, later chapter) | ~10 | ~3 s a call | ~5 s |
+| **Total** | 209 | **~31 min for 1,670 words** (1,794 s read + 31 s pass) | **~1–1.5 min a chapter** |
+
+The progress line names the pass ("Finding who and what is here…", "Reading about Hesper… (3 of 12)", "Checking facts… (40 of 104)", "Noting what happens…", "Writing profiles…") and estimates what is left from how long each kind of question has taken on this computer.
 
 A 90,000-word novel is a first read of ~1.5–2 h on the 3080 (once; every later read is the changed chapters only) and is not a reasonable first read on a 4-core CPU with Careful (~20 h): there the Quick tier keeps today's per-paragraph engine, and the editor workflow runs per chapter on request. Reading still pauses while the writer types (`CANON_RESUME_MS`).
 

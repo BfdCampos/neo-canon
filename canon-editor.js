@@ -98,6 +98,8 @@ module.exports = function canonEditor(C) {
   const ROOMS = /(?<![\p{L}])(?:room|hall|chamber|kitchen|cell|corridor|yard|office|attic|cellar|stair|stairs|landing|ward|dormitory|gate|door)s?$/iu;
   // nouns for many people, not one: never a role name
   const CROWD = new Set(['children', 'child', 'girls', 'boys', 'girl', 'boy', 'others', 'people', 'everyone', 'everybody', 'someone', 'nobody', 'crowd', 'men', 'women', 'man', 'woman', 'kids', 'line', 'rest', 'novices', 'students', 'pupils', 'class', 'family', 'one', 'ones', 'two', 'three', 'stranger', 'figure', 'voice']);
+  // the parts and furniture of any room, and the stuff of every page: never an entry by themselves
+  const FIXTURES = new Set(['door', 'doors', 'floor', 'floors', 'wall', 'walls', 'window', 'windows', 'ceiling', 'room', 'rooms', 'bed', 'beds', 'table', 'chair', 'corner', 'stairs', 'stair', 'roof', 'ground', 'light', 'air', 'cup', 'jug', 'plate', 'tray', 'hand', 'hands', 'face', 'head', 'eyes', 'hair', 'feet', 'thumb', 'aisle', 'sky', 'night', 'day', 'morning', 'bell', 'line', 'rules', 'rule', 'pocket', 'smock', 'blanket', 'cloth', 'way', 'end', 'side', 'top', 'feeling', 'turn', 'time']);
   const NAMING = /(?<![\p{L}])(?:name|names|named|called|calls|call|known as|nicknamed|nickname|went by)(?![\p{L}])/iu;
   const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // how often the chapter writes `phrase`, as written (capitals kept) or,
@@ -136,7 +138,7 @@ module.exports = function canonEditor(C) {
     if (kind === 'rule') return null;
     const words = bare.split(/\s+/);
     if (words.length > 2 || words.some((w) => !/^\p{Ll}[\p{Ll}'’-]*$/u.test(w))) return null;
-    if (CROWD.has(words[words.length - 1])) return null;
+    if (CROWD.has(words[words.length - 1]) || FIXTURES.has(words[words.length - 1])) return null;
     if (written(text, 'the ' + bare) < 2) return null;
     return 'role';
   }
@@ -539,6 +541,8 @@ module.exports = function canonEditor(C) {
     // a habit or routine is what is done more than once: the words must say so
     // (always, every, never, kept, the same…); one moment is the story's, not the bible's
     if ((g === 'habit' || labelFamily(key) === 'habit') && !HABITUAL.test(value + ' ' + cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
+    // an appearance is how they look, not what they did ("slid the weight", "did not turn round")
+    if (labelFamily(key) === 'appearance' && /^(?:did|was|were|went|tried|kept|got|had|has|made|took|gave|came|stood|sat|looked|turned|peered|slid|walked|ran|said|felt)\b/i.test(value)) return { why: 'once' };
     // a personality is a word or two, or a way they always are
     if (g === 'personality' && value.split(/\s+/).length > 4 && !HABITUAL.test(value + ' ' + cited.map((l) => l.s.text).join(' '))) return { why: 'once' };
     // the quote: the cited sentence (its clause), as the writer wrote it

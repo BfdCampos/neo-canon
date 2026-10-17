@@ -1334,7 +1334,7 @@
         const thing = shared.length && (heavy(plain).find((w) => stemOf(w) === shared[0]) || shared[0]);
         const question = kind && thing ? `who ${kind} the ${thing}` : 'who ' + ev.did.replace(new RegExp('^\\s*' + ev.names[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '');
         const others = [...new Set(here.map((m) => byId.get(m.id).name))].filter((n) => n !== ev.names[0]);
-        let said = await reader.contradicts({ a: ev.quote, label: ev.label, who: ev.names[0], did: ev.did, sentence: s.text, paragraph: p.text, question, others });
+        let said = await reader.contradicts({ a: ev.quote, label: ev.label, who: ev.names[0], did: ev.did, sentence: s.text, paragraph: p.text, question, others, kind: kind && thing ? kind : null });
         if (said === 'no') continue;
         // a sentence that names the doer too ("Dave remembered John…") is a
         // slip only on the reader's yes, never worth a look
@@ -2994,6 +2994,7 @@
   const REFERS_SYSTEM = 'You read a paragraph of a novel and say who or what one word in one of its sentences refers to. Choose only from the options given. If the word means someone or something not in the options, or you cannot tell, say so.';
   const ELSE = 'someone or something else';
   const NOT_SAID = 'the sentence does not say';
+  const SAME_EVENT_SYSTEM = 'You compare two passages of a novel. Answer yes if B tells of the very same event as A (the same act, at the same time, perhaps with a different doer named), no if B tells of another event (another time, or someone else doing something of the same kind), unclear if you cannot tell.';
   const WHO_SYSTEM = 'You read one sentence of a novel and say who did something in it, according to that sentence alone. Choose from the options. If the sentence only says someone remembers, imagines, plans or claims it, or does not say who, choose that the sentence does not say.';
   const ALONE_SYSTEM = 'You answer one question about a sentence of a novel, from that sentence alone. Answer yes or no if the sentence says; unclear if it does not, or if it only pretends, remembers or supposes.';
   const UNSURE = 'cannot tell';
@@ -3117,7 +3118,10 @@
       // sentence? (A small reader shown both passages takes A's word for
       // it.) B names someone else and A the one Canon has: yes; B the same:
       // no; anything else: unclear.
-      async contradicts({ a, who, did, sentence, question, others = [] }) {
+      // A deed of one kind done to one distinctive thing (the crust given)
+      // is one event; anything else (two people sitting on beds) must also
+      // be told as the very same event, asked with both passages.
+      async contradicts({ a, who, did, sentence, question, others = [], kind = null }) {
         if (tier === 'quick') return 'unasked';
         const q = question || ('who ' + String(did || '').replace(new RegExp('^\\s*' + String(who).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), ''));
         const options = [...new Set([who, ...others.slice(0, 3)])].concat(ELSE, NOT_SAID);
@@ -3129,7 +3133,10 @@
         if (inB === who) return 'no';
         if (inB === NOT_SAID || !inB) return 'no';
         if (inB === ELSE) return 'unclear';
-        return (await choose(a)) === who ? 'yes' : 'unclear';
+        if ((await choose(a)) !== who) return 'unclear';
+        if (kind) return 'yes';
+        const r = await safe({ system: SAME_EVENT_SYSTEM, user: `A: "${a}"\nB: "${sentence}"\nIs B about the same event as A?`, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
+        return r && r.a === 'yes' ? 'yes' : 'no';
       },
       tier,
       // the editor's reading (READING.md), for the readers that do it
