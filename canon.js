@@ -2873,6 +2873,7 @@
         // a fact on both; the writer's notes against the prose, every value
         // waits as Which is right?; a later reading that differs is the pass's slip
         const kinDisagree = new Set();
+        const kinAgainst = new Set();
         {
           const narr = { ...(meta.narrators || {}) };
           for (const [b, e] of narrators) narr[b] = e.id;
@@ -2913,9 +2914,21 @@
             firstOf.set(k, had);
             const clash = had.find((x) => kinClash(x.r, r));
             if (!clash) { if (r.strong || r.note) had.push({ r, facts: facts(r) }); continue; }
+            // (the slip's sentence gives no kin of its own: "Danny’s cousin Kieran")
+            if (clash.r.note === r.note) kinAgainst.add(norm(r.sentence));
             // the writer's notes against the prose: Which is right? (a later
             // prose reading that differs from the prose is the pass's slip)
             if (clash.r.note !== r.note) for (const f of [...clash.facts, ...facts(r)]) kinDisagree.add(f);
+          }
+        }
+        if (kinAgainst.size) {
+          for (const e of entries) {
+            if (e.locked) continue;
+            e.facts = e.facts.filter((f) => {
+              if (f.state === 'yours' || !((f.attr === 'other' && labelFamily(factKind(f)) === 'relationship') || ['sibling', 'parent', 'child', 'spouse'].includes(f.attr))) return true;
+              f.sources = f.sources.filter((x) => x.written || ![...kinAgainst].some((t) => t.includes(norm(x.quote))));
+              return f.sources.length > 0;
+            });
           }
         }
         const narrIds = { ...(meta.narrators || {}) };

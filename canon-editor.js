@@ -182,7 +182,8 @@ module.exports = function canonEditor(C) {
     const find = (n, kind = null) => cast.find((c) => !c.gone && [c.name, ...c.aliases].some((a) => sameName(a, n, kind === 'place' && c.kind === 'place')));
     for (const p of proposals || []) {
       const kind = KINDS.includes(p.kind) ? p.kind : 'thing';
-      const name = cleanName(p.name);
+      // (a person is "Daniel Fell", not "Daniel Fell of Mercer Row")
+      const name = kind === 'person' ? cleanName(p.name).replace(/\s+of\s+(?:the\s+)?\p{Lu}.*$/u, '') : cleanName(p.name);
       const how = nameKind(name, text, lower, kind);
       if (!how || misspelt(name.replace(/^the\s+/i, ''), entries)) continue;
       // a thing or rule called only by a lower-case word, said once or twice, is no entry
