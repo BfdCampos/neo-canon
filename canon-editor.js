@@ -473,6 +473,7 @@ module.exports = function canonEditor(C) {
     const st = ts.map(stem);
     for (let i = 0; i < ts.length; i++) {
       if (!words.some((w) => w === st[i] || inBag(w, new Set([st[i]])))) continue;
+      if (NEGATORS.has(ts[i]) && words.includes(st[i])) return true; // ("never" is the value's own word)
       if (ts.slice(Math.max(0, i - 5), i).some((w) => NEGATORS.has(w))) return true;
     }
     return false;

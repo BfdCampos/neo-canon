@@ -1071,6 +1071,10 @@
             if (CLAUSE.has(w.lw)) break;
             const kind = pronounAt(words, i, text);
             if (!kind) continue;
+            // ("The weigher took her right thumb": after a verb, the owner
+            // may be the one acted on; after "on", "in", "with"… the subject)
+            const prevW = i > 0 && words[i - 1].start >= m.end ? words[i - 1] : null;
+            if (OWNING.has(kind) && ['her', 'his'].includes(w.lw) && prevW && HANDLING.test(prevW.lw)) break;
             if (OWNING.has(kind) && PRONOUNS[w.lw] !== k.sex.value) add({ kind: 'pronoun', strength: 'strong', id: m.id, attr: 'sex', fact: k.sex, start: w.start, end: w.end, to: swapPronoun(w.w, kind) });
             break;
           }
@@ -1990,6 +1994,8 @@
   // naming no one, after one that names Pio alone: referent()). Never what
   // anyone says. → Map id → Map 'female'|'male' → [{ pos, note, quote, src, key }],
   // one per sentence, in reading order.
+  // a verb whose object is often someone else's hand, arm or face: "took her right thumb"
+  const HANDLING = /^(?:took|take|takes|taking|held|hold|holds|grabbed|grab|touched|kissed|squeezed|pricked|gripped|seized|caught|stroked|patted|clasped|tugged|slapped|bandaged)$/;
   // after one of these, an owning his or her is the subject's own ("sat on her bed")
   const OF_PLACE = new Set(['on', 'in', 'at', 'to', 'into', 'onto', 'from', 'with', 'by', 'over', 'under', 'behind', 'beside', 'across', 'through', 'against', 'around', 'off', 'up', 'down', 'of', 'and', 'was', 'were', 'is', 'for', 'about', 'between', 'near', 'past', 'toward', 'towards', 'inside', 'outside', 'upon', 'within', 'without']);
   function pronounEvidence(sources, entries) {
