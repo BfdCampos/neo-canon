@@ -1491,6 +1491,7 @@
     }
     return out;
   }
+  const EXCEPTION = /(?<![\p{L}])(?:for the first time|for once|for a change|this time|only once|the one time|just this once|unusually|for the only time|on feast days|except)(?![\p{L}])/iu;
   async function openSlips({ src, p, pos, idx, byId, open, reader, dismissed }) {
     const out = [];
     const talk = talkSpans(p.text);
@@ -1498,6 +1499,9 @@
     const sents = sentences(p.text);
     for (const [si, s] of sents.entries()) {
       if (PLAN.test(s.text) || talk.some(([a, b]) => a < s.end && b > s.start)) continue;
+      // an exception told as one ("for the first time anyone could remember") says
+      // otherwise of nothing: it is the habit's exception
+      if (EXCEPTION.test(s.text)) continue;
       const here = every.filter((m) => m.start >= s.start && m.end <= s.end);
       // (a sentence opening with he or she: the one person the paragraph named last, before it)
       const ids = [...new Set(here.map((m) => m.id))];
