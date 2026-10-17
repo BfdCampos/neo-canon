@@ -175,16 +175,7 @@ module.exports = function canonEditor(C) {
         }
       }
     }
-    // and the places the chapter calls by a common noun, twice or more after
-    // a preposition ("at the press-house door", "down to the press-house")
-    const places = new Map();
-    for (const m of ch.text.matchAll(/(?<![\p{L}])(?:in|at|to|of|on|from|into|by|down|near|inside|outside|through|across|towards?|past|behind)\s+the\s+(\p{Ll}[\p{Ll}-]{3,})(?![\p{L}'’-])/gu)) {
-      const w = m[1];
-      if (FIXTURES.has(w) || CROWD.has(w) || NUMBER.test(w)) continue;
-      places.set(w, (places.get(w) || 0) + 1);
-    }
-    const extra = [...places].filter(([w, n]) => n >= 2 && written(ch.text, 'the ' + w) >= 2).map(([w]) => 'the ' + w);
-    return [...out.keys()].slice(0, 30 - Math.min(6, extra.length)).concat(extra.slice(0, 6));
+    return [...out.keys()].slice(0, 30);
   }
 
   // The reader's cast, through the gates. → [{ key, name, kind, aliases, in, entry }]
