@@ -803,6 +803,79 @@ module.exports = function canonEditor(C) {
     return p.talk.some(([x, y]) => a < y && b > x) && !(p.talk.every(([x, y]) => b <= x + 1 || a >= y - 1));
   }
 
+  /* ---------- introductions, read by code ---------- */
+
+  const INTRO_NOUN = new Set(['man', 'woman', 'girl', 'boy', 'lad', 'lass', 'child', 'fellow', 'figure', 'person', 'creature', 'gentleman', 'lady']);
+  const ADJ_SLOT = {};
+  for (const w of ['tall', 'short', 'tallest', 'shortest', 'taller', 'long', 'towering']) ADJ_SLOT[w] = ['appearance', 'height'];
+  for (const w of ['thin', 'narrow', 'heavy', 'big', 'broad', 'stout', 'slight', 'lean', 'square', 'stooped', 'small', 'plump', 'fat', 'wiry', 'burly', 'slender', 'skinny', 'gaunt', 'bony', 'stocky', 'large', 'hefty', 'straight-backed', 'hunched', 'frail', 'sturdy', 'muscular', 'tiny', 'little']) ADJ_SLOT[w] = ['appearance', 'build'];
+  for (const w of ['old', 'young', 'elderly', 'middle-aged', 'ancient', 'aged']) ADJ_SLOT[w] = ['age', 'age'];
+  for (const w of ['bald', 'balding', 'grey-haired', 'gray-haired', 'sandy-haired', 'red-haired', 'fair-haired', 'dark-haired', 'white-haired', 'black-haired', 'curly-haired', 'shaven-headed']) ADJ_SLOT[w] = ['appearance', 'hair'];
+  for (const w of ['freckled', 'pale', 'sunburnt', 'sunburned', 'bearded', 'clean-shaven', 'scarred', 'one-eyed', 'weathered', 'pock-marked', 'ruddy']) ADJ_SLOT[w] = ['appearance', 'face'];
+  for (const w of ['anxious', 'nervous', 'quiet', 'cheerful', 'shy', 'gentle', 'stern', 'kindly', 'fierce', 'timid', 'cheery', 'grim', 'solemn', 'restless']) ADJ_SLOT[w] = ['personality', 'personality'];
+  const WITH_SLOT = [[/\b(?:hair|head|curls|plait|braid|ponytail|fringe)\b/, ['appearance', 'hair']], [/\beyes?\b/, ['appearance', 'eyes']], [/\b(?:beard|moustache|mustache|whiskers|stubble|teeth|nose|chin|jaw|cheeks?|freckles|face|skin)\b/, ['appearance', 'face']],
+    [/\b(?:scar|scars|burn|tattoo|tattoos|mark|birthmark|patch)\b/, ['appearance', 'mark']], [/\b(?:spectacles|glasses|monocle|earrings?|ring|hat|coat|cap|cloak|apron|boots|uniform|scarf)\b/, ['appearance', 'clothing']],
+    [/\b(?:limp|stick|cane|crutch|stoop)\b/, ['appearance', 'other']], [/\bvoice\b/, ['personality', 'speech']], [/\blaugh\b/, ['personality', 'laugh']]];
+  // → [{ g, a, v }] from one sentence that opens with c (named, or its pronoun)
+  function introFacts(l, c, phits, para) {
+    const s = l.s;
+    const text = s.text;
+    const head = (phits || []).find((h) => h.key === c.key && h.start === s.start + (text.match(/^[\s“"‘']*/u) || [''])[0].length);
+    const pron = l.why === 'chain' && /^(?:he|she)\b/i.test(text);
+    if (!head && !pron) return [];
+    if (para && para.talk.some(([a, b]) => a < s.end && b > s.start)) return [];
+    const rest = head ? text.slice(head.end - s.start) : text.replace(/^\s*\S+/, '');
+    const m = /^\s+(?:was|is)\s+(.+?)[.!?]*$/u.exec(rest);
+    if (!m) return [];
+    const out = [];
+    const add = (g, a, v) => { v = v.replace(/^[\s,]+|[\s,]+$/g, ''); if (v && v.split(/\s+/).length <= 12 && !out.some((x) => x.v === v)) out.push({ g, a, v }); };
+    // the head: "a short, bald man of sixty", "nineteen, narrow and quick", "the chief engineer, a heavy man"
+    let body = m[1];
+    // (where they are or what they're doing is the scene, not the person: "was in the galley", "was waiting")
+    if (/^(?:in|at|on|by|with|from|under|over|behind|beside|near|inside|outside|already|still|now|waiting|sitting|standing|out|up|down|there|here|not|never|about|going|being)\b/i.test(body) || /^\w+ing\b/.test(body)) return [];
+    // (a predicate that is someone's kin, "my mother's younger brother, a big slow man": what follows it)
+    if (/['’]s\s/.test(body.split(',')[0])) {
+      const next = /^[^,]*,\s+((?:a|an)\s.+)$/u.exec(body);
+      if (!next) return [];
+      body = next[1];
+    }
+    const stopAt = body.search(/\s(?:who|whose|that|which|where|when)\s|,?\s+and\s+(?:she|he|it|they|had|was|is)\s|;|—|–/);
+    const clause = stopAt < 0 ? body : body.slice(0, stopAt);
+    const cut = clause.search(/\s(?:with|from)\s/);
+    const front = cut < 0 ? clause : clause.slice(0, cut);
+    const words = front.split(/[\s,]+/).filter(Boolean).map((w) => w.toLowerCase().replace(/[’']s$/, ''));
+    const ageN = /\bof\s+((?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-\w+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|\d+)\b/.exec(front) || /^((?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-[a-z]+)?|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|\d+)\b/.exec(front);
+    if (ageN) add('age', 'age', ageN[1]);
+    const slots = new Map();
+    for (const w of words) {
+      const k = ADJ_SLOT[w];
+      if (!k) continue;
+      const key = k.join('.');
+      if (!slots.has(key)) slots.set(key, []);
+      slots.get(key).push(w);
+    }
+    for (const [key, ws] of slots) {
+      const [g, a] = key.split('.');
+      // (as written: the words in their order)
+      add(g, a === 'height' ? 'height' : a, ws.join(g === 'personality' || a === 'build' ? ' and ' : ', ').replace(/^(\w+), (\w+)$/, '$1, $2'));
+    }
+    const noun = words.find((w) => INTRO_NOUN.has(w));
+    if (noun && SEX_WORDS[noun]) add('sex', 'sex', noun);
+    // "with a shaved head and a burn scar across the back of her right hand"
+    const w = /\swith\s+(.+)$/u.exec(clause);
+    if (w) {
+      for (const np of w[1].split(/,\s+(?:and\s+)?|\s+and\s+(?=(?:a|an|the|his|her|two|one)\s)/u)) {
+        if (/^(?:he|she|it|they)\b/i.test(np.trim())) break;
+        // "with … a habit of rubbing the bridge of his nose when he was tired"
+        if (/^(?:a|the)\s+(?:habit|way|knack|tendency|trick)\s+of\b/i.test(np.trim())) { add('habit', 'habit', np.split(/,\s/)[0]); continue; }
+        const slot = WITH_SLOT.find(([re]) => re.test(np.toLowerCase()));
+        if (slot) add(slot[1][0], slot[1][1], np.split(/\s+(?:who|which|that|and\s+(?:he|she))\s/u)[0]);
+      }
+    }
+    // "with half-moon spectacles and a voice too big for him" is the person's; a place in it is not
+    return out.filter((x) => !(phits || []).some((h) => h.key !== c.key && x.v.includes(para.text.slice(h.start, h.end))));
+  }
+
   /* ---------- hard traits read from open facts ---------- */
 
   // A trait the reader read (Hair: fair as wet straw; Sex: woman) is a
@@ -1098,6 +1171,23 @@ module.exports = function canonEditor(C) {
       }
     }, stop);
     if (stop && stop()) return { calls, dropped, stopped: true };
+    // what an introduction gives, read by code (round 2: appearance was
+    // mostly missing): "She was nineteen, narrow and quick, with a shaved
+    // head and a burn scar…", "He was a short, bald man with half-moon
+    // spectacles", "a big freckled girl from the farm domes with green eyes".
+    // Each still passes the gates and the reader, like a dossier's.
+    for (const { c, part } of jobs) {
+      if (c.kind !== 'person') continue;
+      for (const l of part.lines) {
+        if (!['name', 'chain'].includes(l.why)) continue;
+        for (const x of introFacts(l, c, hits[l.s.pi], ch.paras[l.s.pi])) {
+          if (proposals.some((p) => p.c === c && labelFamily(p.key) === labelFamily(keyOf(x.g, x.a)) && overlap(p.value, x.v) >= 0.5)) continue;
+          const gt = gateFact({ ...x, s: [l.n], x: 0 }, part, c, ctx);
+          if (gt.why) { dropped.push({ entity: c.name, label: x.a, value: x.v, why: 'intro: ' + gt.why }); continue; }
+          proposals.push({ c, part, ...gt, intro: true });
+        }
+      }
+    }
     // 3 · the verifier: the claim against the paragraphs it cites
     const passageOf = (p) => [...new Set(p.cited.map((l) => l.s.pi))].sort((a, b) => a - b).map((pi) => ch.paras[pi].text).join('\n\n');
     // the rest of the cast named in a fact's paragraphs (outside speech), nearest its sentences first
@@ -1199,5 +1289,5 @@ module.exports = function canonEditor(C) {
     return { calls, dropped, kept, cast, ch, narrator: me ? (me.entry || made.get(me.key) || null) : null };
   }
 
-  return { EDITOR_PROMPT, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
+  return { EDITOR_PROMPT, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
 };
