@@ -1251,7 +1251,7 @@
   // `story` (storyIndex), `rank` (book/ch → place in reading order) and
   // `rare` (rarity) let the reader check a sentence against the story's
   // key points (STORY.md §5); without them, or a reader, it isn't.
-  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null, story = null, rank = null, rare = null, open = null }) {
+  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null, story = null, rank = null, rare = null, open = null, kin = null, narrators = {} }) {
     const idx = mentionIndex(entries);
     const world = worldOf(entries, out);
     const names = nameTokens(entries);
@@ -1307,6 +1307,42 @@
           written: !!(c.fact && c.fact.sources.some((x) => x.written)),
           ...(ask ? { ask: true, ref } : {})
         });
+      }
+      // kin said otherwise: a later reading of a pair against its first
+      // (each by rule, both ends named or plainly meant); the writer's notes
+      // against the prose wait in Needs You instead
+      if (kin && kin.length) {
+        // each pair's readings in order: the first, and those that agree with it
+        const held = new Map();
+        const against = new Map();
+        for (const r of kin) {
+          if (!r.strong && !r.note) continue;
+          const k = [r.a, r.b].sort().join('|');
+          const had = held.get(k) || [];
+          const clash = had.map((x) => ({ x, c: kinClash(x, r) })).find((y) => y.c);
+          if (clash) against.set(r, clash); else had.push(r);
+          held.set(k, had);
+        }
+        for (const r of kin) {
+          if (r.src.bookId !== src.bookId || r.src.chId !== src.chId || !r.strong || !against.has(r)) continue;
+          const { x: first, c: clash } = against.get(r);
+          if (first.note !== r.note) continue;
+          if (paraOk && !paraOk(src, r.para)) continue;
+          const e = byId.get(r.b);
+          const other = byId.get(r.a);
+          if (!e || !other) continue;
+          const fact = `${e.id}/kin/${other.id}`;
+          const sentenceHash = textHash(norm(r.sentence));
+          if (dismissed.has(fact + '|' + sentenceHash)) continue;
+          const mark = clash.what === 'side' && r.sideWord ? r.sideWord : r.word;
+          const to = clash.what === 'side' ? (first.sideWord || {}).w : clash.what === 'age' ? Object.keys(KIN).find((w) => KIN[w] === first.age) : first.chain[first.chain.length - 1];
+          if (!to) continue;
+          slips.push({
+            seq: all.length + slips.length, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: r.para.hash, sentence: r.sentence, sat: r.sat, sentenceHash, at: mark.start,
+            span: r.para.text.slice(mark.start, mark.end), to: keepCase(r.para.text.slice(mark.start, mark.end), to), kind: 'kin', strength: 'strong', entry: e.id, name: e.name, attr: 'other',
+            value: `${other.name}’s ${first.text}`, as: 'Family', fact, sources: [{ label: `${first.src.book}, ${first.src.label}`, quote: first.sentence }], more: 0, written: false
+          });
+        }
       }
       if (story && story.length && rank && rare && reader && typeof reader.contradicts === 'function') {
         const paras = sourceParas(src.html);
@@ -2191,6 +2227,151 @@
     return out;
   }
 
+  // Kin, by the text's own words (round 2): who is whose brother, cousin,
+  // mother's mother, with the side (mother's, father's) and the age (elder,
+  // younger), read by rule from the narration, each pair once, in reading
+  // order. "His brother Kieran", "Danny’s cousin Kieran", "He was my
+  // mother’s younger brother", "Tamsin Marchetti, Ivo’s elder sister", "My
+  // uncle Tobiah". The owner of "his" or "her" is the paragraph's one
+  // person by referent() (or, for a paragraph that opens with it, the last
+  // one the paragraphs before named); "my" is the book's narrator.
+  // → [{ a, b, cls, side, age, chain, word: { start, end, w }, sideWord, sentence, sat, para, src, pos, note, strong }]
+  //   b is a's <chain> ("Kieran" is Danny's "brother")
+  const KIN_REL = { brother: 'sib', sister: 'sib', sibling: 'sib', twin: 'sib', mother: 'parent', father: 'parent', mum: 'parent', mam: 'parent', mom: 'parent', dad: 'parent',
+    son: 'child', daughter: 'child', wife: 'spouse', husband: 'spouse', uncle: 'uncle', aunt: 'uncle', nephew: 'nephew', niece: 'nephew', cousin: 'cousin',
+    grandmother: 'grand', grandfather: 'grand', grandma: 'grand', grandpa: 'grand', grandad: 'grand', granny: 'grand', gran: 'grand', grandson: 'grandchild', granddaughter: 'grandchild' };
+  const KIN_INVERSE = { sib: 'sib', parent: 'child', child: 'parent', spouse: 'spouse', uncle: 'nephew', nephew: 'uncle', cousin: 'cousin', grand: 'grandchild', grandchild: 'grand' };
+  const KIN_SIDE = { mother: 'mother', mum: 'mother', mam: 'mother', mom: 'mother', father: 'father', dad: 'father' };
+  // two steps as one: a parent's sibling is an uncle or aunt, a parent's parent a grandparent
+  const KIN_TWO = { 'parent sib': 'uncle', 'parent parent': 'grand', 'sib child': 'nephew', 'child child': 'grandchild', 'parent uncle': null };
+  function kinMentions(sources, entries, narrators = {}) {
+    const live = entries.filter((e) => !e.locked);
+    const idx = mentionIndex(live);
+    const byId = new Map(live.map((e) => [e.id, e]));
+    const sexOf = (e) => { const f = e.facts.find((h) => h.attr === 'sex' && ['verified', 'yours'].includes(h.state)); return f ? { value: f.value } : undefined; };
+    const world = new Map(live.map((x) => [x.id, { e: x, rel: [], ...(sexOf(x) ? { sex: sexOf(x) } : {}) }]));
+    const person = (id) => byId.get(id) && ['person', 'creature'].includes(byId.get(id).kind);
+    const out = [];
+    sources.forEach((src, order) => {
+      const me = narrators[src.bookId] && byId.get(narrators[src.bookId]) ? narrators[src.bookId] : null;
+      let carry = null; // the last one named in the narration of the paragraphs before
+      sourceParas(src.html).forEach((p, pi) => {
+        const talk = talkSpans(p.text);
+        const free = (a, b) => !talk.some(([x, y]) => a < y && b > x);
+        const ctx = paraCtx(p.text, idx, world);
+        const every = ctx.every.filter((m) => free(m.start, m.end) && person(m.id));
+        const sents = ctx.sents;
+        sents.forEach((st, si) => {
+          if (PLAN.test(st.text)) return;
+          const ws = [...st.text.matchAll(WORD)].map((m) => ({ w: m[0], lw: m[0].toLowerCase().replace(/['’]s$/, ''), poss: /['’]s$/.test(m[0]), start: st.start + m.index, end: st.start + m.index + m[0].length }));
+          const inS = every.filter((m) => m.start >= st.start && m.end <= st.end);
+          const mentionAt = (w) => inS.find((m) => m.start <= w.start && m.end >= w.end - (w.poss ? 2 : 0));
+          // whom "his"/"her"/"he"/"she" at word i means
+          const pron = (i) => {
+            const w = ws[i];
+            if (!w || !free(w.start, w.end)) return null;
+            if (['my', 'i', 'me'].includes(w.lw)) return me ? { id: me, strong: true } : null;
+            if (!PRONOUNS[w.lw]) return null;
+            const r = referent(p.text, w.start, si, ctx, PRONOUNS[w.lw]);
+            if (r && (!r.k.sex || r.k.sex.value === PRONOUNS[w.lw])) return { id: r.id, strong: !r.weak };
+            // a sentence that opens with it: the subject of the sentences
+            // before, back to the last one named first in its sentence ("My
+            // uncle Tobiah lived with her. He was…"; "Danny Fell was already
+            // in it. He was twenty-six, … His brother Kieran…"), no other
+            // person named between, the sex agreeing
+            if (i <= 1 && !inS.some((m) => m.start < w.start)) {
+              const sex = PRONOUNS[w.lw];
+              for (let k = si - 1; k >= Math.max(0, si - 3); k--) {
+                const prev = sents[k];
+                const ms = every.filter((m) => m.start >= prev.start && m.end <= prev.end);
+                const lead = (prev.text.match(/^[\s“"‘']*([\p{L}'’]+)/u) || [])[1] || '';
+                if (!ms.length) { if (PRONOUNS[lead.toLowerCase()] === sex) continue; break; }
+                const subj = ms[0];
+                const others = ms.filter((m) => m.id !== subj.id && (!world.get(m.id).sex || world.get(m.id).sex.value === sex));
+                if (others.length || /^\s*(?:in|on|at|by|to|from|with|for|after|before|when|as)\b/i.test(prev.text.slice(0, subj.start - prev.start))) break;
+                const k0 = world.get(subj.id).sex;
+                if (k0 && k0.value !== sex) break;
+                return { id: subj.id, strong: !!k0 };
+              }
+            }
+            if (!inS.some((m) => m.start < w.start) && !every.some((m) => m.end <= w.start) && carry && (!world.get(carry).sex || world.get(carry).sex.value === PRONOUNS[w.lw])) return { id: carry, strong: false };
+            return null;
+          };
+          for (let i = 0; i < ws.length; i++) {
+            const w = ws[i];
+            if (!free(w.start, w.end)) continue;
+            // the owner: a name's "’s", or his / her / my
+            let a = null;
+            const m = mentionAt(w);
+            if (m && /^['’]s\b/.test(p.text.slice(m.end))) { if (m.end !== w.end - 2 && m.end !== w.end) continue; a = { id: m.id, strong: true }; }
+            else if (['his', 'her', 'my'].includes(w.lw)) a = pron(i);
+            else continue;
+            if (!a) continue;
+            // the chain: (mother’s|father’s)* (elder|younger)? KIN
+            const chain = [];
+            let side = '';
+            let sideWord = null;
+            let age = '';
+            let j = i + 1;
+            for (; j < ws.length; j++) {
+              const x = ws[j];
+              if (/[,;:—–()"“”]/.test(p.text.slice(ws[j - 1].end, x.start))) break;
+              if (KIN[x.lw] && !x.poss) { age = KIN[x.lw]; continue; }
+              if (KIN_REL[x.lw]) {
+                chain.push(x);
+                if (x.poss && KIN_SIDE[x.lw] && chain.length === 1) { side = KIN_SIDE[x.lw]; sideWord = x; }
+                if (!x.poss) break;
+                continue;
+              }
+              break;
+            }
+            const last = chain[chain.length - 1];
+            if (!last || last.poss || j >= ws.length + 1) continue;
+            const classes = chain.map((x) => KIN_REL[x.lw]);
+            const cls = classes.length === 1 ? classes[0] : classes.length === 2 ? KIN_TWO[classes.join(' ')] : null;
+            if (!cls) continue;
+            // whom the phrase is: a name right after ("brother Kieran",
+            // "wife, Constance,"), a name or a subject before it set off by a
+            // comma ("Tamsin Marchetti, Ivo’s elder sister"), or the subject
+            // of "was" ("He was my mother’s younger brother")
+            let b = null;
+            const after = inS.find((n) => n.start >= last.end && /^\s*,?\s*$/.test(p.text.slice(last.end, n.start)));
+            const before = inS.filter((n) => n.end <= w.start && /^\s*,\s*$/.test(p.text.slice(n.end, w.start))).pop();
+            const cop = i >= 1 && ['was', 'is'].includes(ws[i - 1].lw) ? i - 1 : -1;
+            if (after) b = { id: after.id, strong: true };
+            else if (before) b = { id: before.id, strong: true };
+            else if (cop > 0) {
+              const subj = mentionAt(ws[cop - 1]);
+              if (subj) b = { id: subj.id, strong: true };
+              else if (cop === 1 && ['he', 'she'].includes(ws[0].lw)) b = pron(0);
+            }
+            if (!b || b.id === a.id || !person(b.id) || !person(a.id)) continue;
+            out.push({ a: a.id, b: b.id, cls, side, age, chain: chain.map((x) => x.lw), text: p.text.slice(w.end, last.end).replace(/^['’]s/, '').trim(),
+              word: { start: last.start, end: last.end, w: last.w }, sideWord: sideWord && { start: sideWord.start, end: sideWord.end - 2, w: sideWord.w.replace(/['’]s$/, '') },
+              sentence: st.text, sat: st.start, para: p, src, order, pos: (isNote(src) ? NOTE_AT : 0) + order * 1e4 + pi, note: isNote(src), strong: a.strong && b.strong });
+            i = j;
+          }
+        });
+        const named = every.filter((m) => !(narrators[src.bookId] && m.id === narrators[src.bookId]));
+        if (named.length) carry = named[named.length - 1].id;
+      });
+    });
+    return out.sort((x, y) => x.pos - y.pos || x.sat - y.sat);
+  }
+  // Do two readings of one pair's kin say otherwise? Each as b-is-a's: the
+  // classes (one turned round when the pair is), then the side, then the age.
+  // → null, or { what: 'cls'|'side'|'age' }
+  function kinClash(x, y) {
+    const same = x.a === y.a && x.b === y.b;
+    const flipped = x.a === y.b && x.b === y.a;
+    if (!same && !flipped) return null;
+    const ycls = same ? y.cls : KIN_INVERSE[y.cls];
+    if (ycls !== x.cls) return { what: 'cls' };
+    if (same && x.side && y.side && x.side !== y.side) return { what: 'side' };
+    if (same && x.cls === 'sib' && x.age && y.age && x.age !== y.age && ['elder', 'younger'].includes(x.age) && ['elder', 'younger'].includes(y.age)) return { what: 'age' };
+    return null;
+  }
+
   function relation(e, f, quote, para, entries) {
     const idx = mentionIndex(entries);
     const target = findEntry(entries, f.value);
@@ -2327,7 +2508,11 @@
           const rank = new Map(shelf.map((s, i) => [s.bookId + '/' + s.chId, i]));
           told = { story: storyIndex(entries, shelf, rank), rank, rare: rarity(shelf.filter((s) => !isNote(s))), open: opens ? openIndex(entries, shelf, rank) : null };
         }
-        return checkSources({ sources, entries, notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk, ...told });
+        // kin read by rule over the whole shelf, for the pass to hold each later reading to the first
+        const shelfAll = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId))
+          .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
+        const kin = kinMentions(shelfAll, entries, meta.narrators || {});
+        return checkSources({ sources, entries, notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk, kin, narrators: meta.narrators || {}, ...told });
       },
 
       // Changing a fact across the series (PRODUCT §4.7), once the writer
@@ -2645,6 +2830,55 @@
           if (!e || e.facts.some(same) || e.setAside.some(same)) continue;
           e.facts.push({ attr: k.attr, value: k.value, as: k.as, state: 'unverified', sources: [{ label: `${k.src.book}, ${k.src.label}`, quote: k.quote, book: k.src.bookId, ch: k.src.chId }] });
         }
+        // kin by the text's own words (kinMentions): each pair's first reading
+        // a fact on both; the writer's notes against the prose, every value
+        // waits as Which is right?; a later reading that differs is the pass's slip
+        const kinDisagree = new Set();
+        {
+          const narr = { ...(meta.narrators || {}) };
+          for (const [b, e] of narrators) narr[b] = e.id;
+          const live = entries.filter((e) => !e.locked);
+          const byId = new Map(live.map((e) => [e.id, e]));
+          const firstOf = new Map();
+          const add = (e, value, r) => {
+            if (e.setAside.some((f) => f.attr === 'other' && norm(f.value) === norm(value))) return null;
+            const source = { label: `${r.src.book}, ${r.src.label}`, quote: r.sentence.split(/\s+/).length > 30 ? r.sentence.split(/\s+/).slice(0, 30).join(' ') : r.sentence, book: r.src.bookId, ch: r.src.chId };
+            let f = e.facts.find((x) => x.attr === 'other' && norm(x.label || '') === 'family' && norm(x.value) === norm(value));
+            if (!f) { f = { attr: 'other', label: 'Family', value, as: '', state: 'unverified', sources: [] }; e.facts.push(f); }
+            if (!f.sources.some((x) => !x.written && sameSource(x, source))) f.sources.push(source);
+            fresh.add(f);
+            return f;
+          };
+          // (a pair the closed kin already has, "Sibling: Oren Hale (younger)", takes no second line)
+          const closed = (X, Y) => X.facts.some((f) => ['sibling', 'parent', 'child', 'spouse'].includes(f.attr) && findEntry(live, f.value) === Y);
+          const facts = (r) => {
+            const A = byId.get(r.a);
+            const B = byId.get(r.b);
+            if (!A || !B) return [];
+            if (closed(A, B) || closed(B, A)) {
+              // (the closed line's own words: a sibling's elder or younger)
+              const have = [A, B].flatMap((X) => X.facts.filter((f) => ['sibling', 'parent', 'child', 'spouse'].includes(f.attr) && findEntry(live, f.value) === (X === A ? B : A)));
+              if (r.cls === 'sib' && r.age && !have.some((f) => f.attr === 'sibling' && f.as === r.age && findEntry(live, f.value) === A)) {
+                const source = { label: `${r.src.book}, ${r.src.label}`, quote: r.sentence.split(/\s+/).length > 30 ? r.sentence.split(/\s+/).slice(0, 30).join(' ') : r.sentence, book: r.src.bookId, ch: r.src.chId };
+                const f = { attr: 'sibling', value: A.name, as: r.age, state: 'unverified', sources: [source] };
+                B.facts.push(f);
+                have.push(f);
+              }
+              return have.filter((f) => r.cls !== 'sib' || f.attr !== 'sibling' || !r.age || f.as === r.age || !f.as);
+            }
+            return [add(B, `${A.name}’s ${r.text}`, r), add(A, `${r.text} ${B.name}`, r)].filter(Boolean);
+          };
+          for (const r of kinMentions(sources, live, narr)) {
+            const k = [r.a, r.b].sort().join('|');
+            const had = firstOf.get(k) || [];
+            firstOf.set(k, had);
+            const clash = had.find((x) => kinClash(x.r, r));
+            if (!clash) { if (r.strong || r.note) had.push({ r, facts: facts(r) }); continue; }
+            // the writer's notes against the prose: Which is right? (a later
+            // prose reading that differs from the prose is the pass's slip)
+            if (clash.r.note !== r.note) for (const f of [...clash.facts, ...facts(r)]) kinDisagree.add(f);
+          }
+        }
         const evidence = shelfEvidence(sources, entries.filter((e) => !e.locked), await io.notSlips());
         // where a passage stands in reading order (the writer's notes first)
         const rank = new Map(sources.map((x, i) => [x.bookId + '/' + x.chId, i]));
@@ -2775,6 +3009,7 @@
         // that differs (the pass's slip), leave the entry
         for (const e of entries) {
           const later = firstCome(e, gated);
+          for (const f of e.facts) if (kinDisagree.has(f) && f.state !== 'yours') f.state = 'disagree';
           e.facts = e.facts.filter((f) => {
             if (f.state === 'yours' || talkOnly(f) || (f.state !== 'unverified' && !later.has(f))) return true;
             if (!later.has(f) && f.sources.some((s) => s.changed)) return true; // a passage edited away: kept, marked
@@ -3266,6 +3501,6 @@
     newEntry, parseEntry, serialiseEntry, dedupFacts, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader,
     shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces,
-    gateEvent, storyIndex, rarity, STORY_SCHEMA
+    gateEvent, storyIndex, rarity, STORY_SCHEMA, kinMentions, kinClash, nonEntity
   };
 });
