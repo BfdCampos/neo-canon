@@ -498,7 +498,7 @@
     queen: ['female', 'king'], king: ['male', 'queen'], aunt: ['female', 'uncle'], uncle: ['male', 'aunt'], niece: ['female', 'nephew'], nephew: ['male', 'niece']
   };
   const PRONOUNS = { she: 'female', her: 'female', hers: 'female', herself: 'female', he: 'male', him: 'male', his: 'male', himself: 'male' };
-  const PRONOUN_SWAP = { he: 'she', she: 'he', him: 'her', hers: 'his', himself: 'herself', herself: 'himself', his: 'her' };
+  const PRONOUN_SWAP = { he: 'she', she: 'he', him: 'her', her: 'his', hers: 'his', himself: 'herself', herself: 'himself', his: 'her' };
   const COLOURS = { grey: 'grey', gray: 'grey', brown: 'brown', green: 'green', blue: 'blue', black: 'black', red: 'red', fair: 'fair', blond: 'fair', blonde: 'fair', golden: 'fair', white: 'white', hazel: 'hazel', amber: 'amber' };
   const SPECIES = { horse: 'horse', pony: 'horse', mule: 'mule', donkey: 'donkey', wolf: 'wolf', dog: 'dog', hound: 'dog', cat: 'cat', hawk: 'hawk', falcon: 'falcon', raven: 'raven', crow: 'crow', ox: 'cattle', cattle: 'cattle', sheep: 'sheep', goat: 'goat', fox: 'fox', bear: 'bear', dragon: 'dragon' };
   for (const [w, [, , sp]] of Object.entries(SEX_WORDS)) if (sp) SPECIES[w] = sp;
@@ -936,7 +936,7 @@
 
   // the word to put back for a colour: the writer's own one word ("gray"), else the value ("fair", not "fair as wet straw")
   const colourWord = (f) => (f.as && !/\s/.test(f.as.trim()) ? f.as.trim() : f.value);
-  const keepCase = (like, w) => /^\p{Lu}/u.test(like) ? w[0].toUpperCase() + w.slice(1) : w;
+  const keepCase = (like, w) => !w ? null : /^\p{Lu}/u.test(String(like || '')) ? w[0].toUpperCase() + w.slice(1) : w;
   // after "her", a word it can own ("her ears"), not one that ends a phrase ("let her go")
   const NOT_OWNED = new Set(['and', 'or', 'but', 'nor', 'so', 'yet', 'to', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'of', 'off', 'up', 'down', 'out', 'over', 'into', 'onto', 'away', 'back', 'again', 'there', 'here', 'then', 'that', 'this', 'the', 'a', 'an', 'as', 'if', 'when', 'while', 'go', 'be', 'have', 'had', 'was', 'is', 'say', 'said', 'know', 'see', 'too', 'once', 'alone', 'home']);
   function pronounAt(words, i, text) {
@@ -947,7 +947,13 @@
     return owns ? 'her' : 'her-obj';
   }
   // the word for the other sex: his → her, her (owning) → his, her → him
-  const swapPronoun = (word, kind) => keepCase(word, kind === 'her' ? 'his' : kind === 'her-obj' ? 'him' : PRONOUN_SWAP[word.toLowerCase()]);
+  // ("He's" → "She's": the word's own ending stays; a form the table lacks swaps to nothing)
+  const swapPronoun = (word, kind) => {
+    const m = /^(\p{L}+)(.*)$/su.exec(String(word || ''));
+    if (!m) return null;
+    const to = kind === 'her' ? 'his' : kind === 'her-obj' ? 'him' : PRONOUN_SWAP[m[1].toLowerCase()];
+    return to ? keepCase(m[1], to) + m[2] : null;
+  };
   const OWNING = new Set(['his', 'her', 'himself', 'herself']);
   const CLAUSE = new Set(['and', 'but', 'or', 'while', 'as', 'when', 'until', 'because', 'though', 'who', 'whom', 'whose', 'which', 'that']);
   const COPULA = new Set(['were', 'was', 'are', 'is', 'looked', 'seemed', 'went', 'turned', 'had', 'gone']);
@@ -1054,7 +1060,8 @@
         const start = s.start + m.index;
         words.push({ w: m[0], lw: m[0].toLowerCase().replace(/['’]s$/, ''), start, end: start + m[0].length });
       }
-      const add = (c) => { if (free(c.start, c.end)) out.push({ ...c, si }); };
+      // (a slip with no word to put back is no slip: a form no table holds)
+      const add = (c) => { if (free(c.start, c.end) && c.to) out.push({ ...c, si }); };
       const after = (pos) => words.findIndex((w) => w.start >= pos);
       const named = (w) => inS.some((m) => m.start < w.end && m.end > w.start);
 
