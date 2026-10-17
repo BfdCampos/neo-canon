@@ -1618,7 +1618,11 @@
     const whole = entries.find((e) => is(e.name) || e.aliases.some(is));
     if (whole) return whole;
     const parts = entries.filter((e) => e.kind === 'person' && nameParts(e.name).some((p) => norm(p) === n));
-    return parts.length === 1 ? parts[0] : null;
+    if (parts.length === 1) return parts[0];
+    // a place's plural and singular are one place ("the Downs", "the Down")
+    const one = (x) => { const y = norm(stripTitles(x)).replace(/^the\s+/, ''); return y.length > 4 && /[^s]s$/.test(y) ? y.slice(0, -1) : y; };
+    const places = entries.filter((e) => e.kind === 'place' && [e.name, ...e.aliases].some((a) => one(a) === one(name)));
+    return places.length === 1 ? places[0] : null;
   }
   // the entity is named in the quote or its paragraph
   function reaches(entries, name, quote, text) {
