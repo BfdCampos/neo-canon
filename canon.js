@@ -3470,10 +3470,9 @@
       // sentence? (A small reader shown both passages takes A's word for
       // it.) B names someone else and A the one Canon has: yes; B the same:
       // no; anything else: unclear.
-      // A deed of one kind done to one distinctive thing (the crust given)
-      // is one event; anything else (two people sitting on beds) must also
-      // be told as the very same event, asked with both passages.
-      async contradicts({ a, who, did, sentence, question, others = [], kind = null }) {
+      // Every deed (round 2: a deed of one kind too) must also be told as
+      // the very same event, asked with both passages.
+      async contradicts({ a, who, did, sentence, question, others = [] }) {
         if (tier === 'quick') return 'unasked';
         const q = question || ('who ' + String(did || '').replace(new RegExp('^\\s*' + String(who).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), ''));
         const options = [...new Set([who, ...others.slice(0, 3)])].concat(ELSE, NOT_SAID);

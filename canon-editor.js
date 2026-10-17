@@ -979,7 +979,7 @@ module.exports = function canonEditor(C) {
     // an age said otherwise: "twenty-nine years of him" against "twenty-six"
     if (canonLabel(f.label || '') === 'age' || f.attr === 'age') {
       const had = agesIn(f.value).concat(numberOf(f.value.trim()) != null ? [{ n: numberOf(f.value.trim()) }] : []);
-      const now = agesIn(sentence).filter((x) => !UNREAL.test(sentence));
+      const now = UNREAL.test(sentence) ? [] : agesIn(sentence);
       if (had.length && now.length && !now.some((x) => had.some((y) => y.n === x.n))) {
         const x = now[0];
         return { span: sentence.slice(x.start, x.end), q: `is ${who} ${sentence.slice(x.start, x.end)} years old?` };
