@@ -19,7 +19,7 @@
 
 module.exports = function canonEditor(C) {
   const { norm, normMap, textHash, sentences, speechSpans, reportedSpans, mentions, mentionIndex, wordsOf, slug, newEntry,
-    findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, canonLabel, labelFamily } = C;
+    findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, canonLabel, labelFamily, nonEntity, stripTitles } = C;
 
   // bumped when a prompt or a gate that the cache keeps answers for changes
   const EDITOR_PROMPT = 1;
@@ -129,9 +129,13 @@ module.exports = function canonEditor(C) {
       const parts = bare.split(/\s+/);
       if (!parts.every((w, i) => /^[\p{Lu}\p{N}]/u.test(w) || (i > 0 && i < parts.length - 1 && /^(?:of|the|de|du|da|del|la|le|van|von|der|and|on|upon)$/.test(w)))) return null;
       if (!written(text, bare)) return null;
-      // a word the shelf writes in lower case too: "Nobody", "Ponies"
-      if (parts.length === 1 && lower && lower.has(bare.toLowerCase()) && !written(text, 'the ' + bare)) return null;
+      // a word the shelf writes in lower case too: "Nobody", "Ponies" (not
+      // a number the text gives as a name, capitalised mid-sentence: "Nine")
+      const asNumber = parts.length === 1 && NUMBER.test(bare.toLowerCase().split('-')[0]) && new RegExp(`[\\p{L},;]\\s+${escRe(bare)}(?![\\p{L}-])`, 'u').test(text);
+      if (parts.length === 1 && lower && lower.has(bare.toLowerCase()) && !written(text, 'the ' + bare) && !asNumber) return null;
       if (parts.length === 1 && TITLES.has(bare.toLowerCase())) return null;
+      // a month, a day, a holiday, a language, "Someone": nobody
+      if (nonEntity(bare, kind)) return null;
       return 'proper';
     }
     // a role: "the warden", one or two lower-case words with "the", written twice
@@ -157,6 +161,7 @@ module.exports = function canonEditor(C) {
           if (!/[\p{L}\p{N}]/u.test(lead) || /[“"‘«:]\s*$/.test(lead)) continue; // a sentence's (or a quotation's) first word
           const w = m[1].replace(/['’]s$/, '');
           if (w.split(/\s+/).length === 1 && (lower.has(w.toLowerCase()) || TITLES.has(w.toLowerCase()) || PRONOUNS[w.toLowerCase()] || /^I$/.test(w))) continue;
+          if (nonEntity(w)) continue;
           out.set(w, (out.get(w) || 0) + 1);
         }
       }
@@ -169,7 +174,10 @@ module.exports = function canonEditor(C) {
     const text = ch.text;
     const lower = names && names.lower;
     const cast = [];
-    const find = (n) => cast.find((c) => [c.name, ...c.aliases].some((a) => norm(a) === norm(n) || norm(a.replace(/^the\s+/i, '')) === norm(n.replace(/^the\s+/i, ''))));
+    // (a place's plural and singular are one place: "the Downs", "the Down")
+    const singular = (x) => x.length > 4 && /[^s]s$/.test(x) ? x.slice(0, -1) : x;
+    const sameName = (a, n, plural) => norm(a) === norm(n) || norm(a.replace(/^the\s+/i, '')) === norm(n.replace(/^the\s+/i, '')) || (plural && singular(norm(a.replace(/^the\s+/i, ''))) === singular(norm(n.replace(/^the\s+/i, ''))));
+    const find = (n, kind = null) => cast.find((c) => !c.gone && [c.name, ...c.aliases].some((a) => sameName(a, n, kind === 'place' && c.kind === 'place')));
     for (const p of proposals || []) {
       const kind = KINDS.includes(p.kind) ? p.kind : 'thing';
       const name = cleanName(p.name);
@@ -178,7 +186,7 @@ module.exports = function canonEditor(C) {
       // a thing or rule called only by a lower-case word, said once or twice, is no entry
       // (a proper name the text writes with "the": "the Weighhouse", "the Long Room")
       const named = how === 'proper' && !/^the\s/i.test(name) && written(text, 'the ' + name) && written(text, 'the ' + name) + written(text, 'The ' + name) >= written(text, name) ? 'the ' + name : name;
-      let c = find(named);
+      let c = find(named, kind);
       if (!c) {
         c = { key: cast.length, name: named, kind, aliases: [], in: '', proper: how === 'proper', wanted: [] };
         cast.push(c);
@@ -223,6 +231,7 @@ module.exports = function canonEditor(C) {
         if (as && nameKind(as, text, lower, c.kind) && !c.aliases.some((y) => bare(y) === x)) c.aliases.push(as);
       }
     }
+    personMerges(cast);
     // the name the text gives a role is its name: "His name … was Anselm"
     for (const t of ties.filter((y) => y.given)) {
       const c = cast.find((y) => !y.gone && [y.name, ...y.aliases].some((n) => bare(n) === bare(t.name)));
@@ -235,9 +244,18 @@ module.exports = function canonEditor(C) {
       c.aliases = c.aliases.filter((a, i, all) => norm(a) !== norm(c.name) && all.findIndex((x) => norm(x) === norm(a)) === i);
     }
     const kept = cast.filter((c) => !c.gone);
-    // joined to the Canon's entries by name or alias
+    // joined to the Canon's entries by name or alias; a full name to the one
+    // entry called by a part of it ("Constance Haddon", "Constance")
+    const coreOf = (n) => norm(stripTitles(String(n).replace(/^the\s+/i, '')));
     for (const c of kept) {
       c.entry = [c.name, ...c.aliases].map((n) => findEntry(entries, n)).find(Boolean) || null;
+      if (!c.entry && c.kind === 'person' && coreOf(c.name).split(/\s+/).length > 1) {
+        const ws = coreOf(c.name).split(/\s+/);
+        // (a given name, or a surname written with no title: "Dr Haddon" is no "Constance Haddon")
+        const titled = (n) => { const w = String(n).replace(/^the\s+/i, '').split(/\s+/); return w.length > 1 && TITLES.has(norm(w[0]).replace(/\.$/, '')); };
+        const by = entries.filter((e) => e.kind === 'person' && !e.locked && [e.name, ...e.aliases].some((n) => { const w = coreOf(n); return w && !/\s/.test(w) && (w === ws[0] || (w === ws[ws.length - 1] && !titled(n))); }));
+        if (by.length === 1 && !kept.some((o) => o !== c && o.kind === 'person' && coreOf(o.name).split(/\s+/).includes(coreOf(by[0].name)))) c.entry = by[0];
+      }
       if (c.entry && c.entry.locked) c.skip = true;
     }
     // the setting: the building, institution or town the reader says the
@@ -258,6 +276,48 @@ module.exports = function canonEditor(C) {
     }
     return kept.filter((c) => !c.skip);
   }
+  // One person written several ways, by the text's own words (never by the
+  // reader's say-so): "Commander Okafor" and "Okafor" (the same name but
+  // the title); "Danny" or "Fell" and "Danny Fell" (the full name holds the
+  // short one, and no one else's does: two Haddons, no "Haddon"); "the
+  // commander", "the doctor" and the one person who holds that rank. Two
+  // first names are never one person.
+  const RANK = { doctor: ['dr', 'doctor'], commander: ['commander'], inspector: ['inspector'], captain: ['captain', 'capt'], sergeant: ['sergeant', 'sgt'], professor: ['professor', 'prof'],
+    lieutenant: ['lieutenant', 'lt'], colonel: ['colonel', 'col'], major: ['major'], general: ['general'], admiral: ['admiral'], nurse: ['nurse'], constable: ['constable'], detective: ['detective'], reverend: ['reverend', 'rev'], judge: ['judge'], mayor: ['mayor'] };
+  function personMerges(cast) {
+    const people = () => cast.filter((c) => !c.gone && c.kind === 'person' && c.proper);
+    const core = (n) => norm(stripTitles(String(n).replace(/^the\s+/i, '')).replace(/['’]s$/, ''));
+    const longer = (a, b) => (b.name.split(/\s+/).length > a.name.split(/\s+/).length ? [b, a] : [a, b]);
+    // the same name but the title (one with none, or both the same one:
+    // "Dr Haddon" and "Mrs Haddon" are two people; "Haddon" beside both, no one)
+    const title = (n) => { const w = String(n).replace(/^the\s+/i, '').split(/\s+/); return w.length > 1 && TITLES.has(norm(w[0]).replace(/\.$/, '')) ? norm(w[0]).replace(/\.$/, '') : ''; };
+    const fits = (x, y) => core(x) && core(x) === core(y) && (!title(x) || !title(y) || title(x) === title(y));
+    for (const a of people()) {
+      if (a.gone) continue;
+      const same = people().filter((b) => b !== a && [a.name, ...a.aliases].some((x) => [b.name, ...b.aliases].some((y) => fits(x, y))));
+      if (same.length === 1) { const [into, from] = longer(a, same[0]); mergeCast(cast, into, from); }
+      else if (same.length > 1 && !title(a.name)) { a.gone = true; a.name = '\u0000'; a.aliases = []; }
+    }
+    // a short form only one full name holds
+    for (const a of people()) {
+      if (a.gone) continue;
+      const w = core(a.name);
+      if (!w || /\s/.test(w)) continue;
+      const holders = people().filter((b) => b !== a && [b.name, ...b.aliases].some((y) => core(y).split(/\s+/).length > 1 && core(y).split(/\s+/).includes(w)));
+      if (holders.length === 1) mergeCast(cast, holders[0], a);
+      else if (holders.length > 1) { a.gone = true; a.name = '\u0000'; a.aliases = []; } // ("Haddon", with two Haddons: no one)
+    }
+    // a rank's role and the one who holds the rank (the role's own entry,
+    // or the one the text has tied it to: "the doctor", called Arthur)
+    for (const r of cast.filter((c) => !c.gone && c.kind === 'person')) {
+      if (r.gone) continue;
+      const role = [r.name, ...r.aliases].find((n) => /^the\s+\p{Ll}+$/u.test(n) && RANK[n.slice(4)]);
+      if (!role) continue;
+      const titles = RANK[role.slice(4)];
+      const holders = people().filter((b) => b !== r && [b.name, ...b.aliases].some((y) => titles.includes(norm(String(y).replace(/^the\s+/i, '').split(/\s+/)[0]).replace(/\.$/, '')) && String(y).split(/\s+/).length > 1));
+      if (holders.length === 1) mergeCast(cast, holders[0], r);
+    }
+  }
   function mergeCast(cast, into, from) {
     for (const a of [from.name, ...from.aliases]) if (!into.aliases.some((x) => norm(x) === norm(a)) && norm(a) !== norm(into.name)) into.aliases.push(a);
     if (!into.proper && from.proper) { const was = into.name; into.name = from.name; into.aliases = [was, ...into.aliases.filter((x) => norm(x) !== norm(from.name))]; into.proper = true; }
@@ -275,19 +335,46 @@ module.exports = function canonEditor(C) {
     const idx = mentionIndex(cast.filter((c) => !c.gone).map((c) => ({ id: c.key, name: c.name, kind: c.kind, aliases: plain([c.name, ...c.aliases, ...c.wanted]) })));
     for (const p of ch.paras) {
       const hits = mentions(p.text, idx).map((m) => ({ key: m.id, start: m.start, end: m.end }));
+      const persons = new Set(cast.filter((c) => !c.gone && ['person', 'creature'].includes(c.kind)).map((c) => c.key));
+      const free = (a, b) => !p.talk.some(([x, y]) => a < y && b > x);
+      const asWritten = (h) => { let ref = p.text.slice(h.start, h.end); if (/^\p{Ll}/u.test(ref) && /\bthe\s+$/i.test(p.text.slice(0, h.start))) ref = 'the ' + ref; return ref; };
       for (const s of p.sents) {
+        // a number for a name, in narration: "Teodora Kask had been Nine for
+        // three years", "Ada was Fourteen"
+        for (const m of s.text.matchAll(/(?<![\p{L}])(?:had been|has been|was|is|became)\s+((?:One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty|Thirty|Forty|Fifty|Sixty|Seventy|Eighty|Ninety)(?:-(?:one|two|three|four|five|six|seven|eight|nine))?)(?![\p{L}-])/gu)) {
+          const pos = s.start + m.index;
+          const h = hits.find((x) => persons.has(x.key) && /^\s+$/.test(p.text.slice(x.end, pos)) && x.end <= pos);
+          if (!h || !free(h.start, pos + m[0].length) || s.said) continue;
+          out.push({ key: h.key, ref: asWritten(h), name: m[1], given: false, sentence: s.text });
+        }
+        // "The vicar, the Reverend Amos Lyle, came…": a role and a name side
+        // by side, set off by commas (not a list: no "and" after)
+        const inS = hits.filter((h) => h.start >= s.start && h.end <= s.end && persons.has(h.key));
+        for (let i = 0; i + 1 < inS.length; i++) {
+          const [a, b] = [inS[i], inS[i + 1]];
+          if (a.key === b.key || !free(a.start, b.end)) continue;
+          const gap = p.text.slice(a.end, b.start);
+          if (!/^,\s+(?:the\s+)?(?:\p{Lu}[\p{L}.]*\s+)?$/u.test(gap)) continue;
+          const after = p.text.slice(b.end, b.end + 8);
+          if (!/^\s*[,.;—–]/u.test(after) || /^\s*,\s*(?:and|or|nor)\b/i.test(after)) continue;
+          const ra = asWritten(a);
+          const rb = asWritten(b);
+          // (one a role in lower case, the other a name)
+          if (/^the\s+\p{Ll}/u.test(ra) === /^the\s+\p{Ll}/u.test(rb)) continue;
+          out.push({ key: a.key, ref: ra, name: rb, given: false, sentence: s.text, apposition: true });
+        }
         if (!NAMING.test(s.text)) continue;
         const pats = [
           [/(?<![\p{L}])([Hh]is|[Hh]er|[Ii]ts)\s+(?:real\s+|true\s+|own\s+)?name\b[\s\S]*?\b(?:was|is)\s+((?:\p{Lu}[\p{L}'’-]+)(?:\s+\p{Lu}[\p{L}'’-]+)?)/u, true],
-          [/(?<![\p{L}])(?:called|named|call|calls|nicknamed)\s+(him|her|it)\s+((?:\p{Lu}[\p{L}'’-]+)(?:\s+\p{Lu}[\p{L}'’-]+)?)/u, false],
+          [/(?<![\p{L}])(?:called|named|call|calls|nicknamed)\s+(him|her|it)\s+((?:the\s+)?(?:\p{Lu}[\p{L}'’-]+)(?:\s+\p{Lu}[\p{L}'’-]+)?)/u, false],
           [/(?<![\p{L}])([Hh]e|[Ss]he|[Ii]t)\s+(?:was|is)\s+(?:called|named|known as)\s+((?:\p{Lu}[\p{L}'’-]+)(?:\s+\p{Lu}[\p{L}'’-]+)?)/u, true]
         ];
         for (const [re, given] of pats) {
           const m = re.exec(s.text);
           if (!m) continue;
           const pos = s.start + m.index;
-          const persons = new Set(cast.filter((c) => !c.gone && ['person', 'creature'].includes(c.kind)).map((c) => c.key));
-          const before = hits.filter((h) => h.end <= pos && persons.has(h.key));
+          // (not the one who does the calling: "Constance called him Arthur")
+          const before = hits.filter((h) => h.end <= pos && persons.has(h.key) && !(given === false && /^[\s\p{Ll}]*$/u.test(p.text.slice(h.end, pos)) && h.end > s.start));
           if (!before.length) continue;
           const h = before[before.length - 1];
           let ref = p.text.slice(h.start, h.end);
@@ -301,6 +388,60 @@ module.exports = function canonEditor(C) {
     return out;
   }
 
+  /* ---------- the narrator ---------- */
+
+  // A story told in the first person: "I", "me", "my" in the narration
+  // (outside speech) five times or more. The lead is the narrator, who gets
+  // an entry like anyone else: named when someone names them to their face
+  // ("“You’ll be wanting your tea, Nell,” Granny Ruth said … in front of
+  // me") or the narration does ("called me Nell", "my name was Ida", "At
+  // home I was Eleanor"); else "the narrator".
+  const SELF = /(?<![\p{L}'’])(I|me|my|myself|mine|Me|My|Myself|Mine)(?![\p{L}'’])/gu;
+  function selfHits(p) {
+    const out = [];
+    for (const m of p.text.matchAll(SELF)) {
+      if (p.talk.some(([a, b]) => m.index < b && m.index + m[0].length > a)) continue;
+      out.push({ start: m.index, end: m.index + m[0].length, word: m[0].toLowerCase() });
+    }
+    return out;
+  }
+  function firstPerson(ch) {
+    return ch.paras.reduce((n, p) => n + selfHits(p).length, 0) >= 5;
+  }
+  function narratorNames(ch, cast, lower) {
+    const ok = (w) => w && /^\p{Lu}\p{Ll}/u.test(w) && !nonEntity(w, 'person') && !TITLES.has(w.toLowerCase()) && !(lower && lower.has(w.toLowerCase())) && !PRONOUNS[w.toLowerCase()];
+    const strong = [];
+    const weak = [];
+    const voc = [];
+    const asOther = new Set(); // a name the narration uses for someone else ("Nell said")
+    for (const p of ch.paras) {
+      const narr = (a, b) => !p.talk.some(([x, y]) => a < y && b > x);
+      for (const m of p.text.matchAll(/(?<![\p{L}])(?:called|call|calls|named)\s+me\s+(\p{Lu}[\p{L}'’-]+)|(?<![\p{L}])[Mm]y\s+name\s+(?:is|was)\s+(\p{Lu}[\p{L}'’-]+)/gu)) {
+        if (narr(m.index, m.index + m[0].length)) strong.push((m[1] || m[2]).replace(/['’]s$/, ''));
+      }
+      for (const m of p.text.matchAll(/(?<![\p{L}])I\s+(?:was|am|’m|'m)\s+(\p{Lu}[\p{L}'’-]+)(?=\s*[,.;!?]|\s+to\b)/gu)) {
+        if (narr(m.index, m.index + m[0].length)) weak.push(m[1]);
+      }
+      // a name said to someone in a paragraph whose narration has "me" in the same sentence
+      for (const s of p.sents) {
+        const narration = selfHits(p).filter((h) => h.start >= s.start && h.end <= s.end && h.word === 'me');
+        if (!narration.length) continue;
+        for (const [a, b] of speechSpans(p.text)) {
+          if (a < s.start || b > s.end + 1) continue;
+          const said = p.text.slice(a, b);
+          for (const m of said.matchAll(/(?:^[“"‘']\s*(\p{Lu}\p{Ll}+)\s*,|,\s*(\p{Lu}\p{Ll}+)\s*[,.!?]\s*[”"’']?\s*$|,\s*(\p{Lu}\p{Ll}+)\s*[,.!?])/gu)) voc.push(m[1] || m[2] || m[3]);
+        }
+      }
+      for (const m of p.text.matchAll(/(?<![\p{L}])(\p{Lu}\p{Ll}+)\s+(?:said|asked|told|was|had|did|went|came|looked|turned|smiled|nodded|laughed)\b/gu)) if (narr(m.index, m.index + m[0].length)) asOther.add(m[1]);
+    }
+    const good = (w) => ok(w) && !asOther.has(w);
+    // the narration's own word first, then a name said to the narrator's face
+    const name = strong.find(good) || voc.find(good) || null;
+    if (!name) return { name: null, aliases: [] };
+    // ("At home I was Eleanor": a second name, beside the first)
+    return { name, aliases: [...new Set([...strong, ...voc, ...weak])].filter((w) => w !== name && good(w)) };
+  }
+
   /* ---------- 2 · passage packs ---------- */
 
   // Where each cast member is named in the chapter: its names and aliases,
@@ -308,7 +449,8 @@ module.exports = function canonEditor(C) {
   // when nothing else has that word and nothing qualifies it ("the room",
   // not "the room with the green tiles")
   function chapterHits(ch, cast) {
-    const idx = mentionIndex(cast.map((c) => ({ id: c.key, name: c.name, kind: c.kind, aliases: c.aliases })));
+    const idx = mentionIndex(cast.filter((c) => !c.narrator || c.proper).map((c) => ({ id: c.key, name: c.narrator && !c.proper ? '\u0000' : c.name, kind: c.kind, aliases: c.aliases })));
+    const me = cast.find((c) => c.narrator);
     const heads = new Map();
     for (const c of cast) {
       if (c.kind !== 'place' || c.name.split(/\s+/).length < 2) continue;
@@ -318,6 +460,8 @@ module.exports = function canonEditor(C) {
     }
     return ch.paras.map((p) => {
       const hits = mentions(p.text, idx).map((m) => ({ key: m.id, start: m.start, end: m.end, via: m.via }));
+      // the narrator: "I", "me", "my" in the narration
+      if (me) for (const h of selfHits(p)) if (!hits.some((x) => x.start < h.end && x.end > h.start)) hits.push({ key: me.key, start: h.start, end: h.end, via: 'self' });
       for (const [head, key] of heads) {
         for (const m of p.text.matchAll(new RegExp(`(?<![\\p{L}])the\\s+${escRe(head)}(?![\\p{L}])(?!\\s+(?:with|of|that|where|which|on|in|at|behind|beside|across)\\b)`, 'giu'))) {
           if (hits.some((h) => h.start < m.index + m[0].length && h.end > m.index)) continue;
@@ -337,7 +481,7 @@ module.exports = function canonEditor(C) {
     const vote = (key, sex) => { if (!votes.has(key)) votes.set(key, { male: 0, female: 0 }); votes.get(key)[sex]++; };
     for (const p of ch.paras) {
       const free = (h) => !p.talk.some(([a, b]) => h.start < b && h.end > a);
-      const ph = hits[p.pi].filter((h) => living.has(h.key) && free(h));
+      const ph = hits[p.pi].filter((h) => living.has(h.key) && free(h) && h.via !== 'self');
       p.sents.forEach((s, si) => {
         const here = ph.filter((h) => h.start >= s.start && h.end <= s.end);
         const people = [...new Set(here.map((h) => h.key))];
@@ -377,13 +521,14 @@ module.exports = function canonEditor(C) {
           const m = !s.said && SUBJECT.exec(s.text);
           if (m && PERSONAL[m[1].toLowerCase()]) {
             const pos = s.start + m.index + m[0].length - m[1].length;
-            const seen = ph.filter((h) => h.end <= pos && living.has(h.key) && !p.talk.some(([a, b]) => h.start < b && h.end > a));
+            // (in the first person, "she" is never the narrator)
+            const seen = ph.filter((h) => h.end <= pos && living.has(h.key) && h.via !== 'self' && !p.talk.some(([a, b]) => h.start < b && h.end > a));
             const sex = PERSONAL[m[1].toLowerCase()];
             // the last one named before whose sex (if known) agrees
             let who = null;
             for (let i = seen.length - 1; i >= 0; i--) { const k = sexOf(seen[i].key); if (!k || k === sex) { who = seen[i].key; break; } }
             if (who == null && !seen.length && si === 0) for (let i = carry.length - 1; i >= 0; i--) { const k = sexOf(carry[i]); if (!k || k === sex) { who = carry[i]; break; } }
-            if (who === c.key && !here.some((h) => living.has(h.key) && h.start < pos)) { add(s, 'chain'); continue; }
+            if (who === c.key && !here.some((h) => living.has(h.key) && h.via !== 'self' && h.start < pos)) { add(s, 'chain'); continue; }
           }
         } else {
           // a place's (or group's, thing's) paragraph: after it's named,
@@ -393,7 +538,7 @@ module.exports = function canonEditor(C) {
         }
         if (c.setting && !s.said) add(s, 'setting');
       }
-      const named = ph.filter((h) => living.has(h.key) && !p.talk.some(([a, b]) => h.start < b && h.end > a));
+      const named = ph.filter((h) => living.has(h.key) && h.via !== 'self' && !p.talk.some(([a, b]) => h.start < b && h.end > a));
       for (const h of named) carry = [...carry.filter((k) => k !== h.key), h.key].slice(-3);
     }
     const ids = [...out.keys()].sort((a, b) => a - b);
@@ -730,7 +875,7 @@ module.exports = function canonEditor(C) {
   // reader said yes to (the engine's gates read it), traits as proposals.
   // → { calls, dropped: [{ entity, label, value, why }], told }
   const KIND = { cast: 'cast', dossier: 'dossier', verdict: 'verify', profile: 'profile' };
-  async function readChapter({ src, paras, entries, reader, cache, names, stop, tell, suspect, sexOf: sexKnown, timed = null }) {
+  async function readChapter({ src, paras, entries, reader, cache, names, stop, tell, suspect, sexOf: sexKnown, timed = null, narrator = null }) {
     const ch = chapterModel(paras);
     const book = `${src.book}, ${src.label}`;
     const dropped = [];
@@ -759,6 +904,20 @@ module.exports = function canonEditor(C) {
       if (cast.some((c) => c.entry === e)) continue;
       cast.push({ key: cast.length, name: e.name, kind: e.kind, aliases: [...e.aliases], in: '', proper: /^\p{Lu}/u.test(e.name), wanted: [], entry: e });
     }
+    // the narrator of a story told in the first person (never of the writer's notes)
+    let me = narrator ? cast.find((c) => c.entry === narrator) || null : null;
+    if (!me && !src.notes && !src.notebook && (narrator || firstPerson(ch))) {
+      const nn = narrator ? { name: narrator.name, aliases: narrator.aliases } : narratorNames(ch, cast, names && names.lower);
+      me = nn.name ? cast.find((c) => c.kind === 'person' && [c.name, ...c.aliases].some((n) => norm(n) === norm(nn.name))) || null : null;
+      if (!me) { me = { key: cast.length, name: nn.name || 'the narrator', kind: 'person', aliases: [], in: '', proper: !!nn.name && nn.name !== 'the narrator', wanted: [], entry: narrator || null }; cast.push(me); }
+      for (const a of nn.aliases || []) {
+        const other = cast.find((c) => c !== me && !c.gone && [c.name, ...c.aliases].some((n) => norm(n) === norm(a)));
+        if (other && other.kind === 'person') mergeCast(cast, me, other);
+        else if (!other && !me.aliases.some((x) => norm(x) === norm(a)) && norm(a) !== norm(me.name)) me.aliases.push(a);
+      }
+    }
+    if (me) me.narrator = true;
+    for (let i = cast.length - 1; i >= 0; i--) if (cast[i].gone) cast.splice(i, 1);
     cast.forEach((c, i) => { c.key = i; });
     const hits = chapterHits(ch, cast);
     const hinted = sexHints(ch, hits, cast);
@@ -776,7 +935,7 @@ module.exports = function canonEditor(C) {
     let done = 0;
     await pool(jobs, reader.parallel || 1, async ({ c, part }) => {
       if (tell) tell({ phase: 'dossier', name: c.name, n: ++done, of: jobs.length });
-      const facts = await ask('dossier', H('dossier', c.name, c.kind, c.aliases, part.text), () => reader.dossier({ name: c.name, kind: c.kind, aliases: c.aliases, text: part.text, n: part.lines.length }));
+      const facts = await ask('dossier', H('dossier', c.name, c.kind, c.aliases, part.text, !!c.narrator), () => reader.dossier({ name: c.name, kind: c.kind, aliases: c.aliases, text: part.text, n: part.lines.length, ...(c.narrator ? { narrator: true } : {}) }));
       for (const x of facts || []) {
         const gt = gateFact(x, part, c, ctx);
         if (gt.why) { dropped.push({ entity: c.name, label: x && x.a, value: x && x.v, why: gt.why }); continue; }
@@ -855,8 +1014,8 @@ module.exports = function canonEditor(C) {
       const n = hits.reduce((k, ph) => k + ph.filter((h) => h.key === c.key && h.via !== 'head').length, 0);
       if (n >= 2 && (c.proper || ['person', 'creature', 'place', 'group'].includes(c.kind))) entryOf(c);
     }
-    return { calls, dropped, kept, cast, ch };
+    return { calls, dropped, kept, cast, ch, narrator: me ? (me.entry || made.get(me.key) || null) : null };
   }
 
-  return { EDITOR_PROMPT, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
+  return { EDITOR_PROMPT, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
 };

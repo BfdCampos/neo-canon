@@ -256,7 +256,31 @@
 
   const WORD = /[\p{L}\p{M}][\p{L}\p{M}'’-]*/gu;
   const isLetter = (c) => !!c && /[\p{L}\p{M}\p{N}]/u.test(c);
-  const TITLES = new Set(['captain', 'capt', 'lord', 'lady', 'sir', 'dame', 'king', 'queen', 'prince', 'princess', 'master', 'mistress', 'father', 'mother', 'brother', 'sister', 'mr', 'mrs', 'ms', 'dr', 'old', 'young', 'the']);
+  const TITLES = new Set(['captain', 'capt', 'lord', 'lady', 'sir', 'dame', 'king', 'queen', 'prince', 'princess', 'master', 'mistress', 'father', 'mother', 'brother', 'sister', 'mr', 'mrs', 'ms', 'dr', 'old', 'young', 'the',
+    'miss', 'mister', 'madam', 'doctor', 'reverend', 'rev', 'commander', 'inspector', 'detective', 'sergeant', 'sgt', 'constable', 'lieutenant', 'lt', 'colonel', 'col', 'major', 'general', 'gen', 'admiral', 'professor', 'prof',
+    'nurse', 'cadet', 'officer', 'chief', 'granny', 'gran', 'grandma', 'grandad', 'grandpa', 'grandfather', 'grandmother', 'nana', 'uncle', 'aunt', 'auntie', 'cousin', 'saint', 'st', 'brother', 'private', 'corporal', 'judge', 'mayor']);
+  // Words written with a capital that name no one and nowhere a story bible
+  // keeps (round 2, the held-out stories): months, days, holidays,
+  // languages, "Someone". A name made only of these is no entry.
+  const NON_ENTITY = new Set(('january february march april may june july august september october november december ' +
+    'monday tuesday wednesday thursday friday saturday sunday mondays tuesdays wednesdays thursdays fridays saturdays sundays ' +
+    'christmas easter michaelmas candlemas lammas whitsun whitsuntide lent advent epiphany halloween hallowe’en hallowe\'en yule midsummer midwinter hogmanay passover ramadan eid diwali hanukkah thanksgiving ' +
+    'new year boxing day good friday shrove tuesday ash wednesday may day christmas eve new year’s new year\'s ' +
+    'english french welsh italian spanish german latin greek gaelic irish scots scottish dutch russian chinese mandarin cantonese japanese arabic hindi portuguese polish swedish norwegian danish finnish hebrew yiddish turkish persian urdu bengali korean cornish breton basque catalan ' +
+    'someone somebody everyone everybody anyone anybody nobody noone nothing something everything anything somewhere nowhere everywhere ' +
+    'sir madam ma’am ma\'am miss mister ok okay yes no hello goodbye').split(' '));
+  // (months that are also given names: no entry unless a person)
+  const NAME_MONTHS = new Set(['april', 'may', 'june', 'august']);
+  const PHRASES_NOT = ['new year', 'boxing day', 'good friday', 'shrove tuesday', 'ash wednesday', 'may day', 'christmas eve', 'new year’s day', "new year's day", 'no one', 'every one'];
+  const nonEntity = (name, kind = null) => {
+    const n = String(name || '').toLowerCase().replace(/^the\s+/, '').replace(/[’']s$/, '').trim();
+    if (!n) return true;
+    if (PHRASES_NOT.includes(n)) return true;
+    const ws = n.split(/\s+/);
+    if (kind === 'person' && ws.length === 1 && NAME_MONTHS.has(n)) return false;
+    // a title alone ("Commander") or titles and days ("Easter Sunday")
+    return ws.every((w) => NON_ENTITY.has(w) || TITLES.has(w));
+  };
   const nameParts = (name) => String(name || '').split(/\s+/).map((w) => w.replace(/[^\p{L}\p{M}'’-]/gu, '')).filter((w) => w.length >= 3 && !TITLES.has(w.toLowerCase()));
 
   // What names each entry: its name and aliases, and for a person each part
@@ -1610,7 +1634,7 @@
     for (const t of texts) {
       for (const m of t.matchAll(/(?<![\p{L}\p{M}])(?:in|at|to|from|of|below|above|near|towards?|through|into|past|beyond|outside)\s+(\p{Lu}[\p{Ll}\p{M}]{3,})(?![\p{L}\p{M}'’-])/gu)) {
         const w = m[1];
-        if (names.lower.has(w.toLowerCase()) || names.has(w.toLowerCase()) || TITLES.has(w.toLowerCase())) continue;
+        if (names.lower.has(w.toLowerCase()) || names.has(w.toLowerCase()) || TITLES.has(w.toLowerCase()) || nonEntity(w)) continue;
         count.set(w, (count.get(w) || 0) + 1);
       }
     }
@@ -2427,6 +2451,8 @@
         // the facts the editor's reading kept this time (open ones the reader
         // said yes to: `fresh`), and the trait proposals it read
         const fresh = new WeakSet();
+        // the narrator of each book told in the first person (canon.json `narrators`)
+        const narrators = new Map();
         const keptRead = [];
         const freshTraits = new WeakSet();
         const told = new Map(); // a chapter read whole for its story → [{ who, did, quote, src }]
@@ -2450,9 +2476,10 @@
             const earlier = [...told.values()].flat();
             const suspect = editorSuspects({ paras, entries, kept: keptRead, told: earlier, rare: rarity(sources.filter((x) => !isNote(x))) });
             const sexOf = (e) => { const f = e.facts.find((x) => x.attr === 'sex' && ['verified', 'yours'].includes(x.state)); return f ? f.value : null; };
+            const narrator = narrators.get(src.bookId) || entries.find((e) => !e.locked && e.id === (meta.narrators || {})[src.bookId]) || null;
             let r;
             try {
-              r = await Editor.readChapter({ src, paras, entries, reader, cache: cache.ed, names, stop, suspect, sexOf,
+              r = await Editor.readChapter({ src, paras, entries, reader, cache: cache.ed, names, stop, suspect, sexOf, narrator,
                 tell: (p) => {
                   if (p.phase === 'dossier' && !p.of) return;
                   if (p.phase === 'cast') phase = { phase: 'cast' };
@@ -2469,6 +2496,7 @@
             plan.verify = 0;
             if (!r || r.stopped || (stop && stop())) { stopped = true; break; }
             cache.ed.dropped[key] = r.dropped;
+            if (r.narrator) narrators.set(src.bookId, r.narrator);
             for (const k of r.kept) {
               const { e, f } = k;
               // the same fact again (another passage) is one fact
@@ -2551,6 +2579,7 @@
         // a new entry never takes the name of a file Canon couldn't read
         for (const e of entries) if (!e.locked && !before.has(e.id) && taken.has(e.id)) e.id += '-' + entries.length;
         for (let i = entries.length - 1; i >= 0; i--) if (entries[i].locked) entries.splice(i, 1);
+        if (narrators.size) { meta.narrators = meta.narrators || {}; for (const [b, e] of narrators) if (entries.includes(e)) meta.narrators[b] = e.id; }
 
         // the story so far: a chapter read again has its Canon's notes made
         // afresh; the writer's lines stay, and win over a note on the same passage
@@ -3157,10 +3186,11 @@
         const r = await safe({ system: CAST_SYSTEM, user, schema: CAST_SCHEMA, maxTokens: 700, compact: true }, null);
         return { cast: ((r && r.c) || []).map((x) => ({ name: x.n, kind: x.k, aliases: x.a || [] })), setting: (r && r.s) || '' };
       },
-      async dossier({ name, kind, aliases = [], text }) {
+      async dossier({ name, kind, aliases = [], text, narrator = false }) {
         this.calls++;
         const also = aliases.filter((a) => norm(a) !== norm(name.replace(/^the\s+/i, ''))).slice(0, 4);
-        const r = await safe({ system: dossierSystem(kind), user: `Sentences about ${name} (${kind}${also.length ? ', also called ' + also.join(', ') : ''}):\n${text}\n\nFacts about ${name} as JSON.`, schema: DOSSIER_SCHEMA, maxTokens: 900, compact: true }, null);
+        const who = narrator ? `${kind}, the narrator: “I”, “me” and “my” outside quotation marks are ${name}` : kind;
+        const r = await safe({ system: dossierSystem(kind), user: `Sentences about ${name} (${who}${also.length ? ', also called ' + also.join(', ') : ''}):\n${text}\n\nFacts about ${name} as JSON.`, schema: DOSSIER_SCHEMA, maxTokens: 900, compact: true }, null);
         return (r && r.f) || [];
       },
       // `setting`: the chapter happens there, so its routines need not name it;
@@ -3200,7 +3230,7 @@
   const Editor = typeof require === 'function' && typeof module === 'object' && module.exports ? (() => {
     try {
       return require('./canon-editor.js')({ norm, normMap, textHash, sentences, speechSpans, reportedSpans, mentions, mentionIndex, nameParts, wordsOf, slug, newEntry,
-        findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, ATTRS, canonLabel, labelFamily, KNOWN_KEYS, openLabel });
+        findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, ATTRS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, nonEntity, stripTitles, talkSpans, referent, paraCtx, KIN, KIN_NOUNS: () => KIN_NOUNS });
     } catch { return null; }
   })() : null;
 
