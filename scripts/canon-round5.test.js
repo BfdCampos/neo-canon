@@ -179,3 +179,14 @@ test('values of different people never meet: an age beside another\'s, years ser
   const c = E.clashDetail(age, 'Dunn was forty-four that winter', 'Dunn was forty-four that winter, and Jo was twenty-six.', ['Dunn']);
   assert.equal(c, null);
 });
+
+test('dev4 with the drift readers: none of the traps the readers propose is kept (a list\'s possessive, a route, a breakfast, one-off actions, an object\'s colour)', async () => {
+  for (const name of ['dev4/carrick-head', 'dev4/lugger', 'dev4/tollands']) {
+    for (const mode of ['drift', 'drift5']) {
+      const r = await run(name, mode);
+      assert.deepEqual(P.survivors(r), [], `${name} · ${mode}`);
+      assert.deepEqual(r.score.precision.wrong, [], `${name} · ${mode}`);
+      assert.deepEqual(r.score.slips.false, [], `${name} · ${mode}`);
+    }
+  }
+});
