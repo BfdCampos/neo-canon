@@ -774,6 +774,8 @@ module.exports = function canonEditor(C) {
     // (no subject: the last one named before it, in the same clause run —
     // "its Long Gallery, … a cold panelled room …, where the light came in
     // through tall windows")
+    // (a place's or thing's claim in a sentence whose subject is a he or she: theirs, not the place's)
+    if (subj && subj.pron && subj.key === undefined && ['he', 'she', 'i'].includes(toks[subj.i].lw) && !['person', 'creature'].includes(c.kind)) return -1;
     if (!subj) return near && near.key !== undefined && !object(near) && !/[;:]/.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start)) ? near.key : null;
     return subj.key === undefined ? null : subj.key;
   }
@@ -912,6 +914,10 @@ module.exports = function canonEditor(C) {
     // rows") is the scene; an apposition before the verb ("Clem, his grey
     // mare, was waiting") still describes. Roles, routines, history, kin: not this.
     if (actionPredicate(cited, grounded, c, key)) return { why: 'once' };
+    // "sweeping the floor", "carrying fence posts": what they were doing then
+    if (['other', 'state', 'location', 'appearance', 'personality', 'description'].includes(labelFamily(key)) && /^(?!being\b|living\b|wearing\b)\p{L}+ing\s+(?:the|a|an|his|her|their|its|some|\p{L}+s)\b/u.test(value) && !HABITUAL.test(citedText)) return { why: 'once' };
+    // a place's location that names the place itself ("smell of the press-house") says nothing of where it is
+    if (c.kind !== 'person' && c.kind !== 'creature' && labelFamily(key) === 'location' && [c.name, ...c.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && norm(value).includes(b); })) return { why: 'empty' };
     // a past role is history, not who they are now
     if (labelFamily(key) === 'role' && PAST_ROLE.test(clauses.join(' ')) && !ONGOING.test(clauses.join(' '))) { g = 'history'; key = 'history'; }
     // a habit or routine is what is done more than once: the words must say so
