@@ -2347,6 +2347,9 @@
           }
           const s = sents[c.si];
           if (PLAN.test(s.text)) continue;
+          // (round 4) an animal's he or she only as the subject, with no person named before it in the sentence ("Smut fell asleep on his chest")
+          const ent = world.get(c.id).e;
+          if (ent.kind === 'creature' && (!['he', 'she'].includes(word) || mentions(p.text.slice(s.start, c.start), idx).some((m) => m.id !== c.id && (entries.find((x) => x.id === m.id) || {}).kind === 'person'))) continue;
           const key = `${src.bookId}/${src.chId}/${pi}/${c.si}`;
           if (!out.has(c.id)) out.set(c.id, new Map());
           const m = out.get(c.id);

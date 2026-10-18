@@ -646,6 +646,9 @@ module.exports = function canonEditor(C) {
         const m = /^\s*(?:,|\s(?:was|is))\s*(?:the|a|an|his|her|their|my|\p{Lu}\p{L}+['’]s)\s+((?:[\p{L}-]+,?\s+){0,3}[\p{L}-]+)/u.exec(p.text.slice(h.end, h.end + 60));
         const w = m && m[1].split(/[\s,]+/).find((x) => SEX_WORDS[x]);
         if (w && SEX_WORDS[w] && !nouns.has(h.key)) nouns.set(h.key, SEX_WORDS[w][0]);
+        // ("a collie bitch called Moss": the noun before the name)
+        const b = /(?:^|\s)(?:a|an|the|his|her|their|my)\s+(?:[\p{L}-]+\s+){0,2}?([\p{Ll}]+)\s+(?:called|named)\s+$/u.exec(p.text.slice(Math.max(0, h.start - 60), h.start));
+        if (b && SEX_WORDS[b[1]] && !nouns.has(h.key)) nouns.set(h.key, SEX_WORDS[b[1]][0]);
       }
     }
     const sex = (k) => (k === -1 ? null : (sexOf && sexOf(k)) || nouns.get(k) || hinted.get(k) || learned.get(k) || null);
@@ -737,6 +740,19 @@ module.exports = function canonEditor(C) {
           let fromCarry = false;
           if (['male', 'female'].includes(want) && !cands.filter((k) => k !== exclude).length) { fromCarry = true; for (const x of [...carry].reverse()) push(x.key); }
           const ok = cands.filter((k) => k !== exclude);
+          // (round 4) an animal is "it" or its name: a he or she means one
+          // whose sex the text has not given only when it goes on with the
+          // animal as the subject and no person could be meant instead
+          // ("Smut, the mill cat, fell asleep on his chest": the Younger's chest)
+          if (['male', 'female'].includes(want)) {
+            const subj = role === 's' ? (sentSubject != null ? sentSubject : subjectBefore) : null;
+            const beast = (k) => k >= 0 && byKey.get(k) && byKey.get(k).kind === 'creature' && !sex(k);
+            const gone = ok.filter(beast).filter((k) => !(subj === k && !ok.some((x) => x !== k && x >= 0 && byKey.get(x) && byKey.get(x).kind === 'person')));
+            for (const k of gone) ok.splice(ok.indexOf(k), 1);
+            // (the nearest was the animal: no one is sure, so no one)
+            // (unless it owns something in a sentence whose subject is a person who agrees: "the Younger sat …, and Smut fell asleep on his chest")
+            if (gone.length && gone.includes(cands[0]) && !(role === 'p' && sentSubject != null && ok.includes(sentSubject))) continue;
+          }
           // (round 3) a body part a verb of the subject's own handles is the
           // subject's, whatever the pronoun says: "He rubbed her eyes with the
           // heel of her hand" (the boy's eyes, the pronoun a slip)

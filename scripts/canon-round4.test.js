@@ -170,3 +170,24 @@ test('moments by rule, word by word: the clause, the condition, the kind of one 
   assert.ok(gone(gate(at('Mara stood'), 'state', 'mood', 'the orchard gate')));
   assert.notEqual(gate(at('Mara sat'), 'appearance', 'posture', 'sits very upright'), 'moment', 'a manner of sitting is no moment by this rule');
 });
+
+/* ---------- 4 · whose pronoun ---------- */
+
+test('wrong subject: a man\'s he and his beside an animal never give it a sex; its own she does', async () => {
+  const E = Canon.Editor;
+  const ch = E.chapterModel(Canon.sourceParas('<p>The Younger sat late over the ledgers, and Smut, the mill cat, fell asleep on his chest. He was cold and tired.</p><p>Biscuit slept under the stove in winter, and she would let no one but the Younger lift her.</p>'));
+  const cast = [{ key: 0, name: 'the Younger', kind: 'person', aliases: ['Younger'] }, { key: 1, name: 'Smut', kind: 'creature', aliases: [] }, { key: 2, name: 'Biscuit', kind: 'creature', aliases: [] }];
+  const hits = E.chapterHits(ch, cast);
+  E.resolveRefs(ch, hits, cast, () => null);
+  const who = (pi, word) => { const p = ch.paras[pi]; const at = p.text.indexOf(word); const r = p.refs.get(at); return r ? cast[r.key].name : null; };
+  assert.equal(who(0, 'his chest'), 'the Younger');
+  assert.equal(who(0, 'He was'), 'the Younger');
+  assert.equal(who(1, 'she would'), 'Biscuit');
+  // in a read, with a reader that gives the cat the nearest he (the drift reader)
+  const km = await run('dev3/kerrs-mill');
+  assert.ok(!entry(km.entries, 'Smut').facts.some((f) => f.attr === 'sex'), lines(entry(km.entries, 'Smut')).join('\n'));
+  assert.ok(entry(km.entries, 'Biscuit').facts.some((f) => f.attr === 'sex' && f.value === 'female' && f.state === 'verified'), lines(entry(km.entries, 'Biscuit')).join('\n'));
+  // (and Moss, "a collie bitch called Moss", is still the she of the sentences after: Lyle's dog, never the narrator)
+  const sh = await run('dev2/salt-house', 'adversarial');
+  for (const name of ['Nell', 'Uncle Tobiah']) assert.ok(!shown(entry(sh.entries, name)).some((f) => /range|come to/.test(f.value)), lines(entry(sh.entries, name)).join('\n'));
+});
