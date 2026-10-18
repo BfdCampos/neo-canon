@@ -744,7 +744,7 @@ module.exports = function canonEditor(C) {
     for (const x of cand) {
       if (!x.poss || x.end >= ci) continue;
       const sub = cand.filter((y) => y.end < x.i).pop();
-      if (sub && sub.key === c.key && /^(?:['’]s)?\s*(?:[,:—–]|\s(?:was|is)(?:\s+(?:a|an|the))?)\s*$/u.test(s.text.slice(toks[sub.end].end - s.start, toks[x.i].start - s.start))) x.poss = false, x.key = c.key;
+      if (sub && sub.key === c.key && /^(?:['’]s)?\s*(?:[,:—–]|\s(?:was|is)(?:\s+(?:a|an|the))?)\s*$/u.test(s.text.slice(toks[sub.end].end - s.start, toks[x.i].start - s.start))) { x.poss = false; x.key = c.key; }
     }
     const before = cand.filter((x) => x.end < ci);
     // an apposition: "at the Corn Exchange, a sandstone hall"; "its Long
@@ -796,7 +796,7 @@ module.exports = function canonEditor(C) {
       for (const m of l.s.text.matchAll(/(?:,\s+(?:and|but|so)\s+|;\s+|:\s+)/g)) if (at0 >= 0 && m.index < all[at0].at) from = m.index + m[0].length;
       let toks = all.filter((t) => t.at >= from);
       // (a clause with no verb of its own, "and Moss at his heels", is the sentence's)
-      if (!toks.some((t, i) => DYNAMIC.test(t.w) || ['was', 'were', 'is', 'are', 'had', 'has', 'have'].includes(t.w))) toks = all;
+      if (!toks.some((t) => DYNAMIC.test(t.w) || ['was', 'were', 'is', 'are', 'had', 'has', 'have'].includes(t.w))) toks = all;
       // the main verb: the first dynamic past, or "was|were" + -ing, outside a leading apposition
       let vi = -1;
       for (let i = 0; i < toks.length; i++) {
