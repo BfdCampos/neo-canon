@@ -333,7 +333,7 @@ module.exports = function canonEditor(C) {
     // a role keeps its bare word as an alias too ("warden" for "the warden")
     for (const c of cast) {
       if (/^the\s/i.test(c.name) && !EPITHET.test(c.name) && !c.aliases.some((a) => norm(a) === norm(c.name.slice(4)))) c.aliases.push(c.name.slice(4));
-      for (const a of [...c.aliases]) if (/^the\s/i.test(a) && !EPITHET.test(a) && !c.aliases.some((x) => norm(x) === norm(a.slice(4)))) c.aliases.push(a.slice(4));
+      for (const a of [...c.aliases]) if (/^the\s/i.test(a) && !EPITHET.test(a) && !(c.noBare && c.noBare.has(norm(a))) && !c.aliases.some((x) => norm(x) === norm(a.slice(4)))) c.aliases.push(a.slice(4));
       c.aliases = c.aliases.filter((a, i, all) => norm(a) !== norm(c.name) && all.findIndex((x) => norm(x) === norm(a)) === i);
     }
     const kept = cast.filter((c) => !c.gone);
@@ -549,7 +549,7 @@ module.exports = function canonEditor(C) {
       const given = base.split(/\s+/)[0];
       const old = holder(new RegExp(`^${escRe(base)}${GEN_OLD.source}`, 'u'));
       const young = holder(new RegExp(`^${escRe(base)}${GEN_YOUNG.source}`, 'u'));
-      const add = (c, form) => { if (c && written(text, form) && !c.aliases.some((a) => norm(a) === norm(form)) && !cast.some((o) => o !== c && !o.gone && [o.name, ...o.aliases].some((n) => norm(n) === norm(form)))) c.aliases.push(form); };
+      const add = (c, form) => { if (c && written(text, form) && !c.aliases.some((a) => norm(a) === norm(form)) && !cast.some((o) => o !== c && !o.gone && [o.name, ...o.aliases].some((n) => norm(n) === norm(form)))) { c.aliases.push(form); (c.noBare = c.noBare || new Set()).add(norm(form)); } };
       if (old && young && old !== young) {
         for (const f of ['the old man', 'The old man', 'old ' + given, 'Old ' + given]) add(old, f);
         for (const f of ['the boy', 'The boy', 'the lad', 'young ' + given, 'Young ' + given]) add(young, f);
@@ -562,6 +562,20 @@ module.exports = function canonEditor(C) {
             else if (!o && !c.aliases.some((a) => norm(a) === norm(nm))) c.aliases.push(nm);
           }
         }
+      }
+    }
+    // a rank only one of them holds, written as "the commander", is that one ("The commander had three years left")
+    {
+      const holders = new Map();
+      for (const x of [...cast.filter((y) => !y.gone && y.kind === 'person'), ...live.filter((y) => y.kind === 'person' && !cast.some((c) => c.entry === y))]) {
+        const r = R.rankOf(x.facts ? x : { ...x, facts: [] }, { loose: true });
+        if (r) { const w = r.key.split(' ').pop(); holders.set(w, [...new Set((holders.get(w) || []).concat(x))]); }
+      }
+      for (const [w, xs] of holders) {
+        const form = 'the ' + w;
+        if (xs.length !== 1 || !written(text, form) || cast.some((c) => !c.gone && [c.name, ...c.aliases].some((n) => norm(n) === form))) continue;
+        const c = xs[0].facts ? holder(new RegExp(`^${escRe(xs[0].name)}$`, 'u')) : xs[0];
+        if (c && !c.aliases.some((a) => norm(a) === form)) { c.aliases.push(form); (c.noBare = c.noBare || new Set()).add(form); }
       }
     }
     // a short name for the one given name the shelf holds ("Tom" for Thomas Carew)

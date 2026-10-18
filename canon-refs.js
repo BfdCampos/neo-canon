@@ -286,9 +286,13 @@ module.exports = function canonRefs(C) {
     const talk = talkSpans(text);
     const out = [];
     const sents = sentences(text);
-    for (const m of mentions(text, idx)) {
+    const ms = mentions(text, idx);
+    for (const m of ms) {
       const e = L.find((x) => x.id === m.id);
       if (!e || e.kind !== 'person') continue;
+      // (a rank used as a name — "Commander" in "Lieutenant Commander Okafor" — is no name; the name after it is)
+      const said = norm(text.slice(m.start, m.end)).replace(/^the\s+/, '');
+      if (ALL_RANKS.includes(said) || ms.some((y) => y !== m && y.id === m.id && y.start > m.end && /^\s+$/.test(text.slice(m.end, y.start)))) continue;
       const own = rankOf(e);
       if (!own) continue;
       // the rank before the mention, or the one the mention's own words open with ("Constable Pryce" as an alias)
