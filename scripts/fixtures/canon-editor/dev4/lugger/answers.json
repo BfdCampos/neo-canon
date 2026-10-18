@@ -1,0 +1,684 @@
+{
+ "about": "dev4 · The Lugger (round 5): a landlady’s terrier by breed, sex and a mark; a lodger whose notebook eyes the prose says otherwise (Which is right?), named in Ch 2 only by the short form of his given name; a possessive list (his sister has their mother’s black hair); an object’s colour in a room. Ch 2 gives the lodger dark hair under the short name and the terrier another breed by her owner’s possessive. Decoys: one-off actions, a route, a breakfast elsewhere, two people’s ages.",
+ "set": "dev4/lugger",
+ "shelf": "Polwenna",
+ "book": "book-the-lugger-lg1",
+ "chapters": {
+  "n1": "People",
+  "c1": "Ch 1",
+  "c2": "Ch 2"
+ },
+ "notEntities": [
+  "Jack Russell",
+  "Sunday",
+  "the war"
+ ],
+ "entities": [
+  {
+   "id": "hollis",
+   "name": "Nora Hollis",
+   "kind": "person",
+   "aliases": [
+    "Mrs Hollis",
+    "Mrs Nora Hollis",
+    "Hollis"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "role",
+     "value": "landlady of the Lugger for thirty years",
+     "quote": "Mrs Nora Hollis had kept it for thirty years.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "landlady",
+      "landlady of the Lugger",
+      "kept the Lugger for thirty years",
+      "has kept it for thirty years"
+     ],
+     "also": [
+      "Nora Hollis: landlady of the Lugger."
+     ]
+    },
+    {
+     "attr": "appearance.build",
+     "value": "stout",
+     "quote": "She was a stout, red-faced widow of sixty",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "stout, red-faced"
+     ]
+    },
+    {
+     "attr": "appearance.face",
+     "value": "red-faced",
+     "quote": "She was a stout, red-faced widow of sixty",
+     "ch": "c1",
+     "weight": "should",
+     "alt": []
+    },
+    {
+     "attr": "state",
+     "value": "a widow",
+     "quote": "She was a stout, red-faced widow of sixty",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "widow"
+     ],
+     "also": [
+      "A widow."
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "sixty",
+     "quote": "She was a stout, red-faced widow of sixty",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "60"
+     ],
+     "also": [
+      "Sixty."
+     ]
+    },
+    {
+     "attr": "routine",
+     "value": "rises at five every morning to bake",
+     "quote": "who rose at five every morning to bake",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "rises at five",
+      "rose at five every morning to bake"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "goes to chapel every Sunday",
+     "quote": "Mrs Hollis had gone to chapel, as she did every Sunday.",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "chapel every Sunday"
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "She was a stout, red-faced widow of sixty",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "widow",
+      "woman"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "possession",
+     "value": "a dog, Pickle",
+     "quote": "Her dog was a wire-haired fox terrier called Pickle",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "Pickle"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "description",
+     "value": "eleven",
+     "why": "a number with no noun",
+     "alt": [
+      "eleven lodgers"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "twenty-four",
+     "why": "Carew’s"
+    },
+    {
+     "attr": "age",
+     "value": "nineteen",
+     "why": "Maud’s"
+    }
+   ]
+  },
+  {
+   "id": "pickle",
+   "name": "Pickle",
+   "kind": "creature",
+   "aliases": [],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "species",
+     "value": "dog, a wire-haired fox terrier",
+     "quote": "Her dog was a wire-haired fox terrier called Pickle",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "dog",
+      "fox terrier",
+      "wire-haired fox terrier",
+      "terrier"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "a bitch with one black ear",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "bitch"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "appearance.mark",
+     "value": "one black ear",
+     "quote": "a bitch with one black ear",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "black ear"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "barks at every boat that comes in",
+     "quote": "who barked at every boat that came in",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "barks at boats",
+      "barks at every boat"
+     ]
+    },
+    {
+     "attr": "possession",
+     "value": "Mrs Hollis’s dog",
+     "quote": "Her dog was a wire-haired fox terrier called Pickle",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "Hollis",
+      "Nora Hollis",
+      "belongs to Mrs Hollis"
+     ],
+     "also": [
+      "Pickle: Mrs Hollis’s dog."
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "walked along the harbour wall every evening at six",
+     "quote": "Every evening at six Carew walked Pickle along the harbour wall.",
+     "ch": "c1",
+     "weight": "nice",
+     "alt": [
+      "walked along the harbour wall"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "species",
+     "value": "Jack Russell",
+     "why": "Ch 2’s slip",
+     "alt": [
+      "a little Jack Russell"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "carew",
+   "name": "Thomas Carew",
+   "kind": "person",
+   "aliases": [
+    "Carew",
+    "Tom"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "name",
+     "value": "Tom",
+     "quote": "Tom came down late, rubbing his dark hair dry with a towel.",
+     "ch": "c2",
+     "weight": "should",
+     "alt": []
+    },
+    {
+     "attr": "age",
+     "value": "twenty-four",
+     "quote": "He was twenty-four, a clerk at the harbour office",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "24"
+     ],
+     "also": [
+      "Carew was twenty-four and Maud was nineteen."
+     ]
+    },
+    {
+     "attr": "occupation",
+     "value": "clerk at the harbour office",
+     "quote": "a clerk at the harbour office",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "clerk"
+     ],
+     "also": [
+      "clerk at the harbour office."
+     ]
+    },
+    {
+     "attr": "appearance.hair",
+     "value": "ginger",
+     "quote": "with ginger hair and brown eyes behind steel spectacles",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "ginger hair"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "appearance.eyes",
+     "value": "brown",
+     "quote": "with ginger hair and brown eyes behind steel spectacles",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "brown eyes"
+     ]
+    },
+    {
+     "attr": "appearance.other",
+     "value": "steel spectacles",
+     "quote": "with ginger hair and brown eyes behind steel spectacles",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "spectacles"
+     ]
+    },
+    {
+     "attr": "location.home",
+     "value": "the back room of the Lugger",
+     "quote": "Thomas Carew had the back room.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "the back room",
+      "back room"
+     ],
+     "also": [
+      "Thomas Carew: lodger in the back room"
+     ]
+    },
+    {
+     "attr": "routine",
+     "value": "walks Pickle along the harbour wall at six every evening",
+     "quote": "Every evening at six Carew walked Pickle along the harbour wall.",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "walks Pickle every evening"
+     ]
+    },
+    {
+     "attr": "relationship.kin",
+     "value": "brother of Maud",
+     "quote": "Carew’s sister Maud had the same freckles",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "Maud",
+      "sister Maud"
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "male",
+     "quote": "He was twenty-four, a clerk at the harbour office",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "man"
+     ],
+     "hard": true
+    }
+   ],
+   "traps": [
+    {
+     "attr": "appearance.hair",
+     "value": "black",
+     "why": "Maud’s: their mother’s black hair is hers",
+     "alt": [
+      "black hair"
+     ]
+    },
+    {
+     "attr": "appearance.hair",
+     "value": "dark",
+     "why": "Ch 2’s slip"
+    },
+    {
+     "attr": "description",
+     "value": "yellow oilskin",
+     "why": "the oilskin’s colour",
+     "alt": [
+      "yellow"
+     ]
+    },
+    {
+     "attr": "location.home",
+     "value": "the Ship",
+     "why": "breakfast there once",
+     "alt": [
+      "Ship"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "straightened his tie",
+     "why": "one moment",
+     "alt": [
+      "straightens his tie"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "did not look at the clock",
+     "why": "one moment"
+    },
+    {
+     "attr": "appearance",
+     "value": "the long way",
+     "why": "a route",
+     "alt": [
+      "long way"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "nineteen",
+     "why": "Maud’s"
+    }
+   ]
+  },
+  {
+   "id": "maud",
+   "name": "Maud",
+   "kind": "person",
+   "aliases": [],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "relationship.kin",
+     "value": "Carew’s sister",
+     "quote": "Carew’s sister Maud had the same freckles",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "sister",
+      "sister of Carew",
+      "Thomas Carew"
+     ]
+    },
+    {
+     "attr": "appearance.hair",
+     "value": "black, her mother’s",
+     "quote": "their mother’s black hair",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "black",
+      "black hair"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "appearance.face",
+     "value": "freckles, like her brother’s",
+     "quote": "Carew’s sister Maud had the same freckles",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "freckles"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "nineteen",
+     "quote": "Maud was nineteen",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "19"
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "Carew’s sister Maud had the same freckles",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "sister"
+     ],
+     "hard": true
+    }
+   ],
+   "traps": [
+    {
+     "attr": "age",
+     "value": "twenty-four",
+     "why": "Carew’s"
+    }
+   ]
+  },
+  {
+   "id": "lugger",
+   "name": "the Lugger",
+   "kind": "place",
+   "aliases": [
+    "Lugger"
+   ],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "location",
+     "value": "at the top of Quay Street in Polwenna",
+     "quote": "The Lugger stood at the top of Quay Street in Polwenna",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "top of Quay Street",
+      "Quay Street, Polwenna",
+      "Polwenna"
+     ]
+    },
+    {
+     "attr": "description",
+     "value": "a narrow slate house with a blue door",
+     "quote": "a narrow slate house with a blue door",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "narrow slate house",
+      "blue door",
+      "slate house"
+     ]
+    },
+    {
+     "attr": "description",
+     "value": "four rooms to let",
+     "quote": "four rooms to let",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "four rooms"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "description",
+     "value": "yellow",
+     "why": "the oilskin’s"
+    },
+    {
+     "attr": "description",
+     "value": "eleven",
+     "why": "a number with no noun",
+     "alt": [
+      "eleven lodgers"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "polwenna",
+   "name": "Polwenna",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": []
+  },
+  {
+   "id": "quay-street",
+   "name": "Quay Street",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": []
+  },
+  {
+   "id": "ship",
+   "name": "the Ship",
+   "kind": "place",
+   "aliases": [
+    "Ship"
+   ],
+   "weight": "nice",
+   "profile": false,
+   "facts": []
+  },
+  {
+   "id": "harbour-office",
+   "name": "the harbour office",
+   "kind": "place",
+   "aliases": [
+    "harbour office"
+   ],
+   "weight": "nice",
+   "profile": false,
+   "facts": [],
+   "traps": [
+    {
+     "attr": "appearance",
+     "value": "the long way",
+     "why": "a route",
+     "alt": [
+      "long way"
+     ]
+    }
+   ]
+  }
+ ],
+ "keyPoints": [],
+ "slips": [
+  {
+   "ch": "c2",
+   "kind": "trait",
+   "entity": "carew",
+   "attr": "appearance.hair",
+   "sentence": "Tom came down late, rubbing his dark hair dry with a towel.",
+   "span": "dark",
+   "to": "ginger",
+   "against": {
+    "ch": "c1",
+    "quote": "with ginger hair and brown eyes behind steel spectacles"
+   },
+   "weight": "must"
+  },
+  {
+   "ch": "c2",
+   "kind": "species",
+   "entity": "pickle",
+   "attr": "species",
+   "sentence": "Mrs Hollis’s little Jack Russell was waiting at the foot of the stairs with her lead in her mouth.",
+   "span": "Jack Russell",
+   "to": "fox terrier",
+   "against": {
+    "ch": "c1",
+    "quote": "Her dog was a wire-haired fox terrier called Pickle"
+   },
+   "weight": "must"
+  }
+ ],
+ "decoys": [
+  {
+   "ch": "c2",
+   "sentence": "Carew straightened his tie and did not look at the clock.",
+   "why": "one-off actions"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Carew was twenty-four and Maud was nineteen.",
+   "why": "two people’s ages, both agreeing"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Pickle barked at the fishing boats all the way down Quay Street.",
+   "why": "agrees"
+  },
+  {
+   "ch": "c1",
+   "sentence": "Carew’s sister Maud had the same freckles and their mother’s black hair.",
+   "why": "Maud’s hair, not Carew’s"
+  },
+  {
+   "ch": "c1",
+   "sentence": "Thomas Carew had the back room. He was twenty-four, a clerk at the harbour office, with ginger hair and brown eyes behind steel spectacles.",
+   "why": "the prose’s brown against the notebook’s green is Which is right?, never a mark"
+  },
+  {
+   "ch": "n1",
+   "sentence": "Thomas Carew: lodger in the back room, clerk at the harbour office. Green eyes.",
+   "why": "the notebook’s green against the prose’s brown is Which is right?, never a mark"
+  }
+ ],
+ "needs": [
+  {
+   "entity": "carew",
+   "attr": "appearance.eyes",
+   "values": [
+    "green",
+    "brown"
+   ],
+   "why": "People: Green eyes. Ch 1: brown eyes behind steel spectacles"
+  }
+ ]
+}

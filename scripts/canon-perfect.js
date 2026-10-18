@@ -32,6 +32,8 @@ const FIX = path.join(__dirname, 'fixtures', 'canon-editor');
 const FIXTURES = ['dev', ...fs.readdirSync(path.join(FIX, 'dev2')).map((d) => 'dev2/' + d), 'qa'].map((d) => path.join(FIX, d));
 // round 4: stories written for the third held-out brief's failure types
 const DEV3 = fs.readdirSync(path.join(FIX, 'dev3')).map((d) => path.join(FIX, 'dev3', d));
+// round 5: stories written for the fourth held-out brief's slip types
+const DEV4 = fs.readdirSync(path.join(FIX, 'dev4')).map((d) => path.join(FIX, 'dev4', d));
 
 // a sheet's canonical attribute as a reader would give it: group and label
 function groupOf(attr) {
@@ -483,7 +485,7 @@ async function main() {
   const tot = {};
   const sum = (m, x) => { const t = (tot[m] = tot[m] || {}); for (const [k, v] of Object.entries(x)) { if (typeof v === 'number') t[k] = (t[k] || 0) + v; else if (/^\d+\/\d+$/.test(v)) { const [a, b] = v.split('/').map(Number); const [c, d] = (t[k] || '0/0').split('/').map(Number); t[k] = `${a + c}/${b + d}`; } else t[k] = t[k] || v; } };
   const dirs = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-  const fixtures = dirs.length ? dirs.map((d) => path.resolve(d)) : [...FIXTURES, ...DEV3];
+  const fixtures = dirs.length ? dirs.map((d) => path.resolve(d)) : [...FIXTURES, ...DEV3, ...DEV4];
   const v = process.argv.includes('--v');
   for (const fx of fixtures) {
     const name = path.relative(FIX, fx);
@@ -499,7 +501,7 @@ async function main() {
     const cr = await runSheet(fx, { mode: 'credulous', setting });
     console.log(`\n== ${name}: pack coverage must ${covMust.in}/${covMust.of}, all ${cov.in}/${cov.of}; perfect reader keeps ${sv.kept}/${sv.of} (of what it proposed ${sv.proposed.kept}/${sv.proposed.of}); adversary's kept ${bad.length}/${adv.log.filter((x) => x.wrong).length}; drift's kept ${drBad.length}/${dr.log.filter((x) => x.wrong).length}`);
     const sums = { perfect: summary(run), adversary: summary(adv, { made: bad }), drift: summary(dr, { made: drBad }), credulous: summary(cr, { made: survivors(cr) }) };
-    for (const [m, x] of Object.entries(sums)) { console.log('  ' + line(m, x)); sum(m, x); if (name.startsWith('dev3/')) sum(m + '·dev3', x); }
+    for (const [m, x] of Object.entries(sums)) { console.log('  ' + line(m, x)); sum(m, x); for (const set of ['dev2', 'dev3', 'dev4']) if (name.startsWith(set + '/')) sum(m + '·' + set, x); }
     const show = (tag, r, made) => {
       for (const w of r.score.precision.wrong) console.log(`  ${tag} wrong: ${w}`);
       for (const w of made) console.log(`  ${tag} kept made-up: ${w}`);
@@ -527,4 +529,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { sheetReader, driftReader, packCoverage, runSheet, survival, survivors, summary, FIXTURES, DEV3, SETTINGS, groupOf, citeIds };
+module.exports = { sheetReader, driftReader, packCoverage, runSheet, survival, survivors, summary, FIXTURES, DEV3, DEV4, SETTINGS, groupOf, citeIds };

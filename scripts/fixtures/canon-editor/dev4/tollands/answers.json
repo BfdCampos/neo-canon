@@ -1,0 +1,532 @@
+{
+ "about": "dev4 · Tolland’s (round 5): a father and son of one name told apart by Senior and Junior, by the old man and the boy, and by a nickname the yard gives the boy (Young Joss); a police sergeant with a morning round; a numbered bay; a foundry cat. Ch 2 credits the father’s bell to Young Joss in a relative clause, gives the old man blue eyes by his epithet, and the sergeant a rank one step down. Decoys: the son’s own blue eyes, a round moved and told as moved, the boy’s red hair, ages of two people.",
+ "set": "dev4/tollands",
+ "shelf": "Saltby",
+ "book": "book-tollands-tl1",
+ "chapters": {
+  "c1": "Ch 1",
+  "c2": "Ch 2"
+ },
+ "notEntities": [
+  "Josiah Tolland",
+  "Josiah",
+  "Tolland",
+  "Constable Pryce"
+ ],
+ "entities": [
+  {
+   "id": "senior",
+   "name": "Josiah Tolland Senior",
+   "kind": "person",
+   "aliases": [
+    "the old man",
+    "Senior"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "history",
+     "value": "cast the great bell of St Ebba’s in the summer of 1889",
+     "quote": "Josiah Tolland Senior cast the great bell of St Ebba’s in the summer of 1889",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "cast the great bell",
+      "cast the bell in 1889",
+      "cast the great bell of St Ebba’s"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "sixty in 1889",
+     "quote": "The old man was sixty that year",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "sixty",
+      "60"
+     ]
+    },
+    {
+     "attr": "appearance.build",
+     "value": "lean, stooping",
+     "quote": "a lean, stooping man with dark eyes and a white moustache",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "lean",
+      "stooping"
+     ]
+    },
+    {
+     "attr": "appearance.eyes",
+     "value": "dark",
+     "quote": "a lean, stooping man with dark eyes and a white moustache",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "dark eyes"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "appearance.face",
+     "value": "a white moustache",
+     "quote": "a lean, stooping man with dark eyes and a white moustache",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "white moustache"
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "male",
+     "quote": "a lean, stooping man with dark eyes and a white moustache",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "man"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "relationship.kin",
+     "value": "father of Josiah Tolland Junior",
+     "quote": "His son, Josiah Tolland Junior, was nineteen",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "father of Junior",
+      "Josiah Tolland Junior",
+      "son, Josiah Tolland Junior"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "appearance.eyes",
+     "value": "blue",
+     "why": "Ch 2’s slip; the son’s"
+    },
+    {
+     "attr": "age",
+     "value": "forty",
+     "why": "Pryce’s"
+    }
+   ]
+  },
+  {
+   "id": "junior",
+   "name": "Josiah Tolland Junior",
+   "kind": "person",
+   "aliases": [
+    "Young Joss",
+    "the boy",
+    "Junior"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "relationship.kin",
+     "value": "son of Josiah Tolland Senior",
+     "quote": "His son, Josiah Tolland Junior, was nineteen",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "son",
+      "Josiah Tolland Senior",
+      "son of the old man"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "nineteen",
+     "quote": "His son, Josiah Tolland Junior, was nineteen",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "19"
+     ]
+    },
+    {
+     "attr": "appearance.hair",
+     "value": "red, his mother’s",
+     "quote": "had his mother’s red hair",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "red",
+      "red hair"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "name",
+     "value": "Young Joss",
+     "quote": "Everyone in the yard called the boy Young Joss.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": []
+    },
+    {
+     "attr": "sex",
+     "value": "male",
+     "quote": "His son, Josiah Tolland Junior, was nineteen",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "son",
+      "boy"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "appearance.eyes",
+     "value": "blue, like his mother’s",
+     "quote": "Young Joss had blue eyes, like his mother.",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "blue",
+      "blue eyes"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "history",
+     "value": "cast the bell",
+     "why": "his father did: Ch 2’s slip",
+     "alt": [
+      "cast the bell in 1889"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "did not look at his father",
+     "why": "one moment"
+    }
+   ]
+  },
+  {
+   "id": "pryce",
+   "name": "Ellis Pryce",
+   "kind": "person",
+   "aliases": [
+    "Pryce",
+    "Sergeant Ellis Pryce",
+    "Sergeant Pryce"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "role",
+     "value": "police sergeant, keeps the police station on Bridge Street",
+     "quote": "Sergeant Ellis Pryce kept the police station on Bridge Street.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "Sergeant",
+      "sergeant",
+      "keeps the police station on Bridge Street",
+      "police station on Bridge Street"
+     ]
+    },
+    {
+     "attr": "routine",
+     "value": "walks past the foundry every morning at eight",
+     "quote": "He walked past the foundry every morning at eight.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "every morning at eight",
+      "walks past the foundry"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "forty",
+     "quote": "Pryce was forty, twenty years younger than the old man.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "40"
+     ],
+     "also": [
+      "Pryce was forty that autumn too."
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "male",
+     "quote": "He walked past the foundry every morning at eight.",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "man"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "routine",
+     "value": "comes past every morning at nine since the station moved",
+     "quote": "He came past every morning at nine now, since the station had moved to Castle Road.",
+     "ch": "c2",
+     "weight": "nice",
+     "alt": [
+      "every morning at nine"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "role",
+     "value": "Constable",
+     "why": "Ch 2’s slip",
+     "alt": [
+      "constable"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "sixty",
+     "why": "the old man’s"
+    }
+   ]
+  },
+  {
+   "id": "bay-9",
+   "name": "Bay 9",
+   "kind": "place",
+   "aliases": [],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "description",
+     "value": "a long brick shed by the river with a floor of sand",
+     "quote": "a long brick shed by the river with a floor of sand",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "long brick shed",
+      "brick shed by the river",
+      "floor of sand"
+     ]
+    },
+    {
+     "attr": "function",
+     "value": "where the moulds are kept",
+     "quote": "The moulds were kept in Bay 9",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "the moulds are kept there",
+      "moulds"
+     ]
+    }
+   ],
+   "traps": []
+  },
+  {
+   "id": "bellows",
+   "name": "Bellows",
+   "kind": "creature",
+   "aliases": [],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "species",
+     "value": "cat",
+     "quote": "The foundry kept a cat, a fat grey tom called Bellows",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "cat, the foundry cat",
+      "tom"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "sex",
+     "value": "male",
+     "quote": "a fat grey tom called Bellows",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "tom"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "appearance",
+     "value": "fat and grey",
+     "quote": "a fat grey tom called Bellows",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "fat",
+      "grey",
+      "fat grey"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "sleeps on the warm bricks behind the furnace",
+     "quote": "who slept on the warm bricks behind the furnace",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "sleeps behind the furnace"
+     ],
+     "also": [
+      "Bellows slept behind the furnace, as he always had."
+     ]
+    }
+   ],
+   "traps": []
+  },
+  {
+   "id": "foundry",
+   "name": "the foundry",
+   "kind": "place",
+   "aliases": [],
+   "weight": "should",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "possession",
+     "value": "keeps a cat, Bellows",
+     "quote": "The foundry kept a cat, a fat grey tom called Bellows",
+     "ch": "c1",
+     "weight": "nice",
+     "alt": [
+      "Bellows",
+      "a cat"
+     ]
+    }
+   ],
+   "traps": []
+  },
+  {
+   "id": "st-ebbas",
+   "name": "St Ebba’s",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": []
+  },
+  {
+   "id": "bridge-street",
+   "name": "Bridge Street",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": []
+  },
+  {
+   "id": "castle-road",
+   "name": "Castle Road",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": []
+  }
+ ],
+ "keyPoints": [
+  {
+   "ch": "c1",
+   "who": [
+    "senior"
+   ],
+   "did": "Josiah Tolland Senior cast the great bell of St Ebba’s",
+   "quote": "Josiah Tolland Senior cast the great bell of St Ebba’s in the summer of 1889",
+   "weight": "should"
+  }
+ ],
+ "slips": [
+  {
+   "ch": "c2",
+   "kind": "deed",
+   "entity": "senior",
+   "attr": "event",
+   "sentence": "Visitors still asked to see the bell that Young Joss had cast in 1889.",
+   "span": "Young Joss",
+   "to": "Josiah Tolland Senior",
+   "against": {
+    "ch": "c1",
+    "quote": "Josiah Tolland Senior cast the great bell of St Ebba’s in the summer of 1889"
+   },
+   "weight": "must"
+  },
+  {
+   "ch": "c2",
+   "kind": "trait",
+   "entity": "senior",
+   "attr": "appearance.eyes",
+   "sentence": "The old man’s blue eyes were the first thing strangers noticed about him.",
+   "span": "blue",
+   "to": "dark",
+   "against": {
+    "ch": "c1",
+    "quote": "a lean, stooping man with dark eyes and a white moustache"
+   },
+   "weight": "must"
+  },
+  {
+   "ch": "c2",
+   "kind": "open",
+   "entity": "pryce",
+   "attr": "role",
+   "sentence": "That autumn Constable Pryce came to the yard about the smoke.",
+   "span": "Constable",
+   "to": "Sergeant",
+   "against": {
+    "ch": "c1",
+    "quote": "Sergeant Ellis Pryce kept the police station on Bridge Street."
+   },
+   "weight": "must"
+  }
+ ],
+ "decoys": [
+  {
+   "ch": "c2",
+   "sentence": "He came past every morning at nine now, since the station had moved to Castle Road.",
+   "why": "a round moved, told as moved"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Young Joss had blue eyes, like his mother.",
+   "why": "the son’s own eyes"
+  },
+  {
+   "ch": "c2",
+   "sentence": "The boy’s red hair was full of sand from Bay 9.",
+   "why": "agrees"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Bellows slept behind the furnace, as he always had.",
+   "why": "agrees"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Pryce was forty that autumn too.",
+   "why": "agrees"
+  },
+  {
+   "ch": "c1",
+   "sentence": "Pryce was forty, twenty years younger than the old man.",
+   "why": "two people’s ages"
+  }
+ ],
+ "needs": []
+}

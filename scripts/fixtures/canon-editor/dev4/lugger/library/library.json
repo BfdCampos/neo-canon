@@ -1,0 +1,17 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-lg",
+      "name": "Polwenna",
+      "bookIds": [
+        "book-lugger-notes-lg0",
+        "book-the-lugger-lg1"
+      ],
+      "canonId": "canon-polwenna-shelf-lg"
+    }
+  ]
+}

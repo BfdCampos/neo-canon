@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-tl",
+      "name": "Saltby",
+      "bookIds": [
+        "book-tollands-tl1"
+      ],
+      "canonId": "canon-saltby-shelf-tl"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-ch",
+      "name": "Carrick Head",
+      "bookIds": [
+        "book-carrick-head-ch1"
+      ],
+      "canonId": "canon-carrick-head-shelf-ch"
+    }
+  ]
+}

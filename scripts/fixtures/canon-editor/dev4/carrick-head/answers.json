@@ -1,0 +1,822 @@
+{
+ "about": "dev4 · Carrick Head (round 5, written for the fourth held-out brief’s slip types): a first-person narrator named only in a radio call and in speech (Lieutenant Hale; “You, Imogen,”); a watch told as a range of 24-hour times; a numbered hut; a commander with a dog. Ch 2 starts the watch an hour late, gives the commander (by her title alone) brown eyes, a rank one step down, and her Labrador another name; a transposed hut number with the hut’s stove. Decoys: a promotion told as one, other people’s ages, a route, a breakfast.",
+ "set": "dev4/carrick-head",
+ "shelf": "Carrick Head",
+ "book": "book-carrick-head-ch1",
+ "chapters": {
+  "c1": "Ch 1",
+  "c2": "Ch 2"
+ },
+ "notEntities": [
+  "Hut 21",
+  "Bess",
+  "October",
+  "March",
+  "Imogen Hale’s sister"
+ ],
+ "entities": [
+  {
+   "id": "hale",
+   "name": "Imogen Hale",
+   "kind": "person",
+   "aliases": [
+    "Hale",
+    "Lieutenant Hale",
+    "Imogen",
+    "the narrator"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "the only woman among its officers",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "woman"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "name",
+     "value": "Hale",
+     "quote": "“Lieutenant Hale, this is the battery.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "Lieutenant Hale"
+     ]
+    },
+    {
+     "attr": "name",
+     "value": "Imogen",
+     "quote": "“You, Imogen, should have been in bed an hour ago,” she said.",
+     "ch": "c2",
+     "weight": "should",
+     "alt": []
+    },
+    {
+     "attr": "role",
+     "value": "lieutenant",
+     "quote": "“Lieutenant Hale, this is the battery.",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "Lieutenant",
+      "officer at the signal station"
+     ]
+    },
+    {
+     "attr": "routine",
+     "value": "her watch runs from 2200 to 0600 every night",
+     "quote": "My watch ran from 2200 to 0600 every night",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "watch from 2200 to 0600",
+      "2200 to 0600 every night",
+      "from 2200 to 0600"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "sleeps through the mornings in the cabin behind the mess",
+     "quote": "I slept through the grey mornings in the cabin behind the mess",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "sleeps in the cabin behind the mess"
+     ]
+    },
+    {
+     "attr": "history",
+     "value": "came to the signal station on Carrick Head in October 1942",
+     "quote": "I came to the signal station on Carrick Head in the October of 1942",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "came to Carrick Head in 1942"
+     ]
+    },
+    {
+     "attr": "relationship.kin",
+     "value": "sister of Jo",
+     "quote": "My sister Jo writes every week from Dundee.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "Jo",
+      "sister Jo"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "appearance.hair",
+     "value": "red",
+     "why": "Jo’s: “our mother’s red hair” is what Jo has"
+    },
+    {
+     "attr": "appearance.face",
+     "value": "long nose",
+     "why": "Jo’s"
+    },
+    {
+     "attr": "routine",
+     "value": "comes on watch at 2300",
+     "why": "Ch 2’s slip",
+     "alt": [
+      "2300"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "okafor",
+   "name": "Ruth Okafor",
+   "kind": "person",
+   "aliases": [
+    "Okafor",
+    "Commander Ruth Okafor",
+    "Commander Okafor",
+    "the commander"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "role",
+     "value": "Commander, runs the signal station",
+     "quote": "Commander Ruth Okafor ran the station.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "commander",
+      "runs the station",
+      "Commander"
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "She was a tall, quiet woman of fifty-two",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "woman"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "appearance.build",
+     "value": "tall",
+     "quote": "She was a tall, quiet woman of fifty-two",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "tall, quiet"
+     ]
+    },
+    {
+     "attr": "personality",
+     "value": "quiet",
+     "quote": "She was a tall, quiet woman of fifty-two",
+     "ch": "c1",
+     "weight": "should",
+     "alt": []
+    },
+    {
+     "attr": "age",
+     "value": "fifty-two",
+     "quote": "She was a tall, quiet woman of fifty-two",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "52"
+     ]
+    },
+    {
+     "attr": "appearance.eyes",
+     "value": "pale grey",
+     "quote": "with pale grey eyes",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "grey",
+      "pale grey eyes"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "appearance.hair",
+     "value": "iron-grey, pinned flat under her cap",
+     "quote": "iron-grey hair pinned flat under her cap",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "iron-grey",
+      "iron-grey hair"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "possession",
+     "value": "a black Labrador called Ness",
+     "quote": "She kept a black Labrador called Ness",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "Ness",
+      "a dog, Ness"
+     ]
+    },
+    {
+     "attr": "history",
+     "value": "has run Carrick Head since the spring of 1941",
+     "quote": "Lieutenant Commander Okafor had run Carrick Head since the spring of 1941.",
+     "ch": "c2",
+     "weight": "nice",
+     "alt": [
+      "since 1941"
+     ]
+    },
+    {
+     "attr": "state",
+     "value": "three years left before her pension",
+     "quote": "The commander had three years left before her pension",
+     "ch": "c1",
+     "weight": "nice",
+     "alt": []
+    }
+   ],
+   "traps": [
+    {
+     "attr": "appearance.eyes",
+     "value": "brown",
+     "why": "Ch 2’s slip"
+    },
+    {
+     "attr": "role",
+     "value": "Lieutenant Commander",
+     "why": "Ch 2’s slip",
+     "alt": [
+      "lieutenant commander"
+     ]
+    },
+    {
+     "attr": "location.home",
+     "value": "the wardroom",
+     "why": "she was at breakfast there",
+     "alt": [
+      "wardroom"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "did not look at the clock",
+     "why": "one moment",
+     "alt": [
+      "does not look at the clock"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "nineteen",
+     "why": "Dunn’s years in the navy"
+    }
+   ]
+  },
+  {
+   "id": "ness",
+   "name": "Ness",
+   "kind": "creature",
+   "aliases": [],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "species",
+     "value": "dog, a black Labrador",
+     "quote": "She kept a black Labrador called Ness",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "dog",
+      "Labrador",
+      "black Labrador"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "a bitch of nine",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "bitch"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "age",
+     "value": "nine",
+     "quote": "a bitch of nine",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "9"
+     ]
+    },
+    {
+     "attr": "appearance.mark",
+     "value": "a white blaze on her chest",
+     "quote": "with a white blaze on her chest",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "white blaze"
+     ]
+    },
+    {
+     "attr": "habit",
+     "value": "sleeps under the chart table every watch",
+     "quote": "who slept under the chart table every watch",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "sleeps under the chart table"
+     ]
+    },
+    {
+     "attr": "possession",
+     "value": "the commander’s dog",
+     "quote": "She kept a black Labrador called Ness",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "Okafor",
+      "Ruth Okafor",
+      "belongs to Okafor"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "name",
+     "value": "Bess",
+     "why": "Ch 2’s slip"
+    }
+   ]
+  },
+  {
+   "id": "dunn",
+   "name": "Dunn",
+   "kind": "person",
+   "aliases": [
+    "Petty Officer Dunn"
+   ],
+   "weight": "must",
+   "profile": true,
+   "facts": [
+    {
+     "attr": "role",
+     "value": "Petty Officer",
+     "quote": "Petty Officer Dunn had served nineteen years in the navy.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "petty officer"
+     ]
+    },
+    {
+     "attr": "history",
+     "value": "served nineteen years in the navy",
+     "quote": "Petty Officer Dunn had served nineteen years in the navy.",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "nineteen years in the navy"
+     ]
+    },
+    {
+     "attr": "appearance.build",
+     "value": "short, square",
+     "quote": "He was a short, square man from Leith with a broken nose.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "short",
+      "square"
+     ]
+    },
+    {
+     "attr": "origin",
+     "value": "Leith",
+     "quote": "He was a short, square man from Leith with a broken nose.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "from Leith"
+     ]
+    },
+    {
+     "attr": "appearance.face",
+     "value": "a broken nose",
+     "quote": "He was a short, square man from Leith with a broken nose.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "broken nose"
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "male",
+     "quote": "He was a short, square man from Leith with a broken nose.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "man"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "routine",
+     "value": "brings the weather report up to Hut 12 at four every morning",
+     "quote": "He brought the weather report up to Hut 12 at four every morning.",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "brings the weather report at four"
+     ]
+    },
+    {
+     "attr": "role",
+     "value": "made Chief Petty Officer in March",
+     "quote": "Dunn had been made Chief Petty Officer in March",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "Chief Petty Officer"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "forty-four",
+     "quote": "Dunn was forty-four that winter",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "44"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "habit",
+     "value": "straightened his jacket",
+     "why": "one moment",
+     "alt": [
+      "straightens his jacket"
+     ]
+    },
+    {
+     "attr": "appearance",
+     "value": "the long way round",
+     "why": "a route",
+     "alt": [
+      "long way"
+     ]
+    },
+    {
+     "attr": "age",
+     "value": "fifty-two",
+     "why": "Okafor’s"
+    },
+    {
+     "attr": "age",
+     "value": "twenty-six",
+     "why": "Jo’s"
+    }
+   ]
+  },
+  {
+   "id": "jo",
+   "name": "Jo",
+   "kind": "person",
+   "aliases": [],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "relationship.kin",
+     "value": "the narrator’s sister",
+     "quote": "My sister Jo writes every week from Dundee.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "sister",
+      "sister of Hale"
+     ]
+    },
+    {
+     "attr": "location",
+     "value": "writes every week from Dundee",
+     "quote": "My sister Jo writes every week from Dundee.",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "Dundee"
+     ]
+    },
+    {
+     "attr": "appearance.face",
+     "value": "her father’s long nose",
+     "quote": "She has our father’s long nose",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "long nose"
+     ]
+    },
+    {
+     "attr": "appearance.hair",
+     "value": "red, her mother’s",
+     "quote": "our mother’s red hair",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "red",
+      "red hair"
+     ],
+     "hard": true
+    },
+    {
+     "attr": "age",
+     "value": "twenty-six",
+     "quote": "Jo was twenty-six",
+     "ch": "c2",
+     "weight": "should",
+     "alt": [
+      "26"
+     ]
+    },
+    {
+     "attr": "sex",
+     "value": "female",
+     "quote": "My sister Jo writes every week from Dundee.",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "sister"
+     ],
+     "hard": true
+    }
+   ],
+   "traps": []
+  },
+  {
+   "id": "hut-12",
+   "name": "Hut 12",
+   "kind": "place",
+   "aliases": [],
+   "weight": "must",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "description",
+     "value": "the wireless hut, the one nearest the mast",
+     "quote": "The wireless was in Hut 12, the one nearest the mast.",
+     "ch": "c1",
+     "weight": "must",
+     "alt": [
+      "the wireless",
+      "nearest the mast",
+      "the one nearest the mast",
+      "the wireless hut"
+     ]
+    },
+    {
+     "attr": "description",
+     "value": "a tin roof that drums in the rain",
+     "quote": "Hut 12 had a tin roof that drummed in the rain",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "tin roof"
+     ]
+    },
+    {
+     "attr": "description",
+     "value": "a stove that smokes",
+     "quote": "a stove that smoked",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "stove that smoked",
+      "a smoking stove"
+     ]
+    }
+   ],
+   "traps": [
+    {
+     "attr": "description",
+     "value": "red",
+     "why": "the mug’s colour",
+     "alt": [
+      "red enamel mug",
+      "a red mug"
+     ]
+    },
+    {
+     "attr": "name",
+     "value": "Hut 21",
+     "why": "Ch 2’s slip"
+    }
+   ]
+  },
+  {
+   "id": "carrick-head",
+   "name": "Carrick Head",
+   "kind": "place",
+   "aliases": [],
+   "weight": "should",
+   "profile": false,
+   "facts": [
+    {
+     "attr": "description",
+     "value": "has a signal station",
+     "quote": "I came to the signal station on Carrick Head in the October of 1942",
+     "ch": "c1",
+     "weight": "should",
+     "alt": [
+      "signal station",
+      "the signal station"
+     ]
+    }
+   ],
+   "traps": []
+  },
+  {
+   "id": "battery",
+   "name": "the battery",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": [],
+   "traps": [
+    {
+     "attr": "appearance",
+     "value": "the long way round",
+     "why": "a route",
+     "alt": [
+      "long way"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "leith",
+   "name": "Leith",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": []
+  },
+  {
+   "id": "dundee",
+   "name": "Dundee",
+   "kind": "place",
+   "aliases": [],
+   "weight": "nice",
+   "profile": false,
+   "facts": []
+  }
+ ],
+ "keyPoints": [
+  {
+   "ch": "c2",
+   "who": [
+    "hale"
+   ],
+   "did": "Hale ran the signal back down to the hut",
+   "quote": "I ran back down to Hut 21 with the signal",
+   "weight": "nice"
+  }
+ ],
+ "slips": [
+  {
+   "ch": "c2",
+   "kind": "open",
+   "entity": "hale",
+   "attr": "routine",
+   "sentence": "I came on watch at 2300, as I did every night, and Ness was already asleep under the chart table.",
+   "span": "2300",
+   "to": "2200",
+   "against": {
+    "ch": "c1",
+    "quote": "My watch ran from 2200 to 0600 every night"
+   },
+   "weight": "must"
+  },
+  {
+   "ch": "c2",
+   "kind": "trait",
+   "entity": "okafor",
+   "attr": "appearance.eyes",
+   "sentence": "The commander’s brown eyes went to the clock and back to me.",
+   "span": "brown",
+   "to": "grey",
+   "against": {
+    "ch": "c1",
+    "quote": "with pale grey eyes"
+   },
+   "weight": "must"
+  },
+  {
+   "ch": "c2",
+   "kind": "open",
+   "entity": "okafor",
+   "attr": "role",
+   "sentence": "Lieutenant Commander Okafor had run Carrick Head since the spring of 1941.",
+   "span": "Lieutenant Commander",
+   "to": "Commander",
+   "against": {
+    "ch": "c1",
+    "quote": "Commander Ruth Okafor ran the station."
+   },
+   "weight": "must"
+  },
+  {
+   "ch": "c2",
+   "kind": "name",
+   "entity": "ness",
+   "attr": "name",
+   "sentence": "The commander’s Labrador, Bess, lifted her head when the door banged.",
+   "span": "Bess",
+   "to": "Ness",
+   "against": {
+    "ch": "c1",
+    "quote": "She kept a black Labrador called Ness"
+   },
+   "weight": "must"
+  },
+  {
+   "ch": "c2",
+   "kind": "name",
+   "entity": "hut-12",
+   "attr": "name",
+   "sentence": "I ran back down to Hut 21 with the signal, and the stove in there was smoking again.",
+   "span": "Hut 21",
+   "to": "Hut 12",
+   "against": {
+    "ch": "c1",
+    "quote": "Hut 12 had a tin roof that drummed in the rain and a stove that smoked."
+   },
+   "weight": "must"
+  }
+ ],
+ "decoys": [
+  {
+   "ch": "c2",
+   "sentence": "Dunn had been made Chief Petty Officer in March, and he wore the new badge on his sleeve.",
+   "why": "a promotion told as one"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Dunn was forty-four that winter, and Jo was twenty-six.",
+   "why": "two other people’s ages"
+  },
+  {
+   "ch": "c1",
+   "sentence": "Petty Officer Dunn had served nineteen years in the navy.",
+   "why": "a span of years, not an age"
+  },
+  {
+   "ch": "c1",
+   "sentence": "The commander had three years left before her pension, and she did not look at the clock when she said so.",
+   "why": "years to come, not an age"
+  },
+  {
+   "ch": "c2",
+   "sentence": "I came on watch at 2300, as I did every night, and Ness was already asleep under the chart table.",
+   "why": "Ness asleep under the table agrees (the hour is the slip)"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Okafor was at breakfast in the wardroom when the answer came through.",
+   "why": "a breakfast, not a home"
+  },
+  {
+   "ch": "c2",
+   "sentence": "Dunn took the long way round to the battery, by the cliff path.",
+   "why": "a route"
+  }
+ ],
+ "needs": []
+}
