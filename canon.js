@@ -280,13 +280,13 @@
   const NON_ENTITY = new Set(('january february march april may june july august september october november december ' +
     'monday tuesday wednesday thursday friday saturday sunday mondays tuesdays wednesdays thursdays fridays saturdays sundays ' +
     'christmas easter michaelmas candlemas lammas whitsun whitsuntide lent advent epiphany halloween hallowe’en hallowe\'en yule midsummer midwinter hogmanay passover ramadan eid diwali hanukkah thanksgiving ' +
-    'new year boxing day good friday shrove tuesday ash wednesday may day christmas eve new year’s new year\'s ' +
     'english french welsh italian spanish german latin greek gaelic irish scots scottish dutch russian chinese mandarin cantonese japanese arabic hindi portuguese polish swedish norwegian danish finnish hebrew yiddish turkish persian urdu bengali korean cornish breton basque catalan ' +
     'someone somebody everyone everybody anyone anybody nobody noone nothing something everything anything somewhere nowhere everywhere ' +
     'sir madam ma’am ma\'am miss mister ok okay yes no hello goodbye').split(' '));
   // (months that are also given names: no entry unless a person)
   const NAME_MONTHS = new Set(['april', 'may', 'june', 'august']);
-  const PHRASES_NOT = ['new year', 'boxing day', 'good friday', 'shrove tuesday', 'ash wednesday', 'may day', 'christmas eve', 'new year’s day', "new year's day", 'no one', 'every one'];
+  // (phrases, never their words alone: "a year below her" is no holiday — round 3)
+  const PHRASES_NOT = ['new year', 'boxing day', 'good friday', 'shrove tuesday', 'ash wednesday', 'may day', 'christmas eve', 'new year’s day', "new year's day", 'new year’s', "new year's", 'no one', 'every one'];
   const nonEntity = (name, kind = null) => {
     const n = String(name || '').toLowerCase().replace(/^the\s+/, '').replace(/[’']s$/, '').trim();
     if (!n) return true;

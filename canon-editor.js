@@ -269,7 +269,16 @@ module.exports = function canonEditor(C) {
         if (as && nameKind(as, text, lower, c.kind) && !c.aliases.some((y) => bare(y) === x)) c.aliases.push(as);
       }
     }
-    personMerges(cast);
+    personMerges(cast, names);
+    // (round 3) a group's, place's or thing's short name that one full name
+    // opens with: "the Guild" for "the Guild of Wick-Trimmers" (never two:
+    // "the Hall" beside "the Hall of Records" and "the Hall of Mirrors" is no one's)
+    for (const a of cast.filter((x) => !x.gone && !['person', 'creature'].includes(x.kind))) {
+      if (a.gone) continue;
+      const short = norm(a.name.replace(/^the\s+/i, ''));
+      const longer = cast.filter((b) => b !== a && !b.gone && b.kind === a.kind && [b.name, ...b.aliases].some((n) => { const l = norm(n.replace(/^the\s+/i, '')); return l.startsWith(short + ' of ') || l.startsWith(short + ' and '); }));
+      if (longer.length === 1) mergeCast(cast, longer[0], a);
+    }
     // (round 3) a place's or thing's common noun the reader gives as its
     // alias ("the river" for the Sare, "the orchard" for Lisle, "the station")
     // when the text first writes it just after the name (the same or the
@@ -352,7 +361,7 @@ module.exports = function canonEditor(C) {
   // first names are never one person.
   const RANK = { doctor: ['dr', 'doctor'], commander: ['commander'], inspector: ['inspector'], captain: ['captain', 'capt'], sergeant: ['sergeant', 'sgt'], professor: ['professor', 'prof'],
     lieutenant: ['lieutenant', 'lt'], colonel: ['colonel', 'col'], major: ['major'], general: ['general'], admiral: ['admiral'], nurse: ['nurse'], constable: ['constable'], detective: ['detective'], reverend: ['reverend', 'rev'], judge: ['judge'], mayor: ['mayor'] };
-  function personMerges(cast) {
+  function personMerges(cast, names = null) {
     const people = () => cast.filter((c) => !c.gone && c.kind === 'person' && c.proper);
     const core = (n) => norm(stripTitles(String(n).replace(/^the\s+/i, '')).replace(/['’]s$/, ''));
     const longer = (a, b) => (b.name.split(/\s+/).length > a.name.split(/\s+/).length ? [b, a] : [a, b]);
@@ -373,6 +382,9 @@ module.exports = function canonEditor(C) {
       const w = core(a.name);
       if (!w || /\s/.test(w)) continue;
       const holders = people().filter((b) => b !== a && [b.name, ...b.aliases].some((y) => core(y).split(/\s+/).length > 1 && core(y).split(/\s+/).includes(w)));
+      // (round 3: and none other on the shelf — "Marchetti" beside "Tamsin Marchetti" in the notebook is no one's)
+      const onShelf = names && names.get && names.get(w) ? new Set([...names.get(w)].map((n) => norm(n).split(/\s+/)[0]).filter((x) => x !== w)) : new Set();
+      if (holders.length === 1 && onShelf.size > 1) { a.gone = true; a.name = '\u0000'; a.aliases = []; continue; }
       if (holders.length === 1) mergeCast(cast, holders[0], a);
       else if (holders.length > 1) { a.gone = true; a.name = '\u0000'; a.aliases = []; } // ("Haddon", with two Haddons: no one)
     }
@@ -906,7 +918,7 @@ module.exports = function canonEditor(C) {
   }
   // what is done more than once, in so many words (round 2: "all" and "any"
   // made one moment a habit)
-  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|after (?:the\s+)?\p{Ll}+ came)(?![\p{L}])/iu;
+  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|after (?:the\s+)?\p{Ll}+ came|the (?:mon|tues|wednes|thurs|fri|satur|sun)day \p{Ll}+)(?![\p{L}])/iu;
   // a role that was, not one that is: "had been a soldier", "used to be",
   // "formerly" (but "had been the town's doctor for twenty-two years" still is)
   const PAST_ROLE = /(?<![\p{L}])(?:had been|used to be|was once|once was|formerly|former|ex-|retired|until)(?![\p{L}])/iu;
@@ -1140,7 +1152,8 @@ module.exports = function canonEditor(C) {
     if (c.kind === 'place' && !['location', 'state', 'relationship', 'possession', 'function'].includes(fam)) return false;
     // (what is said stays what is said: never a moment)
     if (cited.some((l) => l.s.said || (l.s.talk && l.s.talk.length))) return false;
-    if (key === 'location.home') return false;
+    if (key === 'location.home' || key === 'location.part') return false;
+    const STATIVE = /^(?:stood|lay|sat|ran|rose|wound|stretched|climbed|faced|overlooked|looked|hung|sloped|leaned|towered|squatted|smelled|smelt|sounded|seemed|tasted|stank|reeked|echoed)$/;
     return cited.every((l) => {
       // (the clause that holds the claim: "There was a new ribbon …, and Hesper tried not to look …")
       const all = [...l.s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)].map((m) => ({ w: norm(m[0]), at: m.index }));
@@ -1148,6 +1161,8 @@ module.exports = function canonEditor(C) {
       let from = 0;
       for (const m of l.s.text.matchAll(/(?:,\s+(?:and|but|so)\s+|;\s+|:\s+)/g)) if (at0 >= 0 && m.index < all[at0].at) from = m.index + m[0].length;
       let toks = all.filter((t) => t.at >= from);
+      // (round 3: a place's or thing's clause that stands, runs or smells is how it is — "and the stairs wound up through the middle")
+      if (c.kind !== 'person' && c.kind !== 'creature' && toks.some((t) => STATIVE.test(t.w))) return false;
       // (a clause with no verb of its own, "and Moss at his heels", is the sentence's)
       if (!toks.some((t) => DYNAMIC.test(t.w) || ['was', 'were', 'is', 'are', 'had', 'has', 'have'].includes(t.w))) toks = all;
       // the main verb: the first dynamic past, or "was|were" + -ing, outside a leading apposition
@@ -1169,7 +1184,7 @@ module.exports = function canonEditor(C) {
       // Lantern House stood at the end of the breakwater", "the stairs wound
       // up through the middle"); what one keeps, wears or carries is theirs
       // ("Mara kept a brass key on a cord around her neck")
-      if (c.kind !== 'person' && c.kind !== 'creature' && /^(?:stood|lay|sat|ran|rose|wound|stretched|climbed|faced|overlooked|looked|hung|sloped|leaned|towered|squatted)$/.test(toks[vi].w)) return false;
+      if (c.kind !== 'person' && c.kind !== 'creature' && STATIVE.test(toks[vi].w)) return false;
       if (fam === 'possession' && /^(?:kept|had|owned|carried|wore|held)$/.test(toks[vi].w)) return false;
       { const k = toks.findIndex((t, i) => i > 0 && words.some((w) => stem(t.w) === w)); if (fam === 'possession' && k > 0 && ['his', 'her', 'their', 'my'].includes(toks[k - 1].w)) return false; }
       // (a mark is what a deed left: "He had lost two fingers of his left hand to a winch")
@@ -1275,7 +1290,9 @@ module.exports = function canonEditor(C) {
       // (a sentence that is no one's of the cast, "They got a number inked…", beside one that is c's, "Hesper's was 41": c's)
       // (a part of a place is a place itself: "a pub called the Anchor", "the bottling plant on Quay Road")
       const partOwner = (k) => key === 'location.part' && (ctx.cast || []).some((o) => o.key === k && !['person', 'creature'].includes(o.kind));
-      if (owners.some((k) => k != null && k >= 0 && k !== c.key && !partOwner(k)) || (owners.includes(-1) && !owners.includes(c.key) && key !== 'location.part')) return { why: 'someone else' };
+      // (and beside a sentence that is c's, one about a group c belongs to is its context: "They got a number inked…. Hesper's was 41.")
+      const groupBeside = (k) => owners.includes(c.key) && (ctx.cast || []).some((o) => o.key === k && o.kind === 'group');
+      if (owners.some((k) => k != null && k >= 0 && k !== c.key && !partOwner(k) && !groupBeside(k)) || (owners.includes(-1) && !owners.includes(c.key) && key !== 'location.part')) return { why: 'someone else' };
       owned = owners.some((k) => k === c.key);
       // (and owned by its name, not a pronoun: "Ada was Fourteen, …, a big freckled girl"; "a collie bitch called Moss")
       if (owned) ownedByName = cited.some((l) => claimOwner(l, grounded, c, { ...ctx, noRefs: true }, key) === c.key);
@@ -1318,7 +1335,7 @@ module.exports = function canonEditor(C) {
     if (valueWords.every((w) => ['call', 'called', 'name', 'named', 'known', 'nicknam'].includes(w))) return { why: 'empty' };
     if (labelFamily(key) === 'appearance' && /^(?:in|on|at|by|under|from|through)\s/i.test(value)) return { why: 'once' };
     // "sweeping the floor", "carrying fence posts": what they were doing then
-    if (['other', 'state', 'location', 'appearance', 'personality', 'description'].includes(labelFamily(key)) && /^(?!being\b|living\b|wearing\b)\p{L}+ing\s+(?:the|a|an|his|her|their|its|some|\p{L}+s)\b/u.test(value) && !HABITUAL.test(citedText)) return { why: 'once' };
+    if (['other', 'state', 'location', 'appearance', 'personality', 'description'].includes(labelFamily(key)) && /^(?!being\b|living\b|wearing\b|getting\b|growing\b|becoming\b)\p{L}+ing\s+(?:the|a|an|his|her|their|its|some|\p{L}+[^s\s]s)\b/u.test(value) && !HABITUAL.test(citedText)) return { why: 'once' };
     // a place's location that names the place itself ("smell of the press-house") says nothing of where it is
     if (c.kind !== 'person' && c.kind !== 'creature' && labelFamily(key) === 'location' && [c.name, ...c.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && norm(value).includes(b); })) return { why: 'empty' };
     // a past role is history, not who they are now
@@ -1858,6 +1875,16 @@ module.exports = function canonEditor(C) {
       made.set(c.key, e);
       return e;
     };
+    // (round 3) the names this chapter writes for an entry are its names, kept or not ("Tamsin Marchetti" for "Tamsin")
+    // (only a fuller form of the entry's own name, no title: "Tamsin Marchetti" for "Tamsin", never "Mrs Haddon" for "Dr Haddon")
+    for (const c of cast) {
+      if (!c.entry || c.entry.locked || !c.proper || c.kind !== 'person') continue;
+      const own = norm(c.entry.name).split(/\s+/);
+      for (const a of [c.name, ...c.aliases]) {
+        const ws = norm(a).split(/\s+/);
+        if (ws.length > own.length && own.every((w) => ws.includes(w)) && !ws.some((w) => TITLES.has(w.replace(/\.$/, ''))) && /^\p{Lu}/u.test(a) && !c.entry.aliases.some((x) => norm(x) === norm(a))) c.entry.aliases.push(a);
+      }
+    }
     const kept = [];
     for (const p of proposals) {
       if (p.verdict !== 'yes') { dropped.push({ entity: p.c.name, label: p.label, value: p.value, why: 'verifier: ' + (p.verdict || 'none') }); continue; }

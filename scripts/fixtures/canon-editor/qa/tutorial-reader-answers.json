@@ -1,0 +1,400 @@
+{
+ "cast": [
+  {
+   "para": "Wren Calloway was the only woman in Ferrybridge",
+   "cast": [
+    {
+     "n": "Wren Calloway",
+     "k": "person",
+     "a": [
+      "Wren"
+     ]
+    },
+    {
+     "n": "Juniper",
+     "k": "creature",
+     "a": [
+      "the bay mare"
+     ]
+    },
+    {
+     "n": "Hesketh",
+     "k": "person",
+     "a": [
+      "Old Hesketh"
+     ]
+    },
+    {
+     "n": "Ballast",
+     "k": "creature",
+     "a": []
+    },
+    {
+     "n": "the Saltings",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "Marrowby",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "Ferrybridge",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "Mistress Fenn",
+     "k": "person",
+     "a": []
+    }
+   ]
+  },
+  {
+   "para": "The fog came in at the second mile",
+   "cast": [
+    {
+     "n": "Wren Calloway",
+     "k": "person",
+     "a": [
+      "Wren"
+     ]
+    },
+    {
+     "n": "Juniper",
+     "k": "creature",
+     "a": []
+    },
+    {
+     "n": "Hesketh",
+     "k": "person",
+     "a": []
+    },
+    {
+     "n": "Ballast",
+     "k": "creature",
+     "a": []
+    },
+    {
+     "n": "the Long Bank",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "the Withy Post",
+     "k": "place",
+     "a": []
+    }
+   ]
+  },
+  {
+   "para": "The fog lifted at the sixth mile",
+   "cast": [
+    {
+     "n": "Wren Calloway",
+     "k": "person",
+     "a": [
+      "Wren"
+     ]
+    },
+    {
+     "n": "Juniper",
+     "k": "creature",
+     "a": []
+    },
+    {
+     "n": "Odile Fenn",
+     "k": "person",
+     "a": [
+      "Mistress Fenn"
+     ]
+    },
+    {
+     "n": "Marrowby",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "the Bell",
+     "k": "place",
+     "a": []
+    }
+   ]
+  }
+ ],
+ "dossier": [
+  {
+   "name": "Wren Calloway",
+   "facts": [
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "woman",
+     "s": [
+      "Wren Calloway was the only woman in Ferrybridge"
+     ]
+    },
+    {
+     "g": "role",
+     "a": "job",
+     "v": "carries the post across the Saltings",
+     "s": [
+      "Wren Calloway was the only woman in Ferrybridge who would carry the post"
+     ]
+    },
+    {
+     "g": "history",
+     "a": "years",
+     "v": "has carried the post for eleven years",
+     "s": [
+      "it had gone across every day for eleven years"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "eyes",
+     "v": "grey",
+     "s": [
+      "Wren\u2019s eyes were the grey of the marsh at first light"
+     ]
+    },
+    {
+     "g": "personality",
+     "a": "pride",
+     "v": "proud of her record, though she would never say so",
+     "s": [
+      "Wren was proud of that in a way she would never have said out loud"
+     ]
+    },
+    {
+     "g": "relationship",
+     "a": "father",
+     "v": "her father taught her to count the stones",
+     "s": [
+      "the way her father had taught her"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Juniper",
+   "facts": [
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "mare",
+     "s": [
+      "Juniper, the bay mare, had crossed the Saltings"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "colour",
+     "v": "bay",
+     "s": [
+      "Juniper, the bay mare, had crossed the Saltings"
+     ]
+    },
+    {
+     "g": "age",
+     "a": "age",
+     "v": "fourteen",
+     "s": [
+      "She was fourteen, broad in the barrel and short in the temper"
+     ]
+    },
+    {
+     "g": "personality",
+     "a": "temper",
+     "v": "short in the temper",
+     "s": [
+      "She was fourteen, broad in the barrel and short in the temper"
+     ]
+    },
+    {
+     "g": "habit",
+     "a": "stops",
+     "v": "stops when the water is wrong, and nothing will move her",
+     "s": [
+      "When the water was wrong she would stop"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Hesketh",
+   "facts": [
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "man",
+     "s": [
+      "Old Hesketh, a small weathered man"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "build",
+     "v": "small and weathered",
+     "s": [
+      "Old Hesketh, a small weathered man"
+     ]
+    },
+    {
+     "g": "role",
+     "a": "job",
+     "v": "keeps the tide-board at the causeway end",
+     "s": [
+      "kept the tide-board at the causeway end"
+     ]
+    },
+    {
+     "g": "habit",
+     "a": "chalk",
+     "v": "chalks the safe hours on the board every morning",
+     "s": [
+      "Every morning he chalked the safe hours on it"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Ballast",
+   "facts": [
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "gelding",
+     "s": [
+      "Ballast, the piebald gelding"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "colour",
+     "v": "piebald",
+     "s": [
+      "Ballast, the piebald gelding"
+     ]
+    },
+    {
+     "g": "possession",
+     "a": "owner",
+     "v": "belongs to Hesketh",
+     "s": [
+      "He belonged to Hesketh"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the Saltings",
+   "facts": [
+    {
+     "g": "description",
+     "a": "size",
+     "v": "eleven miles from the sea wall to Marrowby",
+     "s": [
+      "The Saltings ran eleven miles from the sea wall at Ferrybridge"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "land",
+     "v": "flat as a laid table and twice as treacherous",
+     "s": [
+      "flat as a laid table and twice as treacherous"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Marrowby",
+   "facts": [
+    {
+     "g": "description",
+     "a": "what",
+     "v": "a market town on a little hill",
+     "s": [
+      "the market town of Marrowby"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Odile Fenn",
+   "facts": [
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "woman",
+     "s": [
+      "She was a tall woman with a tall woman\u2019s way"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "height",
+     "v": "tall",
+     "s": [
+      "She was a tall woman with a tall woman\u2019s way"
+     ]
+    },
+    {
+     "g": "role",
+     "a": "job",
+     "v": "keeps the counting house beside the wool market",
+     "s": [
+      "Mistress Odile Fenn kept the counting house beside the wool market"
+     ]
+    }
+   ]
+  }
+ ],
+ "verify": {},
+ "refers": [],
+ "profile": [
+  {
+   "name": "Wren Calloway",
+   "p": [
+    {
+     "t": "Wren Calloway carries the post across the Saltings.",
+     "f": [
+      "carries the post across the Saltings"
+     ]
+    }
+   ]
+  }
+ ],
+ "events": [
+  {
+   "para": "Hesketh began to sing",
+   "events": [
+    {
+     "who": [
+      "Hesketh"
+     ],
+     "did": "Hesketh began to sing",
+     "where": "",
+     "quote": "Hesketh began to sing, quietly and badly"
+    }
+   ]
+  },
+  {
+   "para": "At the second withy",
+   "events": [
+    {
+     "who": [
+      "Hesketh"
+     ],
+     "did": "Hesketh turned back at the second withy",
+     "where": "",
+     "quote": "At the second withy Hesketh turned back"
+    }
+   ]
+  }
+ ],
+ "contradicts": [],
+ "clash": []
+}

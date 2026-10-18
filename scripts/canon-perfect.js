@@ -77,18 +77,21 @@ function sheetIndex(sheet) {
 // The value as a careful reader writes it: the sheet's wording or one of
 // its alternatives, whichever is most in the quote's own words (a reader is
 // asked for "the text's own words"; the sheet's editorial wording may not be)
-function wording(f) { return worded(f).v; }
 // → { v, supported }: supported when the words are the quote's (its names, half its words)
 function worded(f) {
   const E = Canon.Editor;
   const bag = new Set(E.content(f.quote));
-  const caps = (v) => (v.match(/(?<![\p{L}])\p{Lu}[\p{L}'’-]+/gu) || []).filter((w) => !/^(?:The|A|An)$/.test(w)).every((w) => N(f.quote).includes(N(w).replace(/['’]s$/, '')));
+  // (its names and its numbers in the quote)
+  const caps = (v) => (v.match(/(?<![\p{L}])\p{Lu}[\p{L}'’-]+/gu) || []).filter((w) => !/^(?:The|A|An)$/.test(w)).every((w) => N(f.quote).includes(N(w).replace(/['’]s$/, '')))
+    && E.content(v).filter((w) => /^(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|first|second|third|twenty|thirty|forty|fifty|hundred)$/.test(w)).every((w) => E.inBag(w, bag));
   const fit = (v) => { const ws = E.content(v); return ws.length ? ws.filter((w) => E.inBag(w, bag)).length / ws.length : 0; };
   // (at most twelve words, as the prompt asks; the sheet's own wording when it
   // is in the quote's words, else the alternative most so)
   const all = [f.value, ...(f.alt || [])].filter((v) => v.split(/\s+/).length <= 12);
   if (!all.length) all.push(f.value);
-  const ok = all.find((v) => caps(v) && fit(v) >= 0.5);
+  // (the sheet's own wording if it holds; else the alternative most in the quote's words)
+  if (caps(all[0]) && fit(all[0]) >= 0.5) return { v: all[0], supported: true };
+  const ok = all.filter((v) => caps(v) && fit(v) >= 0.5).sort((x, y) => fit(y) - fit(x))[0];
   if (ok) return { v: ok, supported: true };
   let best = all[0];
   for (const v of all) if ((caps(v) && !caps(best)) || (caps(v) === caps(best) && fit(v) > fit(best) + 1e-9)) best = v;
@@ -146,7 +149,7 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
       }
       return out;
     },
-    async verify({ name, label, value, negated, other, lasting, strict }) {
+    async verify({ name, label, value, negated, other, lasting }) {
       const madeUp = wrong.has(N(name + '|' + value));
       const t = ix.truth(name, label, value);
       if (adversary && madeUp) return negated || other ? 'no' : 'yes';
@@ -250,15 +253,17 @@ function survival(run) {
       // (a name is kept in the entry's names: "Anselm", "Brother Ink")
       const named = f.attr === 'name' && mine.some((e) => [e.name, ...e.aliases].some((n) => Canon.Editor.content(f.value).some((w) => Canon.Editor.content(n).includes(w))));
       // (a sheet value its own quote doesn't hold — "Hesper (not Coll)" from "He was not one of the Spared" — is the sheet's reading, not a reader's: not counted)
-      const offered = named || (run.log || []).some((y) => !y.wrong && y.supported && y.value === f.value && y.quote === f.quote);
+      // (nor one whose quote is a sentence the sheet has a slip stand on: no fact is read from a slip's sentence)
+      const onSlip = (sheet.slips || []).some((x) => N(x.sentence).includes(N(Canon.sentences(f.quote)[0].text).replace(/[.!?]+$/, '')));
+      const offered = !onSlip && (named || (run.log || []).some((y) => !y.wrong && y.supported && y.value === f.value && y.quote === f.quote));
       if (offered) out.proposed.of++;
       if (named || produced.some((pf) => { const m = Score.matchFact(pf, [{ ...f, entity: a }]); return m; })) { out.kept++; if (offered) out.proposed.kept++; }
       else {
         // why: the gate that dropped what the reader proposed, or never proposed (not in the pack)
         const said = (run.log || []).filter((y) => !y.wrong && y.value === f.value && y.quote === f.quote);
-        const drops = Object.entries(((run.cache || {}).ed || {}).dropped || {}).flatMap(([ch, xs]) => xs.filter((x) => said.some((y) => N(y.entity) === N(x.entity) && N(y.v) === N(x.value))).map((x) => x.why));
+        const drops = Object.entries(((run.cache || {}).ed || {}).dropped || {}).flatMap(([, xs]) => xs.filter((x) => said.some((y) => N(y.entity) === N(x.entity) && N(y.v) === N(x.value))).map((x) => x.why));
         const eng = Object.values((run.cache || {}).dropped || {}).filter((x) => mine.some((e) => e.name === x.entry) && N(x.quote).includes(N(Canon.sentences(f.quote)[0].text).slice(0, 30))).map((x) => 'engine ' + x.why + ' ' + x.attr);
-        const why = drops.length ? drops.join(', ') : eng.length ? eng.join(', ') : said.length ? 'kept elsewhere/merged?' : 'not proposed';
+        const why = (offered ? '' : 'not counted: ') + (drops.length ? drops.join(', ') : eng.length ? eng.join(', ') : said.length ? 'kept elsewhere/merged?' : 'not proposed');
         out.lost.push(`${a.name} · ${f.attr}: ${f.value}  ← "${f.quote}"  [${why}]`);
       }
     }

@@ -1,0 +1,826 @@
+{
+ "cast": [
+  {
+   "para": "The bell of the Lantern House rang nine times",
+   "cast": [
+    {
+     "n": "Mara Venn",
+     "k": "person",
+     "a": [
+      "Mara"
+     ]
+    },
+    {
+     "n": "Tobias",
+     "k": "person",
+     "a": []
+    },
+    {
+     "n": "Edric Slade",
+     "k": "person",
+     "a": [
+      "the Harbourmaster"
+     ]
+    },
+    {
+     "n": "Ines Garrow",
+     "k": "person",
+     "a": []
+    },
+    {
+     "n": "the Lantern House",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "Dunmere",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "Coldharbour",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "the Guild of Wick-Trimmers",
+     "k": "group",
+     "a": [
+      "the Guild"
+     ]
+    },
+    {
+     "n": "the Salt Cod",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "No lamp may be lit before the dusk bell",
+     "k": "rule",
+     "a": []
+    }
+   ]
+  },
+  {
+   "para": "Morning came grey and cold over Dunmere",
+   "cast": [
+    {
+     "n": "Mara Venn",
+     "k": "person",
+     "a": [
+      "Mara"
+     ]
+    },
+    {
+     "n": "Tobias",
+     "k": "person",
+     "a": []
+    },
+    {
+     "n": "the Lantern House",
+     "k": "place",
+     "a": []
+    },
+    {
+     "n": "Dunmere",
+     "k": "place",
+     "a": []
+    }
+   ]
+  },
+  {
+   "para": "Mara Venn has green eyes",
+   "cast": [
+    {
+     "n": "Mara Venn",
+     "k": "person",
+     "a": [
+      "Mara"
+     ]
+    }
+   ]
+  },
+  {
+   "para": "Mara Venn: forty",
+   "cast": [
+    {
+     "n": "Mara Venn",
+     "k": "person",
+     "a": [
+      "Mara"
+     ]
+    }
+   ]
+  }
+ ],
+ "dossier": [
+  {
+   "name": "Mara Venn",
+   "facts": [
+    {
+     "g": "age",
+     "a": "age",
+     "v": "thirty-four",
+     "s": [
+      "She was thirty-four"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "height",
+     "v": "tall",
+     "s": [
+      "a tall woman with a long dark braid"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "hair",
+     "v": "long dark braid",
+     "s": [
+      "a tall woman with a long dark braid"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "eyes",
+     "v": "grey",
+     "s": [
+      "a tall woman with a long dark braid and grey eyes"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "mark",
+     "v": "white scar through her left eyebrow",
+     "s": [
+      "A white scar ran through her left eyebrow"
+     ]
+    },
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "woman",
+     "s": [
+      "a tall woman with a long dark braid"
+     ]
+    },
+    {
+     "g": "role",
+     "a": "job",
+     "v": "lamplighter of the Lantern House",
+     "s": [
+      "she had climbed these three hundred steps every dusk for eleven years"
+     ]
+    },
+    {
+     "g": "habit",
+     "a": "stairs",
+     "v": "climbs three hundred steps every dusk",
+     "s": [
+      "she had climbed these three hundred steps every dusk for eleven years"
+     ]
+    },
+    {
+     "g": "possession",
+     "a": "key",
+     "v": "brass key on a cord around her neck",
+     "s": [
+      "Mara kept a brass key on a cord around her neck"
+     ]
+    },
+    {
+     "g": "habit",
+     "a": "key",
+     "v": "touches the key twice at every landing",
+     "s": [
+      "She touched it twice at every landing"
+     ]
+    },
+    {
+     "g": "personality",
+     "a": "luck",
+     "v": "does not much believe in luck",
+     "s": [
+      "she did not much believe in luck"
+     ]
+    },
+    {
+     "g": "origin",
+     "a": "born",
+     "v": "born in Coldharbour, in a house above the fish market",
+     "s": [
+      "Mara herself had been born in Coldharbour"
+     ]
+    },
+    {
+     "g": "history",
+     "a": "left",
+     "v": "left Coldharbour at nineteen with a single bag",
+     "s": [
+      "she had left at nineteen with a single bag"
+     ]
+    },
+    {
+     "g": "personality",
+     "a": "sea",
+     "v": "does not like the sea",
+     "s": [
+      "She did not like the sea either"
+     ]
+    },
+    {
+     "g": "habit",
+     "a": "wicks",
+     "v": "trims the wicks herself",
+     "s": [
+      "She trimmed the wicks herself"
+     ]
+    },
+    {
+     "g": "relationship",
+     "a": "apprentice",
+     "v": "Tobias",
+     "s": [
+      "he had been her apprentice since the spring"
+     ]
+    },
+    {
+     "g": "personality",
+     "a": "quiet",
+     "v": "says nothing at Guild meetings",
+     "s": [
+      "Mara went to every meeting and said nothing at any of them"
+     ]
+    },
+    {
+     "g": "membership",
+     "a": "guild",
+     "v": "member of the Guild of Wick-Trimmers",
+     "s": [
+      "Mara went to every meeting"
+     ]
+    },
+    {
+     "g": "habit",
+     "a": "dolphins",
+     "v": "rides dolphins to work",
+     "s": [
+      "The bell of the Lantern House rang nine times"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Tobias",
+   "facts": [
+    {
+     "g": "age",
+     "a": "age",
+     "v": "fourteen",
+     "s": [
+      "He was a thin boy of fourteen"
+     ]
+    },
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "boy",
+     "s": [
+      "He was a thin boy of fourteen"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "build",
+     "v": "thin",
+     "s": [
+      "He was a thin boy of fourteen"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "hair",
+     "v": "red",
+     "s": [
+      "with red hair and a face full of freckles"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "face",
+     "v": "freckles",
+     "s": [
+      "with red hair and a face full of freckles"
+     ]
+    },
+    {
+     "g": "role",
+     "a": "job",
+     "v": "Mara's apprentice since the spring",
+     "s": [
+      "he had been her apprentice since the spring"
+     ]
+    },
+    {
+     "g": "state",
+     "a": "mother",
+     "v": "his mother is dead",
+     "s": [
+      "My mother says the stairs will kill you one day"
+     ],
+     "x": 1
+    }
+   ]
+  },
+  {
+   "name": "Edric Slade",
+   "facts": [
+    {
+     "g": "appearance",
+     "a": "build",
+     "v": "heavy man with a grey beard",
+     "s": [
+      "The Harbourmaster was a heavy man with a grey beard"
+     ]
+    },
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "man",
+     "s": [
+      "The Harbourmaster was a heavy man with a grey beard"
+     ]
+    },
+    {
+     "g": "role",
+     "a": "job",
+     "v": "Harbourmaster",
+     "s": [
+      "The Harbourmaster was a heavy man"
+     ]
+    },
+    {
+     "g": "habit",
+     "a": "visit",
+     "v": "comes out along the breakwater every Friday to count the oil",
+     "s": [
+      "who came out along the breakwater every Friday to count the oil"
+     ]
+    },
+    {
+     "g": "origin",
+     "a": "born",
+     "v": "has never been to Coldharbour",
+     "s": [
+      "I have never once been to Coldharbour"
+     ],
+     "x": 1
+    }
+   ]
+  },
+  {
+   "name": "Ines Garrow",
+   "facts": [
+    {
+     "g": "sex",
+     "a": "sex",
+     "v": "woman",
+     "s": [
+      "a woman from the Guild"
+     ]
+    },
+    {
+     "g": "role",
+     "a": "job",
+     "v": "Wick-Trimmer for thirty years",
+     "s": [
+      "she had been a Wick-Trimmer for thirty years"
+     ]
+    },
+    {
+     "g": "membership",
+     "a": "guild",
+     "v": "member of the Guild",
+     "s": [
+      "a woman from the Guild was counting the lamps"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the Lantern House",
+   "facts": [
+    {
+     "g": "location",
+     "a": "where",
+     "v": "at the end of the Dunmere breakwater",
+     "s": [
+      "stood at the end of the Dunmere breakwater"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "shape",
+     "v": "a round tower of black stone",
+     "s": [
+      "a round tower of black stone with eleven floors"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "floors",
+     "v": "eleven floors",
+     "s": [
+      "a round tower of black stone with eleven floors"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "top",
+     "v": "copper lamp-room at the top",
+     "s": [
+      "a copper lamp-room at the top"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "windows",
+     "v": "windows face east, clouded with salt",
+     "s": [
+      "Its windows faced east"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "cold",
+     "v": "always cold inside",
+     "s": [
+      "Inside it was always cold"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "smell",
+     "v": "smells of lamp oil and wet rope",
+     "s": [
+      "The air smelled of lamp oil and wet rope"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "stairs",
+     "v": "stairs wind up through the middle like a shell",
+     "s": [
+      "the stairs wound up through the middle like the inside of a shell"
+     ]
+    },
+    {
+     "g": "rule",
+     "a": "rule",
+     "v": "no lamp may be lit before the dusk bell",
+     "s": [
+      "No lamp may be lit before the dusk bell"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "lamp-room",
+     "v": "the lamp-room is the warmest place in the tower",
+     "s": [
+      "The lamp-room was the warmest place in the tower"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Dunmere",
+   "facts": [
+    {
+     "g": "description",
+     "a": "look",
+     "v": "small grey town of slate roofs and crooked chimneys",
+     "s": [
+      "Dunmere itself was a small grey town"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "people",
+     "v": "fishers and rope-makers",
+     "s": [
+      "Its people were fishers and rope-makers"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "streets",
+     "v": "streets run steeply down to the quay",
+     "s": [
+      "The streets ran steeply down to the quay"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "smell",
+     "v": "smells of smoke and herring in winter",
+     "s": [
+      "in winter the whole town smelled of smoke and herring"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Coldharbour",
+   "facts": [
+    {
+     "g": "description",
+     "a": "lamps",
+     "v": "has no lamps",
+     "s": [
+      "Coldharbour has no lamps"
+     ],
+     "x": 1
+    },
+    {
+     "g": "description",
+     "a": "market",
+     "v": "has a fish market",
+     "s": [
+      "a house above the fish market"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the Guild of Wick-Trimmers",
+   "facts": [
+    {
+     "g": "history",
+     "a": "age",
+     "v": "has run the lights of Dunmere for two hundred years",
+     "s": [
+      "had run the lights of Dunmere for two hundred years"
+     ]
+    },
+    {
+     "g": "membership",
+     "a": "size",
+     "v": "forty members",
+     "s": [
+      "There were forty members"
+     ]
+    },
+    {
+     "g": "description",
+     "a": "dress",
+     "v": "grey coat with a brass button at the collar",
+     "s": [
+      "every one of them wore a grey coat"
+     ]
+    },
+    {
+     "g": "habit",
+     "a": "meet",
+     "v": "meets the first Monday of each month in the cellar of the Salt Cod inn",
+     "s": [
+      "The Guild met on the first Monday of each month"
+     ]
+    },
+    {
+     "g": "rule",
+     "a": "rule",
+     "v": "No lamp may be lit before the dusk bell",
+     "s": [
+      "The Guild had one rule above all the others"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the Salt Cod",
+   "facts": [
+    {
+     "g": "description",
+     "a": "what",
+     "v": "an inn with a cellar where the Guild meets",
+     "s": [
+      "in the cellar of the Salt Cod inn"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "No lamp may be lit before the dusk bell",
+   "facts": [
+    {
+     "g": "rule",
+     "a": "rule",
+     "v": "carved over the door of the Lantern House",
+     "s": [
+      "It was carved over the door of the Lantern House"
+     ]
+    },
+    {
+     "g": "rule",
+     "a": "why",
+     "v": "a lamp lit early burns the oil of the next night",
+     "s": [
+      "A lamp lit early burned the oil of the next night"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Mara Venn",
+   "part": "Morning came grey",
+   "facts": [
+    {
+     "g": "appearance",
+     "a": "eyes",
+     "v": "brown",
+     "s": [
+      "her brown eyes were red from too little sleep"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Mara Venn",
+   "part": "green eyes",
+   "facts": [
+    {
+     "g": "appearance",
+     "a": "eyes",
+     "v": "green",
+     "s": [
+      "Mara Venn has green eyes"
+     ]
+    },
+    {
+     "g": "origin",
+     "a": "born",
+     "v": "Saltmarsh",
+     "s": [
+      "was born in Saltmarsh"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the Lantern House",
+   "part": "nine floors",
+   "facts": [
+    {
+     "g": "description",
+     "a": "floors",
+     "v": "nine floors",
+     "s": [
+      "The Lantern House had nine floors"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Mara Venn",
+   "part": "Mara Venn: forty",
+   "facts": [
+    {
+     "g": "age",
+     "a": "age",
+     "v": "forty",
+     "s": [
+      "Mara Venn: forty"
+     ]
+    },
+    {
+     "g": "appearance",
+     "a": "eyes",
+     "v": "brown",
+     "s": [
+      "Mara Venn: forty"
+     ]
+    },
+    {
+     "g": "origin",
+     "a": "born",
+     "v": "Saltmarsh",
+     "s": [
+      "Mara Venn: forty"
+     ]
+    }
+   ]
+  }
+ ],
+ "verify": {
+  "mara venn|rides dolphins to work": "no"
+ },
+ "refers": [
+  {
+   "sentence": "She was thirty-four",
+   "span": "She",
+   "entity": "Mara Venn",
+   "answer": "yes"
+  },
+  {
+   "sentence": "He was a thin boy",
+   "span": "He",
+   "entity": "Tobias",
+   "answer": "yes"
+  }
+ ],
+ "profile": [
+  {
+   "name": "Mara Venn",
+   "p": [
+    {
+     "t": "Mara Venn is a thirty-four-year-old lamplighter.",
+     "f": [
+      "thirty-four",
+      "lamplighter of the Lantern House"
+     ]
+    },
+    {
+     "t": "She is a tall woman with grey eyes and a long dark braid.",
+     "f": [
+      "tall",
+      "grey",
+      "long dark braid"
+     ]
+    },
+    {
+     "t": "She was born in Coldharbour.",
+     "f": [
+      "born in Coldharbour, in a house above the fish market"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the Lantern House",
+   "p": [
+    {
+     "t": "The Lantern House is a round tower of black stone with eleven floors.",
+     "f": [
+      "a round tower of black stone",
+      "eleven floors"
+     ]
+    }
+   ]
+  }
+ ],
+ "events": [
+  {
+   "para": "Mara kept a brass key",
+   "events": [
+    {
+     "who": [
+      "Mara Venn"
+     ],
+     "did": "Mara kept a brass key on a cord",
+     "where": "",
+     "quote": "Mara kept a brass key on a cord around her neck"
+    }
+   ]
+  },
+  {
+   "para": "She struck the flint",
+   "events": [
+    {
+     "who": [
+      "Mara Venn"
+     ],
+     "did": "Mara lit the great lamp",
+     "where": "the lamp-room",
+     "quote": "She struck the flint, and the wick caught"
+    }
+   ]
+  },
+  {
+   "para": "Mara herself had been born",
+   "events": [
+    {
+     "who": [
+      "Mara Venn"
+     ],
+     "did": "Mara left Coldharbour at nineteen",
+     "where": "Coldharbour",
+     "quote": "she had left at nineteen with a single bag"
+    }
+   ]
+  }
+ ],
+ "contradicts": [
+  {
+   "sentence": "It was Tobias who lit the great lamp",
+   "who": "Mara Venn",
+   "answer": "yes"
+  }
+ ],
+ "clash": [
+  {
+   "sentence": "The Lantern House had nine floors",
+   "answer": "yes"
+  }
+ ]
+}
