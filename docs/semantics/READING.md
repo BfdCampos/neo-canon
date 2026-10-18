@@ -247,10 +247,11 @@ The evaluation lead ran Careful on six stories the builder had never seen (`/tmp
 | Set | Engine | Must facts | Precision (all kept, reviewed) | Slips | False slips | Which is right? | Junk entries | Profile sentences unsupported |
 |---|---|---|---|---|---|---|---|---|
 | dev2 (5 stories, 2,480 words) | round 1 | 81/129 (63%) | 145/149 judged, 54 unreviewed | 4/11 | 0 | 0/2 | 3 | — |
-| dev2 | **round 2** | **92/129 (71%)** | **139/139 (100%)** | **11/11** | **0** | **2/2** | **0** | **0/23** |
+| dev2 | **round 2, Careful** | **91/129 (71%)** | **137/137 (100%)** | **11/11** | **0** | **2/2** | **0** | **0/23** |
+| dev2 | round 2, Thorough 8B (CPU) | 66/129 (51%) | 108/109 (99%) | 10/11 | **0** | **2/2** | 0 | 1/54 |
 | dev (1,670 words) | round 1 (§11) | 29/41 (71%) | 64/65 (98%) | 3/3 | 0 | — | — | — |
-| dev | **round 2** | 26/41 (63%) | **45/45 (100%)** | 2/3 (+1 worth a look: the crust, which the reader won't call one event) | **0** | — | 0 | 0/7 |
+| dev | **round 2, Careful** | 25/41 (61%) | **42/42 (100%)** | 2/3 (+1 worth a look: the crust, which the reader won't call one event) | **0** | — | 0 | 0/7 |
 
-Model time: dev 1,870 s, dev2 5,182 s (2,480 words), about the round-1 engine's per word: the second questions (whose, wrong-about) cost ~3 s each, and code reads the introductions.
+Model time (Careful): dev 1,870 s, dev2 5,182 s (2,480 words); Thorough on dev2 10,777 s. Thorough's precision now meets the bar (99%, was 86% on dev in round 1): the whose and wrong-about questions take away the yes it gave too readily; its recall is lower than Careful's on this CPU run (it says no to more of the code's introductions and is asked fewer of them). about the round-1 engine's per word: the second questions (whose, wrong-about) cost ~3 s each, and code reads the introductions.
 
 What the numbers are not: dev2 was written for the failure types and the rules were tuned on it, so it is a second dev set, not a held-out estimate. The held-out brief's 37% must and ~55–72% precision were on prose the builder had never read; the final gate is a new unseen batch. Recall on dev fell a little (Hesper's Spared, her friend Coll and the Weighhouse's routines still need the reader; a habit "she kept her hands still" is no longer a habit), and that was the trade the owner asked for: precision first.

@@ -149,7 +149,8 @@ Slips on open facts and on deeds ask each passage alone: a 4B reader shown A and
 |---|---|---|---|---|---|
 | Careful | dev | 29/41 (71%) | 100% / 98% (64/65) | 3/3 | 0 |
 | Thorough (CPU) | dev | 30/41 (73%) | 100% / 86% (60/70) | 3/3 | 0 |
-| Careful, round 2 | dev | 26/41 (63%) | 100% / 100% (45/45) | 2/3 (+1 worth a look) | 0 |
-| Careful, round 2 | dev2 (5 stories) | 92/129 (71%) | 100% / 100% (139/139) | 11/11 | 0 |
+| Careful, round 2 | dev | 25/41 (61%) | 100% / 100% (42/42) | 2/3 (+1 worth a look) | 0 |
+| Careful, round 2 | dev2 (5 stories) | 91/129 (71%) | 100% / 100% (137/137) | 11/11 | 0 |
+| Thorough (CPU), round 2 | dev2 | 66/129 (51%) | 100% / 99% (108/109) | 10/11 | 0 |
 
 The fixture shelves (Ashfall Road, Lantern Coast) keep the paragraph reading's answers through the fake reader in `npm test`; their numbers above were not re-measured with a real reader in this change. Careful's precision rests on the builder's review of 12 facts not on the sheet; Thorough's does not yet meet the bar (READING.md §11). Round 2 (rules 12–20, READING.md §12) was written against the held-out evaluation's failure types — 37% must, ~55–72% precision, 9 false slips on prose the builder never saw — and measured on dev and the builder's dev2 stories, which are dev sets, not a held-out estimate.
