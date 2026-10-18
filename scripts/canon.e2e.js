@@ -1459,7 +1459,8 @@ part('editor', 'an entry\'s page: the profile, each source a number that opens i
     assert.equal(await js(`document.querySelector('.cn-profile-text').textContent`), 'Hesper is fifteen and the tallest girl in her year.1 Her hair is fair as wet straw.2');
     assert.deepEqual(await js(`[...document.querySelectorAll('.cn-profile .cn-cite')].map((b) => b.title)`), ['Under the Line, Ch 1: “Hesper was fifteen and the tallest girl in her year”', 'Under the Line, Ch 1: “Her hair was cropped close to the skull and fair as wet straw.”']);
     assert.equal(await js(`document.querySelector('.cn-profile .cn-by').textContent`), 'Canon’s profile');
-    assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-group')].map((h) => h.textContent)`), ['Who they are', 'Appearance', 'Habits and routines', 'Origin and history']);
+    // (round 2: "She kept her hands still" says nothing of how often: no habit)
+    assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-group')].map((h) => h.textContent)`), ['Who they are', 'Appearance', 'Origin and history']);
     // what the warden says ("too tall") is below the facts, never among them, and never asked
     assert.match(await js(`document.querySelector('#canon-view .cn-sub').nextElementSibling.textContent`), /Height: too tall/);
     assert.ok(!(await js(`canonNeeds().some((x) => x.f.attr === 'other')`)));
