@@ -633,7 +633,17 @@
     name: 'name', nickname: 'name', alias: 'name', 'also known as': 'name', called: 'name',
     function: 'function', purpose: 'function', use: 'use', effect: 'effect', effects: 'effect', taste: 'description',
     opinion: 'opinion', belief: 'opinion', skill: 'skill', skills: 'skill', ability: 'skill',
-    other: 'other', note: 'other', notes: 'other', fact: 'other', detail: 'other'
+    other: 'other', note: 'other', notes: 'other', fact: 'other', detail: 'other',
+    // (round 4: the real reader's labels drift; these are the words it used for the same things)
+    address: 'location.home', lodging: 'location.home', lodgings: 'location.home', whereabouts: 'location', 'situated at': 'location', 'located': 'location',
+    shift: 'routine', 'shift start': 'routine', 'shift starts': 'routine', hours: 'routine', timetable: 'routine', daily: 'routine', times: 'routine', 'working hours': 'routine',
+    pattern: 'habit', usual: 'habit', tendency: 'habit', tendencies: 'habit',
+    teaches: 'occupation', subject: 'occupation', subjects: 'occupation', teaching: 'occupation', 'works as': 'occupation', post: 'role',
+    deed: 'history', deeds: 'history', founding: 'history', founded: 'history', built: 'history', building: 'description',
+    frame: 'appearance.build', beard: 'appearance.face', moustache: 'appearance.face', walk: 'appearance.other', gait: 'appearance.other',
+    temper: 'personality', pet: 'possession', pets: 'possession', patient: 'residents', patients: 'residents', occupant: 'residents', occupants: 'residents',
+    breed: 'species', animal: 'species', feeling: 'state', feelings: 'state', emotion: 'state', posture: 'state', years: 'age',
+    son: 'relationship.kin', daughter: 'relationship.kin', parent: 'relationship.kin', father: 'relationship.kin', mother: 'relationship.kin'
   };
   // families: the attributes an editor would let stand for each other
   const LABEL_FAMILY = { occupation: 'role', routine: 'habit', custom: 'habit', atmosphere: 'description', residents: 'description', function: 'function', use: 'function', effect: 'function', members: 'membership', 'manner.speech': 'personality', manner: 'personality', opinion: 'personality', origin: 'origin', history: 'history', species: 'species', skill: 'role' };
@@ -1564,6 +1574,24 @@
         const e = byId.get(id);
         for (const o of open) {
           if (o.e.id !== id || o.pos >= pos) continue;
+          // (round 4) the same slot, another value, whatever the labels: a
+          // floor, a wing, a bank, a street, the hour of a routine (sure: a
+          // slip, no question asked); a neighbour, a year, a subject (they
+          // may both hold: worth a look)
+          const sc = Slots ? slotClash(e, o.f, o.quote, s, here, !here.length && lead ? { id } : null) : null;
+          if (sc) {
+            const fact = factKey(o.e, o.f);
+            const sentenceHash = textHash(norm(s.text));
+            const at = s.start + sc.b.start;
+            if (dismissed.has(fact + '|' + sentenceHash) || talk.some(([a, b]) => at < b && at + sc.b.span.length > a)) continue;
+            out.push({
+              bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: p.hash, sentence: s.text, sat: s.start, sentenceHash, at, span: sc.b.span,
+              to: null, kind: 'open', strength: sc.sure ? 'strong' : 'weak', entry: e.id, name: e.name, attr: 'other', value: o.f.value, as: labelOf(o.f), fact,
+              sources: o.f.sources.filter((x) => !x.written).slice(0, 2).map((x) => ({ label: x.label, quote: x.quote })), more: 0, written: o.f.state === 'yours',
+              ...(sc.sure ? {} : { ask: true, ref: sc.b.span })
+            });
+            break;
+          }
           const detail = Editor.clashDetail(o.f, o.quote, s.text, [e.name, ...e.aliases]);
           if (!detail) continue;
           { const at0 = s.start + s.text.indexOf(detail.span); if (talk.some(([a, b]) => at0 < b && at0 + detail.span.length > a)) continue; }
@@ -1599,6 +1627,19 @@
   // `notes`: Set of 'book/ch' that are the writer's notes; `inNotes`: this chapter is
   // one. The notes against the prose is a question, not a slip: a prose
   // sentence is never suspect against a value only the notes hold.
+  // (round 4) a sentence's claim of entity `e` in the slot of its fact `f`
+  // that differs (canon-slots.js) → { a, b, sure } or null. `here`: the
+  // sentence's mentions (paragraph offsets); `lead`: the mention a
+  // sentence-opening he or she goes on with.
+  function slotClash(e, f, quote, s, here, lead = null) {
+    const fc = Slots.factClaims(f, quote, e.kind);
+    if (!fc.length) return null;
+    const rel = (m) => [m.start - s.start, m.end - s.start];
+    const at = here.filter((m) => m.id === e.id).map(rel);
+    if (!at.length && lead && lead.id === e.id) at.push([0, (/^\s*\S+/.exec(s.text) || [''])[0].length]);
+    if (!at.length) return null;
+    return Slots.clashOf(fc, Slots.claimsAbout(s.text, at, here.filter((m) => m.id !== e.id).map(rel), e.kind));
+  }
   function editorSuspects({ paras, entries, kept = [], told = [], rare = null, notes = new Set(), inNotes = false }) {
     const prose = (f) => inNotes || (f.sources || []).some((x) => x.written || !notes.has(x.book + '/' + x.ch));
     const ids = new Set();
@@ -1629,10 +1670,15 @@
       const every = mentions(p.text, idx).filter((m) => !talk.some(([a, b]) => m.start < b && m.end > a));
       for (const s of ss) {
         const here = every.filter((m) => m.start >= s.start && m.end <= s.end);
+        // (a sentence opening with he or she: the one person the paragraph named last, before it)
+        const lead = /^\s*(?:he|she)\b/i.exec(s.text) && !here.length ? every.filter((m) => m.end <= s.start).pop() : null;
         for (const { e, f } of opens) {
-          if (!here.some((m) => m.id === e.id)) continue;
+          const named = here.some((m) => m.id === e.id);
+          if (!named && !(lead && lead.id === e.id)) continue;
           const q = (f.sources.find((x) => !x.written) || {}).quote || '';
-          if (Editor.clashCandidate(f, q, s.text, [e.name, ...e.aliases])) ids.add(s.id);
+          if (named && Editor.clashCandidate(f, q, s.text, [e.name, ...e.aliases])) ids.add(s.id);
+          // (round 4) the same slot, another value, whatever the label
+          if (Slots && slotClash(e, f, q, s, here, lead)) ids.add(s.id);
         }
         if (rare && deeds.length) {
           const own = new Set(heavy(s.text).map(stemOf).filter((w) => rare(w) && !nameStems.has(w)));
@@ -3237,6 +3283,22 @@
                 e.facts.splice(e.facts.indexOf(f), 1);
                 continue;
               }
+              // (round 4) the same slot, another value: "on the west bank" after
+              // "on the east bank" whatever the labels ("Situated", "Where"), ten
+              // every night after eight; the notes against the prose wait as
+              // Which is right? (both values), a later one in the prose is the
+              // pass's slip (sure) or worth a look (it may hold beside the first)
+              const mine = Slots ? Slots.factClaims(f, fq, e.kind) : [];
+              const slotWith = mine.length && keep.map((g) => ({ g, c: Slots.clashOf(Slots.factClaims(g, (g.sources.find(live) || {}).quote || '', e.kind), mine) })).find((x) => x.c);
+              if (slotWith) {
+                const gw = where(slotWith.g.sources.find(live) || {});
+                const fw = where(f.sources.find(live) || {});
+                if (gw && fw && gw.note !== fw.note) { slotWith.g.state = 'disagree'; f.state = 'disagree'; keep.push(f); continue; }
+                const x = f.sources.find(live) || {};
+                dropped[factKey(e, f) + '|' + textHash(norm(x.quote || ''))] = { entry: e.name, attr: f.attr, value: f.value, quote: x.quote || '', why: slotWith.c.sure ? 'later' : 'look' };
+                e.facts.splice(e.facts.indexOf(f), 1);
+                continue;
+              }
               // (round 3) one place of birth: "Saltmarsh" in the notes against
               // "born in Coldharbour" in the prose is Which is right?; a later
               // one in the prose is the pass's
@@ -3721,8 +3783,13 @@
     } catch { return null; }
   })() : null;
 
+  // Where a value stands (canon-slots.js, round 4): main and the tests load it
+  const Slots = typeof require === 'function' && typeof module === 'object' && module.exports ? (() => {
+    try { return require('./canon-slots.js')({ norm }); } catch { return null; }
+  })() : null;
+
   return {
-    Editor, LABELS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, factKind, factSection, SECTIONS, openIndex, editorSuspects,
+    Editor, Slots, LABELS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, factKind, factSection, SECTIONS, openIndex, editorSuspects,
     CAST_SCHEMA, DOSSIER_SCHEMA, PROFILE_SCHEMA,
     localReader, PROPOSE_SCHEMA, ANSWER_SCHEMA, JUDGE_SCHEMA,
     textHash, norm, normMap, decode, sourceParas, speechSpans, reportedSpans, sentences, mentionIndex, mentions, gateQuote,

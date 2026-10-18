@@ -298,9 +298,10 @@ function driftReader(sheet, base, { log, wrongSet, hash, N, Canon }) {
     },
     async verify(q) {
       if (wrongSet.has(N(q.name + '|' + q.value))) return q.negated || q.other || q.moment ? 'no' : 'yes';
-      return base.verify(q);
+      // (a true fact under a drifted label is still true: the label isn't the sheet's)
+      return base.verify({ ...q, label: 'other' });
     },
-    async whose(q) { return wrongSet.has(N(q.name + '|' + q.value)) ? q.name : base.whose(q); },
+    async whose(q) { return wrongSet.has(N(q.name + '|' + q.value)) ? q.name : base.whose({ ...q, label: 'other' }); },
     async refers(q) { return 'yes'; },
     // sentences that cite real facts and say more than they do
     async profile({ name, kind, facts }) {
@@ -428,7 +429,7 @@ function survivors(run) {
     const kept = e.facts.filter((g) => ['verified'].includes(g.state)).filter((g) => {
       const pf = { value: g.value, as: g.as, attr: Score.canonLabel(Canon.labelOf(g)), quotes: g.sources.map((s) => s.quote) };
       const m = Score.matchFact(pf, [{ attr: x.attr, value: x.value, quote: x.quote, alt: [] }]);
-      return m && !ix.truth(e.name, Canon.labelOf(g), g.value);
+      return m && !ix.truth(e.name, Canon.labelOf(g), g.value) && !ix.truth(e.name, 'other', g.value);
     });
     for (const g of kept) out.push(`${e.name} · ${Canon.labelOf(g)}: ${g.value}  (${['slip', 'trap', 'moment', 'pronoun'].includes(x.of) ? x.of : `really ${x.of}'s`})  ← "${(g.sources[0] || {}).quote}"`);
   }
