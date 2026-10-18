@@ -936,7 +936,12 @@ module.exports = function canonEditor(C) {
     const inHit = (t) => hits.find((h) => h.start < t.end && h.end > t.start);
     // the claim: the first of its words in the sentence, outside any name
     const want = new Set(words);
-    const isClaim = (t) => !inHit(t) && !STOPW.has(t.lw) && (want.has(stem(t.lw)) || inBag(stem(t.lw), want));
+    // (a hyphened word by its parts too: "seventy-three", "grey-haired")
+    if (ctx.ch.notes) {
+      const first = ((ctx.hits || [])[s.pi] || [])[0];
+      if (first && first.start === 0 && /^\s*[:,—–]/.test(p.text.slice(first.end))) return first.key;
+    }
+    const isClaim = (t) => !inHit(t) && !STOPW.has(t.lw) && [t.lw, ...(t.lw.includes('-') ? t.lw.split('-') : [])].some((w) => want.has(stem(w)) || inBag(stem(w), want));
     // (round 3: in the clause that holds most of the claim's words — "They lined up by height,
     // which put Hesper near the back, behind Coll"; "…, and Tobiah sat by the window splicing rope")
     let ci = toks.findIndex(isClaim);
@@ -992,12 +997,13 @@ module.exports = function canonEditor(C) {
       if (ofx) return ofx.key;
     }
     // (a modifier owns its own noun only: "the Salt Cod inn"; else it is no candidate)
-    for (const x of cand) if (x.attributive !== undefined && (x.attributive === ci || isClaim(toks[x.attributive]))) return x.key;
+    // ("the valley children" are no valley: a common noun of its kind only — inn, street, house, river…)
+    for (const x of cand) if (x.attributive !== undefined && CATEGORY.has(toks[x.attributive].lw.replace(/s$/, '')) && (x.attributive === ci || isClaim(toks[x.attributive]))) return x.key;
     for (let k = cand.length - 1; k >= 0; k--) if (cand[k].attributive !== undefined) cand.splice(k, 1);
     // (the object of a preposition is no owner: "above the Sare", "below her")
     const gapPunct = (a, b) => /[,;:—–()]/.test(s.text.slice(toks[a].end - s.start, toks[b].start - s.start));
     // "a black-and-white collie bitch called Moss"
-    for (const x of cand) if (x.i > ci && x.i - ci <= 3 && x.key !== undefined && /^(?:called|named)$/.test((toks[x.i - 1] || {}).lw || '')) return x.key;
+    for (const x of cand) if (x.i > ci && x.i - ci <= 4 && !gapPunct(ci, x.i) && x.key !== undefined && /^(?:called|named)$/.test((toks[x.i - 1] || {}).lw || '')) return x.key;
     // (a possessive in c's own apposition or predicate is c: "Clem, his grey
     // mare", "Clem: Ivo’s grey mare", "He was my mother’s younger brother")
     for (const x of cand) {
@@ -1033,7 +1039,7 @@ module.exports = function canonEditor(C) {
     // "its Long Gallery, upstairs, a cold panelled room hung with portraits…,
     // where the light came in through tall windows")
     {
-      const anchor = before.filter((x) => x.key === c.key && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s/u.test(s.text.slice(toks[x.end].end - s.start, toks[x.end].end - s.start + 40))).pop();
+      const anchor = before.filter((x) => x.key === c.key && !x.pron && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s/u.test(s.text.slice(toks[x.end].end - s.start, toks[x.end].end - s.start + 40))).pop();
       if (anchor && !cand.some((y) => y.i > anchor.end && y.i < ci && y.key !== undefined && y.key !== c.key)) return c.key;
     }
     // a sentence about something the cast doesn't hold, which names this one
@@ -1050,14 +1056,19 @@ module.exports = function canonEditor(C) {
         && (mine.length || /^(?:room|hall|chamber|kitchen|cell|corridor|yard|office|attic|cellar|ward|dormitory|bedroom|surgery|parlour|study|garden|house|building|cottage|barn|shop|church|chapel|stable|loft|cabin|galley|hangar)$/.test(lead[1]))) return -1;
     }
     if (near && near.key !== undefined && !near.pron && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an|the)\s+(?:[\p{L}\p{N}'’-]+\s+){0,10}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) {
-      if (!object(near) || near.key === c.key) return near.key;
+      if (!object(near)) return near.key;
+      // ("…at the bottom of the Spine, the long vertical shaft": a definite description is the name's just before it)
+      const def = /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?the\s+((?:[\p{Ll}-]+\s+){0,3}?)([\p{Ll}-]+)(?=\s+(?:of|before|after|that|which|where|with|on|in|at|by)\b|\s*[,.;]|$)/u.exec(s.text.slice(toks[near.end].end - s.start));
+      // (unless its noun is this one's own: "my grandmother’s house stood at the end of Wrack Lane, the last house before the marsh")
+      if (def && [c.name, ...c.aliases].some((n) => norm(n).split(/\s+/).pop() === def[2])) return c.key;
+      if (def) return near.key;
       // (after a preposition's object: the subject's, when a place or thing is the subject — "The surgery was the
       // front half of the house on Bridge Street, a narrow red-brick building"; the object's, when a person is —
       // "the doctor held a clinic at the Corn Exchange, a sandstone hall")
       const sub = before.filter((x) => x.i < near.i && !x.poss && !object(x) && x.key !== undefined).pop();
       const subLiving = sub && (ctx.cast || []).some((o) => o.key === sub.key && ['person', 'creature'].includes(o.kind));
       if (sub && !subLiving) return sub.key;
-      if (sub || living) return near.key;
+      if (near.key === c.key || sub || living) return near.key;
       return null;
     }
     // a possessive just before the claim, in its own phrase
@@ -1076,7 +1087,7 @@ module.exports = function canonEditor(C) {
       // (round 3) a person's claim in a clause where nothing can be them —
       // "The bell went six times, the way it always did, and Hesper…"; "They lined up by height"
       if (living) {
-        const strict = (i) => /(?:[;:]|,\s*(?:and|but|so|yet|then|while|where|when|which)\b)/i.test(s.text.slice(toks[i - 1].end - s.start, toks[i].start - s.start));
+        const strict = (i) => /[;:]/.test(s.text.slice(toks[i - 1].end - s.start, toks[i].start - s.start)) || (/,/.test(s.text.slice(toks[i - 1].end - s.start, toks[i].start - s.start)) && /^(?:and|but|so|yet|then|while|where|when|which)$/.test(toks[i].lw));
         let a2 = ci;
         while (a2 > 0 && !strict(a2)) a2--;
         let b2 = ci + 1;
@@ -1087,7 +1098,12 @@ module.exports = function canonEditor(C) {
     }
     // a possessive just before the claim, in its own phrase (and not one that owns a name between: "My uncle Tobiah lived with her")
     // (nor one whose noun owns the claim in turn: "their mother’s dark hair")
-    { const px = before.filter((x) => x.poss && !x.pron && x.key !== undefined && /^\s*:\s*$/.test(s.text.slice(toks[x.end].end - s.start + (/^['’]s/.test(s.text.slice(toks[x.end].end - s.start)) ? 2 : 0), toks[ci].start - s.start).replace(/^['’]s/, ''))).pop(); if (px && toks.slice(px.end + 1, ci).length <= 1) return px.key; }
+    {
+      const pp = before.filter((x) => x.poss && ci - x.end <= 3 && !gapPunct(x.end, ci)).pop();
+      const sub = pp && before.filter((x) => x.i < pp.i && !x.poss && !object(x) && x.key !== undefined).pop();
+      if (sub && sub.key !== pp.key && /^(?:['’]s)?\s+(?:was|is|were|are|became|remained)(?:\s+(?:the|a|an|only|still))*\s*$/u.test(s.text.slice(toks[sub.end].end - s.start, toks[pp.i].start - s.start))) return sub.key;
+    }
+    if (living) { const px = before.filter((x) => x.poss && !x.pron && x.key !== undefined && /^\s*:\s*$/.test(s.text.slice(toks[x.end].end - s.start + (/^['’]s/.test(s.text.slice(toks[x.end].end - s.start)) ? 2 : 0), toks[ci].start - s.start).replace(/^['’]s/, ''))).pop(); if (px && toks.slice(px.end + 1, ci).length <= 1) return px.key; }
     // (and "her apprentice" is the apprentice's, not hers: a relation's other end)
     const poss = !RELNOUN.has(toks[ci].lw) && before.filter((x) => x.poss && ci - x.end <= 3 && !gapPunct(x.end, ci) && !cand.some((y) => y.i > x.end && y.i < ci) && !toks.slice(x.end + 1, ci).some((t) => t.poss)).pop();
     if (poss) return ownerOf(poss);
@@ -1310,6 +1326,18 @@ module.exports = function canonEditor(C) {
     if (quotes.length !== cited.length) return { why: 'quote' };
     // said: inside speech or reported speech, whatever the reader marked
     const said = !!x.x || cited.every((l) => { const q = clauseOf(l.s, grounded); return talkOf(l.s, q, ctx); });
+    // (round 3) what is said is quoted as said: the words inside the quotation
+    // marks that hold the claim, not the tag after them ("Coldharbour has no
+    // lamps," she said.), so every later read still finds it inside them
+    if (said) {
+      cited.forEach((l, i) => {
+        const p0 = ctx.ch.paras[l.s.pi];
+        const spans = speechSpans(p0.text).filter(([a, b]) => a < l.s.end && b > l.s.start);
+        const best = spans.map(([a, b]) => p0.text.slice(a, b).replace(/^[“"‘'«\s]+|[”"’'»\s]+$/g, '').replace(/[,;:]+$/, '')).find((t) => grounded.some((w) => inBag(w, new Set(content(t)))));
+        const q = best && gateQuote(best, ctx.text);
+        if (q) quotes[i] = q;
+      });
+    }
     if (bySetting && !['membership', 'residents', 'members'].includes(key) && g !== 'membership' && quotes.some((q) => namesOther(q) || others.some((o) => o.kind === 'place' && o.name.split(/\s+/).length > 1 && new RegExp(`(?<![\\p{L}])${o.name.split(/\s+/).pop()}s?(?![\\p{L}])`, 'iu').test(q)))) return { why: 'setting' };
     // not from a sentence a slip stands on (a later value that differs)
     if (cited.some((l) => ctx.suspect && ctx.suspect.has(l.s.id))) return { why: 'suspect' };
