@@ -331,3 +331,49 @@ Before: the round-3 engine (`471dcaa`) with the same readers and fixtures. Must:
 The two must facts dev3 "loses" are Hester's subject and year, which now wait as *Which is right?*, as the sheet asks. Of the 242 must facts shown, 238 carry the dot; the four of dev that don't are Canon's reading: the Weighhouse's routines (the bell six times at dawn, lining up by height, lessons after the weighing), which name nothing of it and are its only because the reader named it the setting, and Hesper's "one of the Spared", read from the sentence defining the Spared. The slips still missed with the drift reader are the three only a reader's yes can make (a never, a polarity, a crust given by a verb of giving, which is no deed done once). With a credulous reader five false slips remain, all on candidates that wait for the reader's yes by design (a deed shared by words, a polarity, an antonym): a reader that says yes to anything is not one the real Careful reader was (0 false in every held-out run).
 
 What these numbers are not: dev3 was written by the builder for the brief's types and the rules were tuned on it, so it is a third dev set; the drift reader is the brief's failures as the builder understood them, not the model. The real reader's word on unseen prose is the evaluation lead's to measure (the prompts gained the "only this moment?" and the profile questions, `EDITOR_PROMPT` is unchanged, so the verdict cache holds round 3's answers and only the new questions are asked).
+
+## 15. Round 5: the slips, from the kept facts
+
+The evaluation lead ran Careful (4B) on four more unseen stories (brief only: types, no text): verified precision 89% (round 3: 73%), must recall 50%, slips **2/11** (0 false), Worth a look 3 true and 2 false. Slips are the product's promise, and the misses were of one kind: the later sentence said otherwise of a fact Canon already kept, but tied it to its one by something other than the plain name. A pet called by another name and the "little <other breed>"; a shift's start hour against a range kept as "2200 to 0600"; a rank one step down (and no rank fact at all); a father's deed given to his son by the son's epithet; eyes by an epithet or a pronoun; hair under a nickname; a room number turned round, which the reader made a place with the slip as its fact while the true room had no entry; and the writer's notes against the prose, marked on the notes instead of asked.
+
+**dev4** (`scripts/fixtures/canon-editor/dev4/`, three stories written for exactly these slip types, with sheets): *Carrick Head* (a first-person signals officer named only by a radio call and a vocative; a watch "from 2200 to 0600"; Hut 12; a commander's Labrador bitch; Ch 2: the watch at 2300, "The commander's brown eyes", "Lieutenant Commander Okafor", "The commander's Labrador, Bess", "Hut 21 … the stove in there"; decoys: a promotion told as one, two people's ages, years served and years left, a route, a breakfast); *The Lugger* (a landlady's wire-haired fox terrier; a lodger whose notebook eyes the prose says otherwise; a possessive list, an object's colour, a number with no noun; Ch 2: "Tom … his dark hair", "Mrs Hollis's little Jack Russell"); *Tolland's* (Josiah Tolland Senior and Junior, "the old man", "the boy", "called the boy Young Joss"; a police sergeant; Bay 9; a foundry cat; Ch 2: "the bell that Young Joss had cast", "The old man's blue eyes", "Constable Pryce"; decoys: the son's own blue eyes, a round moved and told as moved).
+
+**The drift5 reader** (`scripts/canon-perfect.js`, mode `drift5`): the drift reader, plus the brief's types — it casts each one only by the name written (never an epithet, a short name or a generation, a nickname cast as someone of its own), the narrator as no one and the name a radio call gives as its own empty one, a renamed pet as another pet, a numbered room as no one and its number turned round as a place with the slip's sentence for a fact; it never proposes a rank, a species or a breed, and gives a watch as the bare range.
+
+| Failure type (brief) | What decides now (ACCURACY.md) |
+|---|---|
+| a. pet renamed; breed changed ("the little <breed>") | an animal's name and breed are slots, by its owner and kind, two cues (32); no entry for the new name |
+| b. a routine's start hour against a kept range | the 24-hour clock and ranges (33); the narrator's own I and me hold them to their hours (35) |
+| c. rank one step down; no rank fact | ranks on ladders, a fact from the narration (31) |
+| d. a deed given to the son | generation forms and the name the text gives the boy (30); "cast", "launched", "raised" are deeds done once |
+| e, f. eyes by epithet or pronoun, hair by nickname | the forms that refer, strong and weak (30); "ginger", "dark", "iron-grey" are colours, "dark" against what it can't be |
+| g. room number turned round; the true room no entry | numbered places from their first mention (34) |
+| h. notes against prose marked on the notes | the notes are never marked (36) |
+| false Worth a look across people | the words said otherwise must be this one's; years counted are how long (36) |
+| wrong dotted facts | a creature's apposition is its own; an object's colour, a number with no noun, a deed's own verb (37) |
+| recall: animals, ranks, the narrator, numbered places | species from a breed, ranks by code, the narrator from vocatives, numbered places (31–35, 37) |
+
+### Results, round 5 (no model: the sheet readers; `node scripts/canon-perfect.js`)
+
+Before: the round-4 engine (`5f3208c`) with the same readers and fixtures (dev4 included). Slips found / of (must) · false · Worth a look true/false.
+
+| Set | perfect r4 → r5 | drift r4 → r5 | credulous r4 → r5 | drift5 r4 → r5 |
+|---|---|---|---|---|
+| dev | 2/3 → 2/3 · 0 | 1/3 → 1/3 · 0 | 2/3 → 2/3 · 1 → 1 | 1/3 → 1/3 · 0 |
+| dev2 | 11/11 → 11/11 · 0 | 10/11 → 10/11 · 0 | 11/11 · 3 → **2** | 10/11 → 10/11 · 0 |
+| dev3 | 8/8 → 8/8 · 0 | 8/8 → 8/8 · 0 | 8/8 · 0 | 7/8 → **8/8** · 0 |
+| qa | 3/3 → 3/3 · 0 | 3/3 → 3/3 · 0 | 3/3 · 1 → 1 | 3/3 → 3/3 · 0 |
+| **dev4** | **0/10 → 10/10** · 0 · look 1/0 → 0/0 | **0/10 → 10/10** · 1 → **0** | 0/10 → 10/10 · 1 → **0** | **0/10 → 10/10** · 1 → **0** |
+
+| Set · reader | Must (r4 → r5) | Precision (r4 → r5) | Which is right? |
+|---|---|---|---|
+| dev4 · drift5 | 41 → 57/60 | 70/75 → **92/92** | 1/1 |
+| dev4 · drift | 44 → 57/60 | 74/81 → **92/92** | 1/1 |
+| dev3 · drift5 | 46 → 48/52 | 76/76 → 80/80 | 2/2 |
+| dev2 · drift | 123 → 123/129 | 203/203 → 204/204 | 2/2 |
+| dev · drift | 36 → 36/41 | 69/71 → 69/71 | — |
+| qa · drift | 35 → 35/35 | 51/51 → 51/51 | — |
+
+Every set holds at round 4's numbers or above. The slips the drift readers still miss on dev are the three only a reader's yes can make (§14); with a credulous reader the five false slips left are all candidates that wait for the reader's yes by design. `npm test` holds the rules (`scripts/canon-round5.test.js`), the end-to-end run is unchanged.
+
+What these numbers are not: dev4 was written by the builder for the brief's types, and drift5 is the brief as the builder read it; the real reader's word on unseen prose is the evaluation lead's to measure. No prompt changed (`EDITOR_PROMPT` is the same), so the verdict cache holds round 4's answers; everything new here is code's, and needs no model call (the kind-noun ties ask the reader's `refers` once each, as before).
