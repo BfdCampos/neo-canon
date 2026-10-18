@@ -1,0 +1,145 @@
+{
+  "about": "qa · The Lamplighter of Dunmere, the in-app QA's own chapter (round 3, /tmp qa10 ch1 and ch2), with its answer sheet written by the builder from the QA report. A lighthouse keeper seen through pronouns and possessives, a boy introduced after a line of dialogue, a tower described in a paragraph that opens with it and names the town in passing, a town described by its own paragraph, a guild with its short name and its rule. Ch 2 holds the four slips QA planted: brown eyes against grey, \"rubbed her eyes\" for a boy, nine floors against eleven, and a deed swap (nice: the deed is told in other words).",
+  "set": "qa",
+  "shelf": "Dunmere Lights",
+  "book": "book-the-lamplighter-qa1",
+  "chapters": { "c1": "Ch 1", "c2": "Ch 2" },
+  "notEntities": ["Friday", "Monday"],
+  "entities": [
+    {
+      "id": "mara-venn", "name": "Mara Venn", "kind": "person", "aliases": ["Mara"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "She was thirty-four, a tall woman with a long dark braid and grey eyes", "ch": "c1", "weight": "must", "hard": true, "alt": ["woman"] },
+        { "attr": "age", "value": "thirty-four", "quote": "She was thirty-four", "ch": "c1", "weight": "must", "alt": ["34"] },
+        { "attr": "appearance.height", "value": "tall", "quote": "She was thirty-four, a tall woman", "ch": "c1", "weight": "must", "alt": ["tall woman"] },
+        { "attr": "appearance.hair", "value": "a long dark braid", "quote": "a tall woman with a long dark braid", "ch": "c1", "weight": "must", "alt": ["dark braid", "long braid", "dark"] },
+        { "attr": "appearance.eyes", "value": "grey", "quote": "a long dark braid and grey eyes", "ch": "c1", "weight": "must", "hard": true, "alt": ["grey eyes"] },
+        { "attr": "appearance.mark", "value": "a white scar through her left eyebrow", "quote": "A white scar ran through her left eyebrow.", "ch": "c1", "weight": "must", "alt": ["white scar", "scar through her left eyebrow", "scar"] },
+        { "attr": "habit", "value": "has climbed the three hundred steps every dusk for eleven years", "quote": "she had climbed these three hundred steps every dusk for eleven years", "ch": "c1", "weight": "must", "alt": ["three hundred steps every dusk", "climbs the steps every dusk"] },
+        { "attr": "possession", "value": "a brass key on a cord around her neck", "quote": "Mara kept a brass key on a cord around her neck.", "ch": "c1", "weight": "must", "alt": ["brass key"] },
+        { "attr": "habit", "value": "touches the key twice at every landing", "quote": "She touched it twice at every landing, once for luck and once to be sure", "ch": "c1", "weight": "should", "alt": ["twice at every landing"] },
+        { "attr": "personality", "value": "does not much believe in luck", "quote": "she did not much believe in luck", "ch": "c1", "weight": "nice", "alt": ["not superstitious"] },
+        { "attr": "habit", "value": "trims the wicks herself and has never let anyone else", "quote": "She trimmed the wicks herself. She had never let anyone else do it", "ch": "c1", "weight": "should", "alt": ["trims the wicks herself", "trimmed the wicks herself"] },
+        { "attr": "origin", "value": "born in Coldharbour, in a house above the fish market", "quote": "Mara herself had been born in Coldharbour, in a house above the fish market", "ch": "c1", "weight": "must", "alt": ["born in Coldharbour", "Coldharbour"] },
+        { "attr": "history", "value": "left Coldharbour at nineteen with a single bag", "quote": "she had left at nineteen with a single bag", "ch": "c1", "weight": "should", "alt": ["left at nineteen"] },
+        { "attr": "personality", "value": "does not like the sea", "quote": "She did not like the sea either", "ch": "c1", "weight": "should", "alt": ["dislikes the sea"] },
+        { "attr": "habit", "value": "goes to every Guild meeting and says nothing at any", "quote": "Mara went to every meeting and said nothing at any of them.", "ch": "c1", "weight": "should", "alt": ["goes to every meeting", "says nothing at meetings"] },
+        { "attr": "relationship", "value": "Tobias is her apprentice", "quote": "he had been her apprentice since the spring", "ch": "c1", "weight": "should", "alt": ["apprentice Tobias", "Tobias"] }
+      ],
+      "traps": [
+        { "attr": "appearance.eyes", "value": "brown", "why": "Ch 2's slip" },
+        { "attr": "appearance.build", "value": "heavy", "why": "the Harbourmaster's" }
+      ]
+    },
+    {
+      "id": "tobias", "name": "Tobias", "kind": "person", "aliases": [], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "male", "quote": "He was a thin boy of fourteen", "ch": "c1", "weight": "must", "hard": true, "alt": ["boy"] },
+        { "attr": "age", "value": "fourteen", "quote": "He was a thin boy of fourteen", "ch": "c1", "weight": "must", "alt": ["14"] },
+        { "attr": "appearance.build", "value": "thin", "quote": "He was a thin boy of fourteen", "ch": "c1", "weight": "must", "alt": ["thin boy"] },
+        { "attr": "appearance.hair", "value": "red", "quote": "He was a thin boy of fourteen with red hair", "ch": "c1", "weight": "must", "hard": true, "alt": ["red hair"] },
+        { "attr": "appearance.face", "value": "a face full of freckles", "quote": "with red hair and a face full of freckles", "ch": "c1", "weight": "must", "alt": ["freckles", "freckled"] },
+        { "attr": "role", "value": "Mara's apprentice since the spring", "quote": "he had been her apprentice since the spring", "ch": "c1", "weight": "must", "alt": ["apprentice"] }
+      ],
+      "traps": [
+        { "attr": "appearance.height", "value": "long", "why": "\"quiet for a long while\": a while, not his height" },
+        { "attr": "personality", "value": "quiet", "why": "one moment: \"quiet for a long while\"" }
+      ]
+    },
+    {
+      "id": "edric-slade", "name": "Edric Slade", "kind": "person", "aliases": ["the Harbourmaster", "Harbourmaster"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "role", "value": "the Harbourmaster", "quote": "The Harbourmaster was a heavy man with a grey beard", "ch": "c1", "weight": "must", "alt": ["Harbourmaster", "harbourmaster"] },
+        { "attr": "sex", "value": "male", "quote": "The Harbourmaster was a heavy man with a grey beard", "ch": "c1", "weight": "must", "hard": true, "alt": ["man"] },
+        { "attr": "appearance.build", "value": "heavy", "quote": "The Harbourmaster was a heavy man with a grey beard", "ch": "c1", "weight": "must", "alt": ["heavy man"] },
+        { "attr": "appearance.face", "value": "a grey beard", "quote": "The Harbourmaster was a heavy man with a grey beard", "ch": "c1", "weight": "must", "alt": ["grey beard", "beard"] },
+        { "attr": "habit", "value": "comes out along the breakwater every Friday to count the oil", "quote": "The Harbourmaster was a heavy man with a grey beard who came out along the breakwater every Friday to count the oil.", "ch": "c1", "weight": "must", "alt": ["every Friday", "counts the oil"] },
+        { "attr": "opinion", "value": "says he has never been to Coldharbour and never will", "quote": "I have never once been to Coldharbour, Mara, and I never will.", "ch": "c1", "weight": "nice", "said": true, "alt": ["never been to Coldharbour"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "ines-garrow", "name": "Ines Garrow", "kind": "person", "aliases": [], "weight": "should", "profile": false,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "Her name was Ines Garrow, and she had been a Wick-Trimmer for thirty years.", "ch": "c1", "weight": "should", "hard": true, "alt": ["woman"] },
+        { "attr": "role", "value": "a Wick-Trimmer for thirty years", "quote": "she had been a Wick-Trimmer for thirty years", "ch": "c1", "weight": "must", "alt": ["Wick-Trimmer"] },
+        { "attr": "habit", "value": "nods once up at the Lantern House", "quote": "She looked up at the Lantern House and nodded once, the way she always did.", "ch": "c1", "weight": "nice", "alt": ["nods once"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "the-lantern-house", "name": "the Lantern House", "kind": "place", "aliases": ["Lantern House"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "location", "value": "at the end of the Dunmere breakwater", "quote": "The Lantern House stood at the end of the Dunmere breakwater", "ch": "c1", "weight": "must", "alt": ["end of the breakwater", "Dunmere breakwater"] },
+        { "attr": "description", "value": "a round tower of black stone", "quote": "The Lantern House stood at the end of the Dunmere breakwater, a round tower of black stone", "ch": "c1", "weight": "must", "alt": ["round tower", "black stone", "tower of black stone"] },
+        { "attr": "description", "value": "eleven floors", "quote": "a round tower of black stone with eleven floors", "ch": "c1", "weight": "must", "alt": ["11 floors"] },
+        { "attr": "location.part", "value": "a copper lamp-room at the top", "quote": "a copper lamp-room at the top", "ch": "c1", "weight": "should", "alt": ["copper lamp-room", "lamp-room"] },
+        { "attr": "description", "value": "its windows face east, toward the sea, clouded by the salt", "quote": "Its windows faced east, toward the sea, and the salt had clouded every one of them.", "ch": "c1", "weight": "must", "alt": ["windows face east", "windows faced east", "clouded windows"] },
+        { "attr": "atmosphere", "value": "always cold inside", "quote": "Inside it was always cold.", "ch": "c1", "weight": "must", "alt": ["cold inside", "cold"] },
+        { "attr": "atmosphere", "value": "smells of lamp oil and wet rope", "quote": "The air smelled of lamp oil and wet rope", "ch": "c1", "weight": "must", "alt": ["lamp oil and wet rope"] },
+        { "attr": "location.part", "value": "the stairs wind up through the middle like the inside of a shell", "quote": "the stairs wound up through the middle like the inside of a shell", "ch": "c1", "weight": "should", "alt": ["stairs wind up through the middle", "spiral stairs"] },
+        { "attr": "location.part", "value": "the lamp-room is the warmest place in the tower", "quote": "The lamp-room was the warmest place in the tower.", "ch": "c1", "weight": "should", "alt": ["warmest place"] },
+        { "attr": "rule", "value": "the Guild's rule is carved over its door", "quote": "It was carved over the door of the Lantern House", "ch": "c1", "weight": "nice", "alt": ["carved over the door"] }
+      ],
+      "traps": [
+        { "attr": "age", "value": "thirty-four", "why": "Mara's" },
+        { "attr": "description", "value": "small grey town", "why": "Dunmere's" }
+      ]
+    },
+    {
+      "id": "dunmere", "name": "Dunmere", "kind": "place", "aliases": [], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "description", "value": "a small grey town of slate roofs and crooked chimneys", "quote": "Dunmere itself was a small grey town of slate roofs and crooked chimneys", "ch": "c1", "weight": "must", "alt": ["small grey town", "slate roofs", "grey town"] },
+        { "attr": "location", "value": "on the only flat ground between the cliffs and the harbour", "quote": "Dunmere itself was a small grey town of slate roofs and crooked chimneys, built on the only flat ground between the cliffs and the harbour", "ch": "c1", "weight": "must", "alt": ["between the cliffs and the harbour"] },
+        { "attr": "residents", "value": "fishers and rope-makers", "quote": "Its people were fishers and rope-makers", "ch": "c1", "weight": "must", "alt": ["fishers", "rope-makers"] },
+        { "attr": "description", "value": "streets run steeply down to the quay in a dozen narrow stairways", "quote": "The streets ran steeply down to the quay in a dozen narrow stairways", "ch": "c1", "weight": "should", "alt": ["steep streets", "narrow stairways"] },
+        { "attr": "atmosphere", "value": "in winter the whole town smells of smoke and herring", "quote": "in winter the whole town smelled of smoke and herring", "ch": "c1", "weight": "should", "alt": ["smoke and herring"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "eleven floors", "why": "the Lantern House's" },
+        { "attr": "description", "value": "round tower of black stone", "why": "the Lantern House's" }
+      ]
+    },
+    {
+      "id": "coldharbour", "name": "Coldharbour", "kind": "place", "aliases": [], "weight": "should", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "has no lamps", "quote": "Coldharbour has no lamps", "ch": "c1", "weight": "nice", "said": true, "alt": ["no lamps"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "the-guild-of-wick-trimmers", "name": "the Guild of Wick-Trimmers", "kind": "group", "aliases": ["the Guild", "Guild of Wick-Trimmers", "Guild"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "history", "value": "has run the lights of Dunmere for two hundred years", "quote": "The Guild of Wick-Trimmers had run the lights of Dunmere for two hundred years.", "ch": "c1", "weight": "must", "alt": ["runs the lights of Dunmere", "two hundred years"] },
+        { "attr": "members", "value": "forty members", "quote": "There were forty members", "ch": "c1", "weight": "must", "alt": ["40 members"] },
+        { "attr": "custom", "value": "every member wears a grey coat with a brass button at the collar", "quote": "every one of them wore a grey coat with a brass button at the collar", "ch": "c1", "weight": "must", "alt": ["grey coat with a brass button", "grey coat"] },
+        { "attr": "custom", "value": "meets on the first Monday of each month in the cellar of the Salt Cod inn", "quote": "The Guild met on the first Monday of each month in the cellar of the Salt Cod inn.", "ch": "c1", "weight": "must", "alt": ["first Monday of each month", "meets in the cellar of the Salt Cod"] },
+        { "attr": "rule", "value": "no lamp may be lit before the dusk bell", "quote": "The Guild had one rule above all the others. No lamp may be lit before the dusk bell.", "ch": "c1", "weight": "must", "alt": ["no lamp before the dusk bell"] },
+        { "attr": "opinion", "value": "says a lamp lit early burns the next night's oil", "quote": "A lamp lit early burned the oil of the next night, the Guild said", "ch": "c1", "weight": "nice", "said": true, "alt": ["lamp lit early"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "the-salt-cod", "name": "the Salt Cod", "kind": "place", "aliases": ["Salt Cod"], "weight": "nice", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "an inn with a cellar", "quote": "in the cellar of the Salt Cod inn", "ch": "c1", "weight": "nice", "alt": ["inn"] }
+      ],
+      "traps": []
+    }
+  ],
+  "keyPoints": [
+    { "ch": "c1", "who": ["mara-venn"], "did": "Mara struck the flint and the wick caught", "quote": "She struck the flint, and the wick caught.", "weight": "should" }
+  ],
+  "slips": [
+    { "ch": "c2", "kind": "trait", "entity": "mara-venn", "attr": "eyes", "sentence": "Mara woke before Tobias and made tea in the lamp-room, and her brown eyes were red from too little sleep.", "span": "brown", "against": { "ch": "c1", "quote": "a long dark braid and grey eyes" }, "weight": "must" },
+    { "ch": "c2", "kind": "trait", "entity": "tobias", "attr": "sex", "sentence": "He rubbed her eyes with the heel of her hand and held out the taper he had carried all night.", "span": "her", "against": { "ch": "c1", "quote": "He was a thin boy of fourteen" }, "weight": "must" },
+    { "ch": "c2", "kind": "open", "entity": "the-lantern-house", "attr": "description", "sentence": "The Lantern House had nine floors, and Mara said they were nine too many for one woman and a boy.", "span": "nine floors", "against": { "ch": "c1", "quote": "a round tower of black stone with eleven floors" }, "weight": "must" },
+    { "ch": "c2", "kind": "deed", "entity": "mara-venn", "attr": "event", "sentence": "It was Tobias who lit the great lamp that night, and Mara let him, standing back with the brass key in her fist.", "span": "Tobias", "against": { "ch": "c1", "quote": "She struck the flint, and the wick caught." }, "weight": "nice" }
+  ],
+  "decoys": [
+    { "ch": "c1", "sentence": "\"My mother says the stairs will kill you one day.\"", "why": "speech" },
+    { "ch": "c1", "sentence": "He was quiet for a long while.", "why": "one moment, not a trait" },
+    { "ch": "c2", "sentence": "Tobias came up the stairs yawning.", "why": "agrees" }
+  ],
+  "needs": []
+}

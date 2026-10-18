@@ -205,6 +205,11 @@
         // "wrote every number in a ledger" is writing, not a report (only
         // "wrote that…" is); "could say it in their sleep" is what they can do
         if (/^writ|^wrote/i.test(m[0]) && !/^\s*(?:that\b|[,:]?\s*[“"‘])/i.test(rest)) continue;
+        // (round 3) a tag after a quotation ("…tonight,” said Tobias, coming
+        // down to meet her") reports nothing past the quotation; nor does
+        // what was never said ("in a way she would never have said out loud")
+        if (/[”"’'»]\s*$/u.test(s.text.slice(0, m.index))) continue;
+        if (/^\s+(?:out loud|aloud)\b/i.test(rest) && /(?<![\p{L}])(?:never|not|would|could)(?![\p{L}])|n['’]t\b/iu.test(s.text.slice(0, m.index))) continue;
         if (/\b(?:could|can|would)\s+$/i.test(s.text.slice(0, m.index)) && /^\s+it\b/i.test(rest)) continue;
         // "could tell a good year from a bad one" is knowing, not telling
         if (/^tell/i.test(m[0]) && /\b(?:could|can|couldn['’]t|can['’]t|cannot)\s+(?:always\s+|never\s+)?$/i.test(s.text.slice(0, m.index)) && !/^\s+(?:him|her|them|me|us|you)\b/i.test(rest)) continue;

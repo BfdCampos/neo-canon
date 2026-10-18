@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-qa",
+      "name": "Dunmere Lights",
+      "bookIds": [
+        "book-the-lamplighter-qa1"
+      ],
+      "canonId": "canon-dunmere-shelf-qa"
+    }
+  ]
+}

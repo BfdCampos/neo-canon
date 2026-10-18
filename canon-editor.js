@@ -338,7 +338,8 @@ module.exports = function canonEditor(C) {
     const fits = (x, y) => core(x) && core(x) === core(y) && (!title(x) || !title(y) || title(x) === title(y));
     for (const a of people()) {
       if (a.gone) continue;
-      const same = people().filter((b) => b !== a && [a.name, ...a.aliases].some((x) => [b.name, ...b.aliases].some((y) => fits(x, y))));
+      // (round 3: two whose own names carry different titles are never one, whatever their aliases share: "Dr Haddon", "Mrs Haddon")
+      const same = people().filter((b) => b !== a && !(title(a.name) && title(b.name) && title(a.name) !== title(b.name)) && [a.name, ...a.aliases].some((x) => [b.name, ...b.aliases].some((y) => fits(x, y))));
       if (same.length === 1) { const [into, from] = longer(a, same[0]); mergeCast(cast, into, from); }
       else if (same.length > 1 && !title(a.name)) { a.gone = true; a.name = '\u0000'; a.aliases = []; }
     }
@@ -504,6 +505,26 @@ module.exports = function canonEditor(C) {
       if (head.length < 3 || cast.some((x) => x !== c && [x.name, ...x.aliases].some((n) => n.split(/\s+/).pop().toLowerCase() === head))) continue;
       heads.set(head, c.key);
     }
+    // (round 3) the noun a place's, group's or thing's own description gives
+    // it: "The Lantern House stood at the end of the breakwater, a round tower
+    // of black stone" → "the tower"; "Dunmere itself was a small grey town" →
+    // "the town" (when no one else of the cast is called so)
+    const described = new Map();
+    for (const p of ch.paras) {
+      for (const m of mentions(p.text, idx)) {
+        const c = cast.find((x) => x.key === m.id);
+        if (!c || ['person', 'creature', 'rule'].includes(c.kind)) continue;
+        const lead = p.text.slice(Math.max(0, m.start - 6), m.start);
+        if (!/(?:^|[.!?”"]\s+|^\s*[Tt]he\s+)$/.test(p.text.slice(0, m.start)) && !/(?:^|\.\s+)(?:[Tt]he\s+)?$/.test(lead)) continue;
+        const d = /^(?:\s+itself)?\s+(?:was|is|stood|stands|lay|lies|sat|sits)\b[^.;!?]*?(?:,\s+|\s)(?:a|an)\s+((?:[\p{L}-]+\s+){0,3}?)(\p{Ll}[\p{Ll}-]{2,})(?=\s+(?:of|with|that|which|where|built|on|in|at|for|by)\b|\s*[,.;]|$)/u.exec(p.text.slice(m.end, m.end + 160));
+        if (!d) continue;
+        const noun = d[2];
+        if (FIXTURES.has(noun) || CROWD.has(noun) || described.has(noun) || noun.length < 3) { if (described.get(noun) !== c.key) described.set(noun, null); continue; }
+        if (cast.some((x) => x !== c && [x.name, ...x.aliases].some((n) => norm(n).split(/\s+/).pop() === noun))) continue;
+        described.set(noun, c.key);
+      }
+    }
+    for (const [noun, key] of described) if (key != null && !heads.has(noun)) heads.set(noun, key);
     return ch.paras.map((p) => {
       const hits = mentions(p.text, idx).map((m) => ({ key: m.id, start: m.start, end: m.end, via: m.via }));
       // the narrator: "I", "me", "my" in the narration
@@ -548,49 +569,194 @@ module.exports = function canonEditor(C) {
     out.votes = votes;
     return out;
   }
-  const SUBJECT = /^(?:[“"‘']?\s*)(?:(?:then|and|but|so|now|still|later|once|when|after|before|there|here|yet)\s*,?\s+)?(he|she|his|her|it|its|they|their)\b/i;
-  const PERSONAL = { he: 'male', his: 'male', she: 'female', her: 'female' };
-  // The sentences about one cast member, each with why it is there:
-  // 'name' (it is named), 'chain' (the pronoun after it), 'para' (a place's
-  // or thing's paragraph, after it is named), 'setting' (the chapter's place)
+  // Whom each he, she, his, her, it and its in the narration means (round 3:
+  // a pack that followed only a sentence-opening pronoun lost "A white scar
+  // ran through her left eyebrow" and a boy's whole introduction after a
+  // line of his speech). Read in order, as a reader would:
+  //   · a pronoun opening a sentence goes on with the last sentence's subject
+  //     ("Juniper, the bay mare, had crossed the Saltings more times than Wren
+  //     could count. She was fourteen": the mare, not Wren in the "than");
+  //   · an owning his/her/its, the subject of its own clause ("Mara kept a
+  //     key on a cord around her neck");
+  //   · a him/her that is an object is never its clause's subject ("said
+  //     Tobias, coming down to meet her": not Tobias);
+  //   · otherwise the last one named whose sex (if known) agrees.
+  // it/its/they mean a place, thing or group of the paragraph only. A choice
+  // made by those rules, or with only one who agrees, is strong; else weak,
+  // and the others who agree are `alt`. Each paragraph gets `refs`: start →
+  // { key, strong, alt }. → per sentence id: { keys: Set, weak: Set }
+  const PRON = { he: ['male', 's'], she: ['female', 's'], him: ['male', 'o'], himself: ['male', 'o'], his: ['male', 'p'], hers: ['female', 'o'], herself: ['female', 'o'], her: ['female', '?'],
+    it: ['it', '?'], its: ['it', 'p'], itself: ['it', 'o'], they: ['they', 's'], them: ['they', 'o'], their: ['they', 'p'], themselves: ['they', 'o'] };
+  const OPENERS = new Set(['then', 'and', 'but', 'so', 'now', 'still', 'later', 'once', 'yet', 'there', 'here', 'soon', 'afterwards', 'meanwhile', 'inside', 'outside', 'today', 'tonight']);
+  const EXPLETIVE = /^\s*(?:was|is|had been|has been|would be|seemed|felt|took|came)\s+(?:a\s+|an\s+|the\s+)?(?:\p{Ll}+\s+){0,2}?(?:that|to|when|as if|odd|strange|clear|true|late|early|time|night|morning|evening|raining|snowing|no use|no good|said|thing)\b/iu;
+  const refMemo = new WeakMap();
+  function resolveRefs(ch, hits, cast, sexOf) {
+    if (refMemo.has(hits)) return refMemo.get(hits);
+    const byKey = new Map(cast.map((x) => [x.key, x]));
+    const living = (k) => byKey.has(k) && ['person', 'creature'].includes(byKey.get(k).kind);
+    const learned = new Map();
+    // what the chapter's own nouns say ("Juniper, the bay mare"; "Old Hesketh, a
+    // small weathered man"; "He was a thin boy"), and its pronoun votes
+    const hinted = sexHints(ch, hits, cast);
+    const nouns = new Map();
+    for (const p of ch.paras) {
+      for (const h of hits[p.pi] || []) {
+        if (!living(h.key) || p.talk.some(([a, b]) => h.start < b && h.end > a)) continue;
+        const m = /^\s*(?:,|\s(?:was|is))\s*(?:the|a|an|his|her|their|my|\p{Lu}\p{L}+['’]s)\s+((?:[\p{L}-]+,?\s+){0,3}[\p{L}-]+)/u.exec(p.text.slice(h.end, h.end + 60));
+        const w = m && m[1].split(/[\s,]+/).find((x) => SEX_WORDS[x]);
+        if (w && SEX_WORDS[w] && !nouns.has(h.key)) nouns.set(h.key, SEX_WORDS[w][0]);
+      }
+    }
+    const sex = (k) => (k === -1 ? null : (sexOf && sexOf(k)) || nouns.get(k) || hinted.get(k) || learned.get(k) || null);
+    const OTHER_NP = /(?:^|[,;]\s+|\b(?:and|but|then|when)\s+)(?:a|an|one|another|some)\s+(?:[\p{Ll}-]+\s+){0,2}?(woman|man|girl|boy|lad|lass|stranger|rider|soldier|child|figure|fellow|gentleman|lady|mare|stallion|gelding|horse|dog)\b/u;
+    const agrees = (k, want) => {
+      if (k === -1) return ['male', 'female'].includes(want);
+      if (want === 'it') return !living(k) && byKey.has(k) && byKey.get(k).kind !== 'group';
+      if (want === 'they') return byKey.has(k) && byKey.get(k).kind === 'group';
+      if (!living(k)) return false;
+      const s = sex(k);
+      return !s || s === want;
+    };
+    const out = new Map();
+    let carry = []; // the living named before this paragraph, latest last
+    let lastSubject = null;
+    for (const p of ch.paras) {
+      p.refs = new Map();
+      const talk = (a, b) => p.talk.some(([x, y]) => a < y && b > x);
+      const ph = (hits[p.pi] || []).filter((h) => !talk(h.start, h.end) && h.via !== 'self');
+      const seen = []; // { key, at, subj } in this paragraph
+      let subjectBefore = lastSubject;
+      for (const s of p.sents) {
+        const info = { keys: new Set(), weak: new Set() };
+        out.set(s.id, info);
+        const items = [];
+        for (const h of ph.filter((x) => x.start >= s.start && x.end <= s.end)) items.push({ at: h.start, end: h.end, key: h.key });
+        for (const m of s.text.matchAll(/(?<![\p{L}'’-])(he|she|him|himself|his|hers|herself|her|it|its|itself|they|them|their|themselves)(?![\p{L}'’-])/giu)) {
+          const at = s.start + m.index;
+          if (talk(at, at + m[0].length) || items.some((x) => x.at <= at && x.end > at)) continue;
+          items.push({ at, end: at + m[0].length, pron: m[1].toLowerCase() });
+        }
+        // "a woman from the Guild was counting the lamps": someone the cast doesn't hold yet
+        const np = OTHER_NP.exec(s.text);
+        if (np && !items.some((x) => x.at < s.start + np.index) && !PREP.has(((s.text.slice(0, np.index).match(/([\p{L}'’-]+)\s*$/u) || [])[1] || '').toLowerCase())) items.push({ at: s.start + np.index + np[0].length - np[1].length, end: s.start + np.index + np[0].length, key: -1 });
+        items.sort((a, b) => a.at - b.at);
+        let clauseSubject = null;
+        let sentSubject = null;
+        let lastEnd = s.start;
+        for (const it of items) {
+          const lead = p.text.slice(s.start, it.at);
+          // (a clause ends at a comma, semicolon or dash before a conjunction, or at "when", "because"…)
+          if (/(?:[;:—–]|(?<![\p{L}])(?:and|but|or|so|yet|while|when|because|though|although|until|before|after|since|than|whom|who|which|where))\s/iu.test(p.text.slice(lastEnd, it.at) + ' ') && lastEnd > s.start) clauseSubject = null;
+          lastEnd = it.end;
+          const words = (lead.match(/[\p{L}'’-]+/gu) || []).map((w) => w.toLowerCase());
+          const prev = words[words.length - 1] || '';
+          // a new clause: ", and she", "; he", "when she"
+          const freshClause = /(?:[,;:—–]|(?<![\p{L}])(?:and|but|while|when|because|though|although|until|before|after|so|then|yet|as|since|where))\s*$/iu.test(lead);
+          const object = PREP.has(prev) || prev === 'of';
+          if (it.key != null) {
+            // (the subject: the first one named not after a preposition, or a fresh clause's)
+            if (!object && (sentSubject == null || freshClause)) { if (sentSubject == null) sentSubject = it.key; clauseSubject = it.key; }
+            seen.push({ key: it.key, at: it.at, subj: clauseSubject === it.key });
+            if (it.key !== -1) info.keys.add(it.key);
+            continue;
+          }
+          const [want, role0] = PRON[it.pron];
+          let role = role0;
+          const next = (p.text.slice(it.end).match(/^\s*([\p{L}'’-]+)/u) || [])[1] || '';
+          if (role === '?') {
+            const nx = next.toLowerCase();
+            if (it.pron === 'her') role = !nx || PREP.has(nx) || ['and', 'or', 'but', 'that', 'a', 'an', 'the', 'to', 'as', 'so', 'once', 'again', 'back', 'up', 'down', 'off', 'out', 'away', 'go', 'be', 'too', 'gently', 'there', 'here', 'now', 'then', 'herself', 'his', 'her', 'their', 'its', 'my'].includes(nx) || /[,.;:!?]/.test(p.text.slice(it.end, it.end + 1)) ? 'o' : 'p';
+            else role = !words.length || freshClause || OPENERS.has(prev) || /^(?:inside|outside)$/.test(prev) ? 's' : 'o';
+          }
+          // ("It was an odd thing to say", "It was late": no one)
+          if (it.pron === 'it' && role === 's' && EXPLETIVE.test(p.text.slice(it.end))) continue;
+          const atStart = !words.filter((w) => !OPENERS.has(w)).length;
+          // "Her name was Ines Garrow": the one named
+          const naming = /^\s+(?:real\s+|full\s+|own\s+)?name\s+(?:was|is)\s*$/i.test(p.text.slice(it.end, (items.find((x) => x.at > it.at && x.key != null) || { at: -1 }).at));
+          if (naming && role === 'p') {
+            const named = items.find((x) => x.at > it.at && x.key != null);
+            if (named && named.key !== -1) { p.refs.set(it.at, { key: named.key, strong: true, alt: [] }); info.keys.add(named.key); continue; }
+          }
+          // (an "it" that is an object means the paragraph's place only when it opened the paragraph)
+          if (want === 'it' && role === 'o' && !(seen[0] && seen[0].subj && !living(seen[0].key) && seen[0].key !== -1)) continue;
+          const pool = [...seen.filter((x) => x.at < it.at)].reverse();
+          const cands = [];
+          const push = (k) => { if (k != null && agrees(k, want) && !cands.includes(k)) cands.push(k); };
+          for (const x of pool) push(x.key);
+          let pick = null;
+          let strong = false;
+          const exclude = role === 'o' ? clauseSubject : null;
+          let fromCarry = false;
+          if (['male', 'female'].includes(want) && !cands.filter((k) => k !== exclude).length) { fromCarry = true; for (const x of [...carry].reverse()) push(x.key); }
+          const ok = cands.filter((k) => k !== exclude);
+          // a subject goes on with this sentence's subject, else the last sentence's;
+          // an owner is its clause's subject, else the same
+          const prefer = role === 's' ? [sentSubject, sentSubject == null ? subjectBefore : null] : role === 'p' ? [clauseSubject, clauseSubject == null && sentSubject == null ? subjectBefore : null] : [];
+          const pref = prefer.find((k) => k != null && ok.includes(k));
+          if (pref != null) { pick = pref; strong = true; }
+          else if (ok.length) {
+            pick = ok[0];
+            // (from paragraphs before: the latest who agrees, unless another who agrees was named as lately)
+            const at = (k) => (carry.find((x) => x.key === k) || { pi: -9 }).pi;
+            strong = ok.length === 1 || (fromCarry && ok.slice(1).every((k) => at(k) < at(pick) - 1));
+          }
+          if (pick == null) continue;
+          if (pick === -1) { if (role === 's') { clauseSubject = -1; if (sentSubject == null) sentSubject = -1; } seen.push({ key: -1, at: it.at, subj: role === 's' }); continue; }
+          const alt = strong ? [] : ok.filter((k) => k !== pick && k !== -1);
+          if (strong && !sex(pick) && ['male', 'female'].includes(want)) learned.set(pick, want);
+          p.refs.set(it.at, { key: pick, strong, alt });
+          (strong ? info.keys : info.weak).add(pick);
+          for (const k of alt) info.weak.add(k);
+          if (role === 's' || (role === 'p' && !sentSubject && atStart)) { if (!sentSubject) sentSubject = pick; clauseSubject = pick; }
+          seen.push({ key: pick, at: it.at, subj: role === 's' });
+        }
+        if (sentSubject != null) subjectBefore = sentSubject;
+      }
+      for (const x of seen) if (x.key === -1 || living(x.key)) carry = [...carry.filter((y) => y.key !== x.key), { key: x.key, pi: p.pi }].slice(-4);
+      lastSubject = subjectBefore != null && (subjectBefore === -1 || living(subjectBefore)) ? subjectBefore : lastSubject;
+    }
+    refMemo.set(hits, out);
+    return out;
+  }
+  // The sentences about one cast member, each with why it is there (round
+  // 3: a sentence belongs to every one it is about, not only the first
+  // named): 'name' (named, by name, alias or "the tower" its own description
+  // gave it), 'chain' (a pronoun meant for it), 'near' (a pronoun that may
+  // be it, the rules unsure), 'para' (a place's, group's or thing's
+  // paragraph: one that opens with it as the subject, until another of its
+  // kind is), 'setting' (the chapter's place), 'context' (the sentence
+  // before a pronoun's, when that isn't in the pack)
   function packFor(ch, hits, cast, c, sexOf) {
     const out = new Map();
-    const living = new Set(cast.filter((x) => ['person', 'creature'].includes(x.kind)).map((x) => x.key));
-    const add = (s, why) => { if (!out.has(s.id) || (out.get(s.id) === 'setting' && why !== 'setting')) out.set(s.id, why); };
-    let carry = []; // the ones a paragraph opening with a pronoun may mean: the last named before it, latest last
-    let chained = null; // the last sentence tied to c by its pronoun
+    const refs = resolveRefs(ch, hits, cast, sexOf);
+    const byKey = new Map(cast.map((x) => [x.key, x]));
+    const living = (k) => byKey.has(k) && ['person', 'creature'].includes(byKey.get(k).kind);
+    const add = (s, why) => { if (!out.has(s.id) || ['setting', 'context'].includes(out.get(s.id))) out.set(s.id, why); };
     for (const p of ch.paras) {
-      const ph = hits[p.pi];
+      const ph = hits[p.pi] || [];
+      const talk = (a, b) => p.talk.some(([x, y]) => a < y && b > x);
+      // the place (or thing, or group) a paragraph is about, sentence by
+      // sentence: the one named as a subject, else the last named (not in
+      // talk); kept while no one living is the subject and nothing else of
+      // its kind is named
+      let topic = null;
+      const isObj = (h) => { const w = (p.text.slice(p.sents.find((x) => h.start >= x.start && h.start < x.end).start, h.start).match(/([\p{L}'’-]+)\s*(?:the\s+)?$/iu) || [])[1]; return !!w && (PREP.has(w.toLowerCase()) || w.toLowerCase() === 'of'); };
       for (const [si, s] of p.sents.entries()) {
         const here = ph.filter((h) => h.start >= s.start && h.end <= s.end);
+        const r = refs.get(s.id) || { keys: new Set(), weak: new Set() };
+        const livingSubject = /^[\s“"‘']*(?:(?:then|and|but|so|now|later|still)\s+)?(?:he|she|i|we|you)\b/i.test(s.text) || [...p.refs.entries()].some(([at, x]) => at >= s.start && at < s.end && x.strong && living(x.key) && /^(?:he|she)$/i.test(p.text.slice(at, at + 3).trim())) || (() => { const f = here.filter((h) => !talk(h.start, h.end))[0]; return !!f && living(f.key) && !isObj(f) && !/['’]s$/.test(p.text.slice(f.end, f.end + 2)); })();
+        if (!living(c.key)) {
+          const places = here.filter((h) => !talk(h.start, h.end) && byKey.has(h.key) && !living(h.key) && byKey.get(h.key).kind === c.kind);
+          if (places.length) topic = livingSubject ? null : (places.find((h) => !isObj(h)) || places[places.length - 1]).key;
+        }
         if (here.some((h) => h.key === c.key)) { add(s, 'name'); continue; }
         // a notes line that opens with the name: "Ivo Marchetti: thirty-four … Brown eyes. Never drinks."
         if (ch.notes && !here.length && ph[0] && ph[0].key === c.key && ph[0].start === 0 && /^\s*[:,—–]/.test(p.text.slice(ph[0].end))) { add(s, 'name'); continue; }
-        if (living.has(c.key)) {
-          const m = !s.said && SUBJECT.exec(s.text);
-          if (m && PERSONAL[m[1].toLowerCase()]) {
-            const pos = s.start + m.index + m[0].length - m[1].length;
-            // (in the first person, "she" is never the narrator)
-            const seen = ph.filter((h) => h.end <= pos && living.has(h.key) && h.via !== 'self' && !p.talk.some(([a, b]) => h.start < b && h.end > a));
-            const sex = PERSONAL[m[1].toLowerCase()];
-            // the last one named before whose sex (if known) agrees
-            let who = null;
-            for (let i = seen.length - 1; i >= 0; i--) { const k = sexOf(seen[i].key); if (!k || k === sex) { who = seen[i].key; break; } }
-            if (who == null && !seen.length && si === 0) for (let i = carry.length - 1; i >= 0; i--) { const k = sexOf(carry[i]); if (!k || k === sex) { who = carry[i]; break; } }
-            // (the pronoun goes on from the sentence before it, which was hers: "She was nineteen… Her eyes were…")
-            if (who == null && !seen.length && si > 0 && chained === p.sents[si - 1].id) who = c.key;
-            if (who === c.key && !here.some((h) => living.has(h.key) && h.via !== 'self' && h.start < pos)) { add(s, 'chain'); chained = s.id; continue; }
-          }
-        } else {
-          // a place's (or group's, thing's) paragraph: after it's named,
-          // until something else of its kind is
-          const before = ph.filter((h) => h.end <= s.start && cast[h.key] && cast[h.key].kind === c.kind);
-          if (before.length && before[before.length - 1].key === c.key && !here.some((h) => cast[h.key] && cast[h.key].kind === c.kind)) { add(s, 'para'); continue; }
-        }
+        if (r.keys.has(c.key)) { add(s, 'chain'); if (si > 0 && !out.has(p.sents[si - 1].id)) add(p.sents[si - 1], 'context'); continue; }
+        if (r.weak.has(c.key)) { add(s, 'near'); continue; }
+        if (topic === c.key && !livingSubject && !here.some((h) => !talk(h.start, h.end) && living(h.key))) { add(s, 'para'); continue; }
         if (c.setting && !s.said) add(s, 'setting');
       }
-      const named = ph.filter((h) => living.has(h.key) && h.via !== 'self' && !p.talk.some(([a, b]) => h.start < b && h.end > a));
-      for (const h of named) carry = [...carry.filter((k) => k !== h.key), h.key].slice(-3);
     }
     const ids = [...out.keys()].sort((a, b) => a - b);
     return ids.map((id) => ({ s: ch.sents[id - 1], why: out.get(id) }));
