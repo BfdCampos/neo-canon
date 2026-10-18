@@ -892,7 +892,7 @@ module.exports = function canonEditor(C) {
   }
   // what is done more than once, in so many words (round 2: "all" and "any"
   // made one moment a habit)
-  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer)(?![\p{L}])/iu;
+  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|after (?:the\s+)?\p{Ll}+ came)(?![\p{L}])/iu;
   // a role that was, not one that is: "had been a soldier", "used to be",
   // "formerly" (but "had been the town's doctor for twenty-two years" still is)
   const PAST_ROLE = /(?<![\p{L}])(?:had been|used to be|was once|once was|formerly|former|ex-|retired|until)(?![\p{L}])/iu;
@@ -934,7 +934,19 @@ module.exports = function canonEditor(C) {
     const inHit = (t) => hits.find((h) => h.start < t.end && h.end > t.start);
     // the claim: the first of its words in the sentence, outside any name
     const want = new Set(words);
-    const ci = toks.findIndex((t) => !inHit(t) && !STOPW.has(t.lw) && (want.has(stem(t.lw)) || inBag(stem(t.lw), want)));
+    const isClaim = (t) => !inHit(t) && !STOPW.has(t.lw) && (want.has(stem(t.lw)) || inBag(stem(t.lw), want));
+    // (round 3: in the clause that holds most of the claim's words — "They lined up by height,
+    // which put Hesper near the back, behind Coll"; "…, and Tobiah sat by the window splicing rope")
+    let ci = toks.findIndex(isClaim);
+    {
+      const segOf = [];
+      let seg = 0;
+      toks.forEach((t, i) => { if (i && /[,;:—–]/.test(s.text.slice(toks[i - 1].end - s.start, t.start - s.start))) seg++; segOf.push(seg); });
+      const count = new Map();
+      toks.forEach((t, i) => { if (isClaim(t)) count.set(segOf[i], (count.get(segOf[i]) || 0) + 1); });
+      const best = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+      if (best && best[1] > (count.get(segOf[ci]) || 0)) ci = toks.findIndex((t, i) => segOf[i] === best[0] && isClaim(t));
+    }
     if (ci < 0) return null;
     // the one each word stands for
     const cand = [];
@@ -959,8 +971,8 @@ module.exports = function canonEditor(C) {
       if (POSS_PRON.has(t.lw) || SUBJ_PRON.has(t.lw) || ['him', 'them', 'me'].includes(t.lw)) {
         // whom the pronoun means, when the chapter's reading is sure of it
         // (resolveRefs); else, a sentence the pack tied to c by its opening pronoun: c's
-        const ref = p.refs && p.refs.get(t.start);
-        const key = ref ? (ref.strong ? ref.key : undefined) : i === 0 && ['chain', 'para'].includes(l.why) ? c.key : undefined;
+        const ref = !ctx.noRefs && p.refs && p.refs.get(t.start);
+        const key = ref ? (ref.strong ? ref.key : undefined) : !ctx.noRefs && i === 0 && ['chain', 'para'].includes(l.why) ? c.key : undefined;
         cand.push({ key, i, end: i, poss: POSS_PRON.has(t.lw) && !(t.lw === 'her' && toks[i + 1] && PREP.has(toks[i + 1].lw)), pron: true, maybe: ref ? [ref.key, ...ref.alt] : null, pw: t.lw });
       }
     });
@@ -971,7 +983,7 @@ module.exports = function canonEditor(C) {
     const cannot = (x) => !!x.pron && x.key === undefined && ((x.maybe && !x.maybe.includes(c.key)) || (living && /^(?:it|its|they|them|their)$/.test(x.pw)) || (!!cSex && !!PRONOUNS[x.pw] && PRONOUNS[x.pw] !== cSex));
     const ownerOf = (x) => (x.key !== undefined ? x.key : cannot(x) ? -1 : null);
     // ("The rule of the Weighhouse was…": the claim's noun is the possessor's)
-    if (toks[ci + 1] && toks[ci + 1].lw === 'of') {
+    if (toks[ci + 1] && toks[ci + 1].lw === 'of' && ci <= 2 && toks.slice(0, ci).every((t) => SKIP_DET.has(t.lw) || /^(?:this|that|one|only)$/.test(t.lw))) {
       const ofx = cand.find((x) => !x.pron && x.key !== undefined && (x.i === ci + 2 || (x.i === ci + 3 && toks[ci + 2].lw === 'the')));
       if (ofx) return ofx.key;
     }
@@ -1149,7 +1161,9 @@ module.exports = function canonEditor(C) {
     const text = cited.map((l) => l.s.text).join(' ');
     const bag = new Set(content(text));
     // 3 grounded: half the value's words (all its names and numbers) in the sentences
-    const grounded = valueWords.filter((w) => inBag(w, bag));
+    const meantWords = new Set(cited.flatMap((l) => [...((ctx.ch.paras[l.s.pi].refs) || new Map()).entries()].filter(([at, r]) => at >= l.s.start && at < l.s.end && r.strong).map(([, r]) => r.key))
+      .flatMap((k) => { const o = (ctx.cast || []).find((y) => y.key === k); return o ? [o.name, ...o.aliases].flatMap((n) => content(n)) : []; }));
+    const grounded = valueWords.filter((w) => inBag(w, bag) || meantWords.has(w));
     // (a sex the cited sentence gives by a he or she the chapter's reading is sure is c: the trait rules decide)
     if (g === 'sex' && !grounded.length && ['male', 'female', 'man', 'woman', 'boy', 'girl'].includes(norm(value))) {
       const want = ['male', 'man', 'boy'].includes(norm(value)) ? 'male' : 'female';
@@ -1173,7 +1187,7 @@ module.exports = function canonEditor(C) {
     const namesOther = (t, living = false) => others.some((o) => (!living || ['person', 'creature'].includes(o.kind)) && [o.name, ...o.aliases].some((n) => nameIn(n, t)));
     if (c.kind !== 'person' && c.kind !== 'creature' && !['relationship', 'location'].includes(g) && !['residents', 'members'].includes(key)) {
       // (round 3: a person named in it; a place it runs or stands by is its own fact — "has run the lights of Dunmere")
-      if (namesOther(label + ' ' + value, true)) return { why: 'someone else' };
+      if (namesOther(label, true) || (labelFamily(key) !== 'history' && namesOther(value.replace(/(?<![\p{L}])\p{Lu}[\p{L}-]*['’]s(?![\p{L}])/gu, ' '), true))) return { why: 'someone else' };
       if ([c.name, ...c.aliases].some((n) => /^\p{Lu}/u.test(n.replace(/^the\s+/i, '')) && nameIn(n, value))) return { why: 'someone else' };
     }
     // a place's, group's or thing's sentence found by its paragraph (not its
@@ -1208,11 +1222,19 @@ module.exports = function canonEditor(C) {
       }
     }
     let owned = false;
-    if (ctx.hits && !['relationship', 'membership', 'possession'].includes(g) && !['residents', 'members', 'possession'].includes(key)) {
+    let ownedByName = false;
+    // (round 3) a thing's use, effect or routine is told with it as the object:
+    // "The warden poured it from a steel jug…", "he wrote every number in a ledger"
+    const thingDone = c.kind === 'thing' && ['function', 'use', 'effect', 'habit', 'routine', 'custom'].some((f) => labelFamily(key) === f || key === f) &&
+      cited.every((l) => (ctx.hits[l.s.pi] || []).some((h) => h.key === c.key && h.start >= l.s.start && h.end <= l.s.end) || [...((ctx.ch.paras[l.s.pi].refs) || new Map()).entries()].some(([at, r]) => at >= l.s.start && at < l.s.end && r.strong && r.key === c.key));
+    if (thingDone) owned = true;
+    if (ctx.hits && !thingDone && !['relationship', 'membership', 'possession'].includes(g) && !['residents', 'members', 'possession'].includes(key)) {
       const owners = cited.map((l) => claimOwner(l, grounded, c, ctx, key));
       // (a sentence that is no one's of the cast, "They got a number inked…", beside one that is c's, "Hesper's was 41": c's)
       if (owners.some((k) => k != null && k >= 0 && k !== c.key) || (owners.includes(-1) && !owners.includes(c.key))) return { why: 'someone else' };
       owned = owners.some((k) => k === c.key);
+      // (and owned by its name, not a pronoun: "Ada was Fourteen, …, a big freckled girl"; "a collie bitch called Moss")
+      if (owned) ownedByName = cited.some((l) => claimOwner(l, grounded, c, { ...ctx, noRefs: true }, key) === c.key);
     }
     // the setting's own: how it works (its routines and rules, who belongs),
     // from a clause that names no one and nothing else of the cast
@@ -1273,7 +1295,7 @@ module.exports = function canonEditor(C) {
     if (bySetting && !['membership', 'residents', 'members'].includes(key) && g !== 'membership' && quotes.some((q) => namesOther(q) || others.some((o) => o.kind === 'place' && o.name.split(/\s+/).length > 1 && new RegExp(`(?<![\\p{L}])${o.name.split(/\s+/).pop()}s?(?![\\p{L}])`, 'iu').test(q)))) return { why: 'setting' };
     // not from a sentence a slip stands on (a later value that differs)
     if (cited.some((l) => ctx.suspect && ctx.suspect.has(l.s.id))) return { why: 'suspect' };
-    return { g, key, label, value, quotes, cited, said, interpretive: interpretive && ratio < 0.5, strong: cited.every((l) => l.why === 'name'), owned,
+    return { g, key, label, value, quotes, cited, said, interpretive: interpretive && ratio < 0.5, strong: cited.every((l) => l.why === 'name'), owned, ownedByName,
       setting: bySetting, lasting: LASTING.has(g) || ['habit', 'routine', 'custom', 'state', 'possession', 'personality'].includes(labelFamily(key)) || ['habit', 'routine', 'custom', 'state', 'possession'].includes(key) };
   }
   // is the clause `q` of sentence `s` talk (speech, or reported)
@@ -1775,7 +1797,8 @@ module.exports = function canonEditor(C) {
       const sources = p.quotes.map((q) => ({ label: book, quote: q, book: src.bookId, ch: src.chId, ...(p.said ? { said: true } : {}) }));
       const trait = ['sex', 'species', 'appearance.hair', 'appearance.eyes'].includes(p.key) ? traitOf(p.key, p.value, p.quotes.join(' ')) : null;
       if (trait) {
-        kept.push({ e, f: { attr: trait.attr, value: trait.value, as: trait.as, state: 'unverified', sources }, trait: true, p });
+        // (round 3: the claim's grammar ties the trait word to it — by its name, or by a pronoun the reading is sure of)
+        kept.push({ e, f: { attr: trait.attr, value: trait.value, as: trait.as, state: 'unverified', sources }, trait: true, p, tie: p.ownedByName ? 'name' : p.owned ? 'pronoun' : null });
         continue;
       }
       // a trait the rules can't read (hair "cropped close"): an open fact under its own label
@@ -1802,7 +1825,27 @@ module.exports = function canonEditor(C) {
       const n = hits.reduce((k, ph) => k + ph.filter((h) => h.key === c.key && h.via !== 'head').length, 0);
       if ((n >= 2 && (c.proper || ['person', 'creature', 'place', 'group'].includes(c.kind))) || (n >= 1 && c.proper && c.kind === 'creature')) entryOf(c);
     }
-    return { calls, dropped, kept, cast, ch, narrator: me ? (me.entry || made.get(me.key) || null) : null };
+    // the narration's he and she, as the chapter's reading resolves them (round 3:
+    // "She was nineteen, narrow and quick", "He was a head shorter than she was"):
+    // per entry, the sentences each pronoun gives it, strong only, never in talk
+    const pronouns = [];
+    for (const c of cast) {
+      if (!['person', 'creature'].includes(c.kind) || c.narrator) continue;
+      const by = { male: [], female: [] };
+      for (const p of ch.paras) {
+        for (const [at, r] of p.refs || []) {
+          if (!r.strong || r.key !== c.key || p.talk.some(([a, b]) => at < b && at + 2 > a)) continue;
+          const w = norm((p.text.slice(at).match(/^\p{L}+/u) || [''])[0]);
+          const sex = PRONOUNS[w];
+          const s = p.sents.find((x) => at >= x.start && at < x.end);
+          if (!sex || !s || by[sex].some((x) => x.s === s)) continue;
+          by[sex].push({ s, pi: p.pi });
+        }
+      }
+      if (by.male.length || by.female.length) pronouns.push({ c, by });
+    }
+    const pron = pronouns.map(({ c, by }) => ({ e: c.entry || made.get(c.key) || null, by })).filter((x) => x.e);
+    return { calls, dropped, kept, cast, ch, pronouns: pron, narrator: me ? (me.entry || made.get(me.key) || null) : null };
   }
 
   return { EDITOR_PROMPT, writtenNames, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };

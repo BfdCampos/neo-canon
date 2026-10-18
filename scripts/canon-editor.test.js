@@ -160,8 +160,9 @@ test('Read the Shelf, the editor\'s way: open facts verified by the reader, trai
     for (const w of ['cited', 'ungrounded', 'polarity', 'once']) assert.ok(why.includes(w), w + ' ' + JSON.stringify([...new Set(why)]));
     // (the keys "she never looked at", the reader's no: never kept, whichever gate takes it first)
     assert.ok(!factLines(L.entry('warden')).some((l) => /ring of keys/.test(l)));
-    // the reader's answer on "Her" is kept in canon.json, against the sentence
-    assert.ok(Object.entries(JSON.parse(fs.readFileSync(path.join(L.dir, 'canon.json'), 'utf8')).refs).some(([k, v]) => k.startsWith('hesper|') && v === true));
+    // "Her hair was cropped…": the chapter's reading ties "Her" to Hesper itself (round 3), kept
+    // in canon.json against the passage, so no reader need be asked whom it means
+    assert.ok(Object.entries(JSON.parse(fs.readFileSync(path.join(L.dir, 'canon.json'), 'utf8')).ties).some(([k, v]) => k.startsWith('hesper/hair|') && v === 'pronoun'));
   } finally { fs.rmSync(L.root, { recursive: true, force: true }); }
 });
 

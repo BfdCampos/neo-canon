@@ -209,6 +209,8 @@
         // down to meet her") reports nothing past the quotation; nor does
         // what was never said ("in a way she would never have said out loud")
         if (/[”"’'»]\s*$/u.test(s.text.slice(0, m.index))) continue;
+        // ("Nobody said what happened in the valley": nothing was said)
+        if (/(?<![\p{L}])(?:nobody|no one|none|no-one)\s+(?:ever\s+)?$/iu.test(s.text.slice(0, m.index))) continue;
         if (/^\s+(?:out loud|aloud)\b/i.test(rest) && /(?<![\p{L}])(?:never|not|would|could)(?![\p{L}])|n['’]t\b/iu.test(s.text.slice(0, m.index))) continue;
         if (/\b(?:could|can|would)\s+$/i.test(s.text.slice(0, m.index)) && /^\s+it\b/i.test(rest)) continue;
         // "could tell a good year from a bad one" is knowing, not telling
@@ -2655,6 +2657,8 @@
         const edMark = editing ? reader.id + '/' + Editor.EDITOR_PROMPT : null;
         meta.edited = meta.edited || {};
         meta.refs = meta.refs || {};
+        // a trait word the editor's reading tied to e by the claim's grammar (`ties`): 'name' | 'pronoun' | undefined
+        const tieOf = (e, f, x) => (meta.ties || {})[e.id + '/' + f.attr + '|' + textHash(norm(x.quote))];
         const cacheWas = JSON.stringify(cache);
         const files = await parsed();
         const entries = [];
@@ -2760,6 +2764,19 @@
             if (!r || r.stopped || (stop && stop())) { stopped = true; break; }
             cache.ed.dropped[key] = r.dropped;
             if (r.narrator) narrators.set(src.bookId, r.narrator);
+            // (round 3) what the chapter's reading ties by its grammar, kept in
+            // canon.json so the next read and the next device agree: a trait
+            // word owned by its name or by a pronoun it is sure of (`ties`),
+            // and the narration's he and she it gives each one (`pron`)
+            meta.ties = meta.ties || {};
+            for (const k of r.kept) if (k.trait && k.tie) for (const x of k.f.sources) meta.ties[k.e.id + '/' + k.f.attr + '|' + textHash(norm(x.quote))] = k.tie;
+            meta.pron = meta.pron || {};
+            const heard = {};
+            for (const { e, by } of r.pronouns || []) {
+              const cut = (t) => (t.split(/\s+/).length > 30 ? t.split(/\s+/).slice(0, 30).join(' ') : t);
+              heard[e.id] = { male: by.male.slice(0, 4).map((x) => cut(x.s.text)), female: by.female.slice(0, 4).map((x) => cut(x.s.text)) };
+            }
+            meta.pron[key] = heard;
             for (const k of r.kept) {
               const { e, f } = k;
               // the same fact again (another passage) is one fact
@@ -3023,7 +3040,7 @@
               // the entry. A pronoun, or a word the rules don't tie, is left out.
               const ev = (evidence.get(e.id + '/' + f.attr) || new Map()).get(norm(f.value));
               const ws = [...(ev || []).map((w) => ({ pos: (isNote(w.src) ? NOTE_AT : 0) + w.order * 1e4 + Math.max(0, sourceParas(w.src.html).findIndex((p) => norm(p.text).includes(norm(w.quote)))), note: isNote(w.src) })),
-                ...(ruleSupported(e, f, entries) ? firm.map(where) : [])];
+                ...(ruleSupported(e, f, entries) ? firm.map(where) : firm.filter((x) => tieOf(e, f, x) === 'name').map(where))];
               // a pronoun's trait ("She was a narrow woman", "Her hair was …
               // fair"): when the pronoun is the entry's by the paragraph's
               // rules, or the reader said so (kept in canon.json `refs`)
@@ -3033,6 +3050,7 @@
                 const weak = [];
                 let byRule = false;
                 for (const x of firm) {
+                  if (tieOf(e, f, x) === 'pronoun') { weak.push(where(x)); byRule = true; continue; }
                   const how = await pronounTrait(e, f, x, paraOf(x), entries, freshTraits.has(f) ? reader : null, meta.refs);
                   if (how) weak.push(where(x));
                   if (how === 'rule') byRule = true;
@@ -3090,6 +3108,28 @@
         // sentences or more that agree, none against, no other value read
         // from the story, and not one the writer set aside
         const pron = pronounEvidence(sources, entries.filter((e) => !e.locked));
+        // (round 3) and the narration's he and she as the editor's reading resolved them
+        sources.forEach((src, order) => {
+          const heard = (meta.pron || {})[src.bookId + '/' + src.chId];
+          if (!heard || isNote(src)) return;
+          const paras = sourceParas(src.html);
+          for (const [id, by] of Object.entries(heard)) {
+            if (!entries.some((x) => x.id === id && !x.locked)) continue;
+            for (const value of ['male', 'female']) {
+              for (const quote of by[value] || []) {
+                const pi = paras.findIndex((p) => norm(p.text).includes(norm(quote)));
+                if (pi < 0) continue;
+                const si = sentences(paras[pi].text).findIndex((x) => norm(x.text).startsWith(norm(quote).slice(0, 40)));
+                const k = `${src.bookId}/${src.chId}/${pi}/${si}`;
+                if (!pron.has(id)) pron.set(id, new Map());
+                const m = pron.get(id);
+                if (!m.has(value)) m.set(value, []);
+                if (m.get(value).some((w) => w.key === k)) continue;
+                m.get(value).push({ key: k, pos: order * 1e4 + pi, note: false, quote, src });
+              }
+            }
+          }
+        });
         for (const e of entries) {
           const got = pronounSex(pron.get(e.id));
           if (!got) continue;

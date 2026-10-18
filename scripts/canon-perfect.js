@@ -77,20 +77,22 @@ function sheetIndex(sheet) {
 // The value as a careful reader writes it: the sheet's wording or one of
 // its alternatives, whichever is most in the quote's own words (a reader is
 // asked for "the text's own words"; the sheet's editorial wording may not be)
-function wording(f) {
+function wording(f) { return worded(f).v; }
+// → { v, supported }: supported when the words are the quote's (its names, half its words)
+function worded(f) {
   const E = Canon.Editor;
   const bag = new Set(E.content(f.quote));
-  const caps = (v) => (v.match(/(?<=\S\s+)\p{Lu}[\p{L}'’-]+/gu) || []).every((w) => N(f.quote).includes(N(w).replace(/['’]s$/, '')));
+  const caps = (v) => (v.match(/(?<![\p{L}])\p{Lu}[\p{L}'’-]+/gu) || []).filter((w) => !/^(?:The|A|An)$/.test(w)).every((w) => N(f.quote).includes(N(w).replace(/['’]s$/, '')));
   const fit = (v) => { const ws = E.content(v); return ws.length ? ws.filter((w) => E.inBag(w, bag)).length / ws.length : 0; };
   // (at most twelve words, as the prompt asks; the sheet's own wording when it
   // is in the quote's words, else the alternative most so)
   const all = [f.value, ...(f.alt || [])].filter((v) => v.split(/\s+/).length <= 12);
   if (!all.length) all.push(f.value);
   const ok = all.find((v) => caps(v) && fit(v) >= 0.5);
-  if (ok) return ok;
+  if (ok) return { v: ok, supported: true };
   let best = all[0];
   for (const v of all) if ((caps(v) && !caps(best)) || (caps(v) === caps(best) && fit(v) > fit(best) + 1e-9)) best = v;
-  return best;
+  return { v: best, supported: ['sex', 'name'].includes(f.attr) };
 }
 
 // The reader. `mode`: 'perfect' | 'adversarial'. `log` (optional) collects
@@ -123,9 +125,9 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
         const ids = citeIds(text, f.quote);
         if (!ids) return;
         const { g, a } = groupOf(f.attr);
-        const v = wording(f);
+        const { v, supported } = worded(f);
         out.push({ g, a, v, s: ids, x: f.said ? 1 : 0 });
-        log.push({ entity: name, attr: f.attr, value: f.value, v, quote: f.quote, wrong: isWrong, of: owner });
+        log.push({ entity: name, attr: f.attr, value: f.value, v, quote: f.quote, wrong: isWrong, of: owner, supported });
         if (isWrong) wrong.add(N(name + '|' + f.value));
       };
       if (e) for (const f of e.facts) push(e.name, f, false);
@@ -247,7 +249,8 @@ function survival(run) {
       }));
       // (a name is kept in the entry's names: "Anselm", "Brother Ink")
       const named = f.attr === 'name' && mine.some((e) => [e.name, ...e.aliases].some((n) => Canon.Editor.content(f.value).some((w) => Canon.Editor.content(n).includes(w))));
-      const offered = named || (run.log || []).some((y) => !y.wrong && y.value === f.value && y.quote === f.quote);
+      // (a sheet value its own quote doesn't hold — "Hesper (not Coll)" from "He was not one of the Spared" — is the sheet's reading, not a reader's: not counted)
+      const offered = named || (run.log || []).some((y) => !y.wrong && y.supported && y.value === f.value && y.quote === f.quote);
       if (offered) out.proposed.of++;
       if (named || produced.some((pf) => { const m = Score.matchFact(pf, [{ ...f, entity: a }]); return m; })) { out.kept++; if (offered) out.proposed.kept++; }
       else {
