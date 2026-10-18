@@ -1218,7 +1218,7 @@ module.exports = function canonEditor(C) {
     // (round 3) a thing's use, effect or routine is told with it as the object:
     // "The warden poured it from a steel jug…", "he wrote every number in a ledger"
     const thingDone = c.kind === 'thing' && ['function', 'use', 'effect', 'habit', 'routine', 'custom'].some((f) => labelFamily(key) === f || key === f) &&
-      cited.every((l) => (ctx.hits[l.s.pi] || []).some((h) => h.key === c.key && h.start >= l.s.start && h.end <= l.s.end) || [...((ctx.ch.paras[l.s.pi].refs) || new Map()).entries()].some(([at, r]) => at >= l.s.start && at < l.s.end && r.strong && r.key === c.key));
+      cited.every((l) => ((ctx.hits || [])[l.s.pi] || []).some((h) => h.key === c.key && h.start >= l.s.start && h.end <= l.s.end) || [...((ctx.ch.paras[l.s.pi].refs) || new Map()).entries()].some(([at, r]) => at >= l.s.start && at < l.s.end && r.strong && r.key === c.key));
     if (c.kind !== 'person' && c.kind !== 'creature' && !thingDone && !['relationship', 'location'].includes(g) && !['residents', 'members'].includes(key)) {
       // (round 3: a person named in it; a place it runs or stands by is its own fact — "has run the lights of Dunmere")
       if (namesOther(label, true) || (labelFamily(key) !== 'history' && namesOther(value.replace(/(?<![\p{L}])\p{Lu}[\p{L}-]*['’]s(?![\p{L}])/gu, ' '), true))) return { why: 'someone else' };
