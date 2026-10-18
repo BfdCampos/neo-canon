@@ -778,7 +778,7 @@ module.exports = function canonEditor(C) {
         const r = refs.get(s.id) || { keys: new Set(), weak: new Set() };
         const livingSubject = /^[\s“"‘']*(?:(?:then|and|but|so|now|later|still)\s+)?(?:he|she|i|we|you)\b/i.test(s.text) || [...p.refs.entries()].some(([at, x]) => at >= s.start && at < s.end && x.strong && living(x.key) && /^(?:he|she)$/i.test(p.text.slice(at, at + 3).trim())) || (() => { const f = here.filter((h) => !talk(h.start, h.end))[0]; return !!f && living(f.key) && !isObj(f) && !/['’]s$/.test(p.text.slice(f.end, f.end + 2)); })();
         if (!living(c.key)) {
-          const places = here.filter((h) => !talk(h.start, h.end) && byKey.has(h.key) && !living(h.key) && byKey.get(h.key).kind === c.kind);
+          const places = here.filter((h) => !talk(h.start, h.end) && byKey.has(h.key) && !living(h.key));
           if (places.length) topic = livingSubject ? null : (places.find((h) => !isObj(h)) || places[places.length - 1]).key;
         }
         if (here.some((h) => h.key === c.key)) {
@@ -920,6 +920,9 @@ module.exports = function canonEditor(C) {
   const nounish = (w) => !!w && /^\p{Ll}[\p{Ll}-]+$/u.test(w) && !STOPW.has(w) && !PREP.has(w) && !DYNAMIC.test(w) && !/^(?:since|until|unless|because|though|although|whether|whose|whom|where|when|while|which|who|that|if|and|but|or|nor|yet|so|itself|herself|himself|themselves)$/.test(w) && !/(?:ly|self|selves)$/.test(w) &&
     !/^(?:was|were|is|are|am|had|has|have|did|does|do|would|could|should|will|can|may|might|must|said|says|stands|lies|runs|went|came|got|kept|looked|seemed|became|began|never|always|often|still|already|too)$/.test(w);
   const POSS_PRON = new Set(['his', 'her', 'its', 'their', 'my']);
+  const RELNOUN = new Set(['apprentice', 'friend', 'servant', 'maid', 'master', 'mistress', 'wife', 'husband', 'sister', 'brother', 'mother', 'father', 'son', 'daughter', 'cousin', 'uncle', 'aunt', 'niece', 'nephew',
+    'grandmother', 'grandfather', 'granddaughter', 'grandson', 'partner', 'boss', 'assistant', 'deputy', 'secretary', 'pupil', 'student', 'teacher', 'tutor', 'lover', 'fiancé', 'fiancée', 'widow', 'ward', 'guardian',
+    'heir', 'enemy', 'rival', 'neighbour', 'landlord', 'landlady', 'lodger', 'tenant', 'employer', 'employee', 'captain', 'mate', 'companion', 'twin', 'sweetheart']);
   const SUBJ_PRON = new Set(['he', 'she', 'it', 'they', 'i']);
   function claimOwner(l, words, c, ctx, key = null) {
     const s = l.s;
@@ -957,9 +960,20 @@ module.exports = function canonEditor(C) {
         // (resolveRefs); else, a sentence the pack tied to c by its opening pronoun: c's
         const ref = p.refs && p.refs.get(t.start);
         const key = ref ? (ref.strong ? ref.key : undefined) : i === 0 && ['chain', 'para'].includes(l.why) ? c.key : undefined;
-        cand.push({ key, i, end: i, poss: POSS_PRON.has(t.lw) && !(t.lw === 'her' && toks[i + 1] && PREP.has(toks[i + 1].lw)), pron: true });
+        cand.push({ key, i, end: i, poss: POSS_PRON.has(t.lw) && !(t.lw === 'her' && toks[i + 1] && PREP.has(toks[i + 1].lw)), pron: true, maybe: ref ? [ref.key, ...ref.alt] : null, pw: t.lw });
       }
     });
+    // (round 3) a pronoun that cannot be c: one the chapter's reading gives
+    // to others only, "it" or "they" for a person, "he" for a woman
+    const living = ['person', 'creature'].includes(c.kind);
+    const cSex = ctx.sexOf ? ctx.sexOf(c.key) : null;
+    const cannot = (x) => !!x.pron && x.key === undefined && ((x.maybe && !x.maybe.includes(c.key)) || (living && /^(?:it|its|they|them|their)$/.test(x.pw)) || (!!cSex && !!PRONOUNS[x.pw] && PRONOUNS[x.pw] !== cSex));
+    const ownerOf = (x) => (x.key !== undefined ? x.key : cannot(x) ? -1 : null);
+    // ("The rule of the Weighhouse was…": the claim's noun is the possessor's)
+    if (toks[ci + 1] && toks[ci + 1].lw === 'of') {
+      const ofx = cand.find((x) => !x.pron && x.key !== undefined && (x.i === ci + 2 || (x.i === ci + 3 && toks[ci + 2].lw === 'the')));
+      if (ofx) return ofx.key;
+    }
     // (a modifier owns its own noun only: "the Salt Cod inn"; else it is no candidate)
     for (const x of cand) if (x.attributive === ci) return x.key;
     for (let k = cand.length - 1; k >= 0; k--) if (cand[k].attributive !== undefined) cand.splice(k, 1);
@@ -988,7 +1002,7 @@ module.exports = function canonEditor(C) {
     // "his old Rover" (old is the Rover's), "His younger sister Tamsin", "His
     // wife, Constance, was…"
     {
-      const head = cand.find((x) => x.i > ci && x.i - ci <= 2 && !x.pron && x.key !== undefined);
+      const head = !DYNAMIC.test(toks[ci].lw) && !/(?:ed|ing)$/.test(toks[ci].lw) && cand.find((x) => x.i > ci && x.i - ci <= 2 && !x.pron && x.key !== undefined);
       if (head && /^(?:\s+[\p{L}'’-]+)*\s*,?\s*$/u.test(s.text.slice(toks[ci].end - s.start, toks[head.i].start - s.start)) && !cand.some((y) => y.i > ci && y.i < head.i)
         && (head.key === c.key || !/,/.test(s.text.slice(toks[ci].end - s.start, toks[head.i].start - s.start))) && !(toks[head.i - 1] && /^(?:of|to|for|with|by|at|in|on|from|than|like|as|and|or)$/.test(toks[head.i - 1].lw))) return head.key;
     }
@@ -1012,7 +1026,17 @@ module.exports = function canonEditor(C) {
       if (lead && !(inHit(toks[0]) && inHit(toks[0]).via !== 'self') && mine.every((x) => objectOf(x)) && stem(norm(lead[1])) !== stem(head) && !want.has(stem(norm(lead[1]))) && !c.aliases.some((a) => norm(a).split(/\s+/).pop() === norm(lead[1]))
         && (mine.length || /^(?:room|hall|chamber|kitchen|cell|corridor|yard|office|attic|cellar|ward|dormitory|bedroom|surgery|parlour|study|garden|house|building|cottage|barn|shop|church|chapel|stable|loft|cabin|galley|hangar)$/.test(lead[1]))) return -1;
     }
-    if (near && near.key !== undefined && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s+(?:[\p{L}\p{N}'’-]+\s+){0,10}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) return object(near) ? null : near.key;
+    if (near && near.key !== undefined && !near.pron && /^(?:['’]s)?,\s+(?:[\p{L}-]+,\s+)?(?:a|an)\s+(?:[\p{L}\p{N}'’-]+\s+){0,10}$/u.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start))) {
+      if (!object(near) || near.key === c.key) return near.key;
+      // (after a preposition's object: the subject's, when a place or thing is the subject — "The surgery was the
+      // front half of the house on Bridge Street, a narrow red-brick building"; the object's, when a person is —
+      // "the doctor held a clinic at the Corn Exchange, a sandstone hall")
+      const sub = before.filter((x) => x.i < near.i && !x.poss && !object(x) && x.key !== undefined).pop();
+      const subLiving = sub && (ctx.cast || []).some((o) => o.key === sub.key && ['person', 'creature'].includes(o.kind));
+      if (sub && !subLiving) return sub.key;
+      if (sub || living) return near.key;
+      return null;
+    }
     // a possessive just before the claim, in its own phrase
     // (round 3) the claim's own clause names its subject after it ("…, and
     // every summer of my childhood I was sent there"): that one
@@ -1024,19 +1048,34 @@ module.exports = function canonEditor(C) {
       while (b < toks.length && !bound(b)) b++;
       const inClause = cand.filter((x) => x.i >= a && x.i < b);
       const after = inClause.find((x) => x.i > ci && !x.poss && !object(x) && (x.self || x.pron ? ['i', 'he', 'she', 'it', 'they'].includes(toks[x.i].lw) : true));
-      if (after && a > 0 && !inClause.some((x) => x.i < ci && !x.poss && !object(x)) && x_isVerbAfter(after)) return after.key === undefined ? null : after.key;
+      if (after && a > 0 && !inClause.some((x) => x.i < ci && !x.poss && !object(x)) && x_isVerbAfter(after)) return ownerOf(after);
+      // (round 3) a person's claim in a clause where nothing can be them —
+      // "The bell went six times, the way it always did, and Hesper…"; "They lined up by height"
+      if (living) {
+        const strict = (i) => /(?:[;:]|,\s*(?:and|but|so|yet|then|while|where|when|which)\b)/i.test(s.text.slice(toks[i - 1].end - s.start, toks[i].start - s.start));
+        let a2 = ci;
+        while (a2 > 0 && !strict(a2)) a2--;
+        let b2 = ci + 1;
+        while (b2 < toks.length && !strict(b2)) b2++;
+        const inc = cand.filter((x) => x.i >= a2 && x.i < b2);
+        if (inc.every((x) => cannot(x)) && (inc.length || /^[\s“"‘']*(?:The|A|An|This|That)\s/.test(s.text.slice(toks[a2].start - s.start)))) return -1;
+      }
     }
     // a possessive just before the claim, in its own phrase (and not one that owns a name between: "My uncle Tobiah lived with her")
-    const poss = before.filter((x) => x.poss && ci - x.end <= 3 && !gapPunct(x.end, ci) && !cand.some((y) => y.i > x.end && y.i < ci)).pop();
-    if (poss) return poss.key === undefined ? null : poss.key;
-    const subj = before.filter((x) => !x.poss && !object(x) && !(x.pron && !['he', 'she', 'it', 'they', 'i'].includes(toks[x.i].lw))).pop();
+    // (nor one whose noun owns the claim in turn: "their mother’s dark hair")
+    // (and "her apprentice" is the apprentice's, not hers: a relation's other end)
+    const poss = !RELNOUN.has(toks[ci].lw) && before.filter((x) => x.poss && ci - x.end <= 3 && !gapPunct(x.end, ci) && !cand.some((y) => y.i > x.end && y.i < ci) && !toks.slice(x.end + 1, ci).some((t) => t.poss)).pop();
+    if (poss) return ownerOf(poss);
+    // (an "it" after a verb is its object: "he did it so gently")
+    const itObject = (x) => x.pron && x.pw === 'it' && x.i > 0 && !gapPunct(x.i - 1, x.i) && !/^(?:and|but|so|then|when|while|because|that|which|if|though|although|as|since|until|where|before|after)$/.test(toks[x.i - 1].lw);
+    const subj = before.filter((x) => !x.poss && !object(x) && !itObject(x) && !(x.pron && !['he', 'she', 'it', 'they', 'i'].includes(toks[x.i].lw))).pop();
     // (no subject: the last one named before it, in the same clause run —
     // "its Long Gallery, … a cold panelled room …, where the light came in
     // through tall windows")
     // (a place's or thing's claim in a sentence whose subject is a he or she: theirs, not the place's)
     if (subj && subj.pron && subj.key === undefined && ['he', 'she', 'i'].includes(toks[subj.i].lw) && !['person', 'creature'].includes(c.kind)) return -1;
     if (!subj) return near && near.key !== undefined && !object(near) && !/[;:]/.test(s.text.slice(toks[near.end].end - s.start, toks[ci].start - s.start)) ? near.key : null;
-    return subj.key === undefined ? null : subj.key;
+    return ownerOf(subj);
   }
 
   const DYNAMIC = /^(?:\p{L}+ed|rode|ran|sat|stood|went|came|lay|slept|held|took|gave|saw|got|left|made|brought|caught|drove|fell|felt|found|heard|hid|kept|knelt|led|lit|met|put|read|said|sang|shook|spoke|swam|threw|told|thought|woke|wore|wrote|ate|drank|began|bent|bit|blew|broke|bought|built|chose|crept|dug|drew|flew|forgot|froze|grew|hung|hurt|knew|lost|meant|paid|rang|rose|sent|set|shut|slid|spent|split|spun|stole|struck|swept|swung|taught|tore|understood|wept|won)$/u;
@@ -1121,21 +1160,32 @@ module.exports = function canonEditor(C) {
     // on the Weighhouse), or names itself ("not one of the Spared" is
     // someone's, not the Spared's)
     const others = (ctx.cast || []).filter((o) => o !== c && !o.gone);
-    const namesOther = (t, living = false) => others.some((o) => (!living || ['person', 'creature'].includes(o.kind)) && [o.name, ...o.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && new RegExp(`(?<![\\p{L}])${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(norm(t)); }));
+    // (a name as written: "Nine" is no "nine decks"; a role or common noun in any case)
+    const nameIn = (n, t) => { const b = n.replace(/^the\s+/i, ''); if (b.length < 3) return false; return /^\p{Lu}/u.test(b) ? new RegExp(`(?<![\\p{L}])${escRe(b)}(?![\\p{L}])`, 'u').test(t) : new RegExp(`(?<![\\p{L}])${escRe(norm(b))}(?![\\p{L}])`, 'u').test(norm(t)); };
+    const namesOther = (t, living = false) => others.some((o) => (!living || ['person', 'creature'].includes(o.kind)) && [o.name, ...o.aliases].some((n) => nameIn(n, t)));
     if (c.kind !== 'person' && c.kind !== 'creature' && !['relationship', 'location'].includes(g) && !['residents', 'members'].includes(key)) {
       // (round 3: a person named in it; a place it runs or stands by is its own fact — "has run the lights of Dunmere")
       if (namesOther(label + ' ' + value, true)) return { why: 'someone else' };
-      if ([c.name, ...c.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && norm(value).includes(b); })) return { why: 'someone else' };
+      if ([c.name, ...c.aliases].some((n) => /^\p{Lu}/u.test(n.replace(/^the\s+/i, '')) && nameIn(n, value))) return { why: 'someone else' };
     }
     // a place's, group's or thing's sentence found by its paragraph (not its
     // name) that is about a person ("Hesper had been born…", "his neck")
     // is that person's; and how anyone looks is never another of the cast
     if (c.kind !== 'person' && c.kind !== 'creature' && !['relationship', 'location'].includes(g) && cited.some((l) => l.why !== 'name')) {
       const people = others.filter((o) => ['person', 'creature'].includes(o.kind));
-      const personal = (t) => /(?<![\p{L}])(?:he|she|his|her|him|hers)(?![\p{L}])/iu.test(t) || people.some((o) => [o.name, ...o.aliases].some((n) => { const b = norm(n.replace(/^the\s+/i, '')); return b.length >= 3 && new RegExp(`(?<![\\p{L}])${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(norm(t)); }));
-      if (cited.some((l) => l.why !== 'name' && personal(l.s.text))) return { why: 'someone else' };
+      const personal = (t) => /(?<![\p{L}])(?:he|she|his|her|him|hers)(?![\p{L}])/iu.test(t) || people.some((o) => [o.name, ...o.aliases].some((n) => nameIn(n, t)));
+      // (in the clause that holds the claim: "The bell went six times, the way it always did, and Hesper was on her feet")
+      if (cited.some((l) => l.why !== 'name' && personal(clauseOf(l.s, grounded)))) return { why: 'someone else' };
     }
     if (labelFamily(keyOf(g, label)) === 'appearance' && namesOther(value)) return { why: 'someone else' };
+    // (round 3) a name that is another's ("Arthur, to Constance" is the doctor's
+    // name); a person's own name owning the value ("Mara's apprentice") is someone else's fact
+    if (keyOf(g, label) === 'name') {
+      const first = (value.match(/(?<![\p{L}])\p{Lu}[\p{L}'’-]+/u) || [])[0];
+      const isOf = (o) => [o.name, ...o.aliases].some((n) => content(n).includes(stem(norm(first || '').replace(/['’]s$/, ''))));
+      if (first && !isOf(c) && others.some(isOf)) return { why: 'someone else' };
+    }
+    if (['person', 'creature'].includes(c.kind) && g !== 'relationship' && !['relationship', 'possession'].includes(labelFamily(keyOf(g, label))) && [c.name, ...c.aliases].some((n) => new RegExp(`(?<![\\p{L}])${escRe(n.replace(/^the\s+/i, ''))}['’]s(?![\\p{L}])`, 'iu').test(value))) return { why: 'someone else' };
     // whose the claim is, by the sentence's grammar: a fact about someone
     // or something else in the same sentence is theirs (the town's slate
     // filed on its river; one person's eye patch on the group they lead)
@@ -1609,7 +1659,7 @@ module.exports = function canonEditor(C) {
       if (!pack.some((x) => x.why === 'name')) continue;
       for (const part of packParts(pack)) jobs.push({ c, part });
     }
-    const ctx = { ch, text: ch.text, suspect, cast, hits };
+    const ctx = { ch, text: ch.text, suspect, cast, hits, sexOf };
     const proposals = [];
     let done = 0;
     await pool(jobs, reader.parallel || 1, async ({ c, part }) => {

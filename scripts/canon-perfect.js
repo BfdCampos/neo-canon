@@ -82,8 +82,14 @@ function wording(f) {
   const bag = new Set(E.content(f.quote));
   const caps = (v) => (v.match(/(?<=\S\s+)\p{Lu}[\p{L}'’-]+/gu) || []).every((w) => N(f.quote).includes(N(w).replace(/['’]s$/, '')));
   const fit = (v) => { const ws = E.content(v); return ws.length ? ws.filter((w) => E.inBag(w, bag)).length / ws.length : 0; };
-  let best = f.value;
-  for (const v of [f.value, ...(f.alt || [])]) if ((caps(v) && !caps(best)) || (caps(v) === caps(best) && fit(v) > fit(best) + 1e-9)) best = v;
+  // (at most twelve words, as the prompt asks; the sheet's own wording when it
+  // is in the quote's words, else the alternative most so)
+  const all = [f.value, ...(f.alt || [])].filter((v) => v.split(/\s+/).length <= 12);
+  if (!all.length) all.push(f.value);
+  const ok = all.find((v) => caps(v) && fit(v) >= 0.5);
+  if (ok) return ok;
+  let best = all[0];
+  for (const v of all) if ((caps(v) && !caps(best)) || (caps(v) === caps(best) && fit(v) > fit(best) + 1e-9)) best = v;
   return best;
 }
 
@@ -117,8 +123,9 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
         const ids = citeIds(text, f.quote);
         if (!ids) return;
         const { g, a } = groupOf(f.attr);
-        out.push({ g, a, v: wording(f), s: ids, x: f.said ? 1 : 0 });
-        log.push({ entity: name, attr: f.attr, value: f.value, quote: f.quote, wrong: isWrong, of: owner });
+        const v = wording(f);
+        out.push({ g, a, v, s: ids, x: f.said ? 1 : 0 });
+        log.push({ entity: name, attr: f.attr, value: f.value, v, quote: f.quote, wrong: isWrong, of: owner });
         if (isWrong) wrong.add(N(name + '|' + f.value));
       };
       if (e) for (const f of e.facts) push(e.name, f, false);
@@ -129,6 +136,8 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
           for (const f of o.facts) {
             if (f.said || /^(?:relationship|possession|membership|members|residents|location)/.test(f.attr)) continue;
             if (e && ix.truth(e.name, groupOf(f.attr).a, f.value)) continue; // (true of this one too)
+            // (a sentence the sheet has as this one's too: what it says may be both's)
+            if (e && e.facts.some((g) => Canon.sentences(g.quote).some((x) => N(f.quote).includes(N(x.text).replace(/[.!?]+$/, '')) || N(x.text).includes(N(f.quote).replace(/[.!?]+$/, ''))))) continue;
             push(o.name, f, true);
           }
         }
@@ -236,7 +245,14 @@ function survival(run) {
         return { value: g.value, as: g.as, attr: g.attr !== 'other' ? (LEG[g.attr] || Score.canonLabel(label)) : Score.canonLabel(label), quotes: g.sources.filter((s) => !s.written).map((s) => s.quote) };
       }));
       if (produced.some((pf) => { const m = Score.matchFact(pf, [{ ...f, entity: a }]); return m; })) out.kept++;
-      else out.lost.push(`${a.name} · ${f.attr}: ${f.value}  ← "${f.quote}"`);
+      else {
+        // why: the gate that dropped what the reader proposed, or never proposed (not in the pack)
+        const said = (run.log || []).filter((y) => !y.wrong && y.value === f.value && y.quote === f.quote);
+        const drops = Object.entries(((run.cache || {}).ed || {}).dropped || {}).flatMap(([ch, xs]) => xs.filter((x) => said.some((y) => N(y.entity) === N(x.entity) && N(y.v) === N(x.value))).map((x) => x.why));
+        const eng = Object.values((run.cache || {}).dropped || {}).filter((x) => mine.some((e) => e.name === x.entry) && N(x.quote).includes(N(Canon.sentences(f.quote)[0].text).slice(0, 30))).map((x) => 'engine ' + x.why + ' ' + x.attr);
+        const why = drops.length ? drops.join(', ') : eng.length ? eng.join(', ') : said.length ? 'kept elsewhere/merged?' : 'not proposed';
+        out.lost.push(`${a.name} · ${f.attr}: ${f.value}  ← "${f.quote}"  [${why}]`);
+      }
     }
   }
   return out;
@@ -282,7 +298,7 @@ async function main() {
       for (const w of bad) console.log('  adversary kept: ' + w);
       if (run.score.slips) for (const w of run.score.slips.missed || []) console.log('  slip missed: ' + w);
       if (run.score.slips) for (const w of run.score.slips.false || []) console.log('  false slip: ' + w);
-      for (const [ch, xs] of Object.entries(((run.cache || {}).ed || {}).dropped || {})) for (const x of xs) if (run.log.some((y) => N(y.entity) === N(x.entity) && N(y.value) === N(x.value))) console.log(`  gate (${ch.split('/').pop()}): ${x.entity} · ${x.label}: ${x.value} — ${x.why}`);
+      for (const [ch, xs] of Object.entries(((run.cache || {}).ed || {}).dropped || {})) for (const x of xs) if (run.log.some((y) => !y.wrong && N(y.entity) === N(x.entity) && N(y.v) === N(x.value))) console.log(`  gate (${ch.split('/').pop()}): ${x.entity} · ${x.label}: ${x.value} — ${x.why}`);
       for (const x of Object.values((run.cache || {}).dropped || {})) console.log(`  engine: ${x.entry} · ${x.attr}: ${x.value} — ${x.why}  ← "${x.quote}"`);
     }
   }
