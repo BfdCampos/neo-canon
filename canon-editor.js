@@ -617,6 +617,8 @@ module.exports = function canonEditor(C) {
   const OPENERS = new Set(['then', 'and', 'but', 'so', 'now', 'still', 'later', 'once', 'yet', 'there', 'here', 'soon', 'afterwards', 'meanwhile', 'inside', 'outside', 'today', 'tonight']);
   const EXPLETIVE = /^\s*(?:was|is|had been|has been|would be|seemed|felt|took|came)\s+(?:a\s+|an\s+|the\s+)?(?:\p{Ll}+\s+){0,2}?(?:that|to|when|as if|odd|strange|clear|true|late|early|time|night|morning|evening|raining|snowing|no use|no good|said|thing)\b/iu;
   const refMemo = new WeakMap();
+  const GROOM = /^(?:rubbed|rubs|rub|shook|shakes|scratched|wiped|bit|licked|closed|opened|narrowed|lifted|raised|lowered|bowed|tilted|cocked|touched|folded|crossed|clenched|shut|blinked|covered|pressed|tossed|nodded|shaded|squeezed|screwed)$/i;
+  const BODY = /^(?:eyes?|head|hands?|face|hair|lips?|nose|brow|forehead|shoulders?|neck|arms?|knees?|teeth|mouth|chin|cheeks?|fists?|fingers?|ears?|temples?|eyebrows?)$/i;
   function resolveRefs(ch, hits, cast, sexOf) {
     if (refMemo.has(hits)) return refMemo.get(hits);
     const byKey = new Map(cast.map((x) => [x.key, x]));
@@ -723,6 +725,16 @@ module.exports = function canonEditor(C) {
           let fromCarry = false;
           if (['male', 'female'].includes(want) && !cands.filter((k) => k !== exclude).length) { fromCarry = true; for (const x of [...carry].reverse()) push(x.key); }
           const ok = cands.filter((k) => k !== exclude);
+          // (round 3) a body part a verb of the subject's own handles is the
+          // subject's, whatever the pronoun says: "He rubbed her eyes with the
+          // heel of her hand" (the boy's eyes, the pronoun a slip)
+          // (and no one else named between: "Bramble, beside Rook, tossed his head" may be Rook's)
+          const subjAt = Math.max(-1, ...seen.filter((x) => x.key === clauseSubject).map((x) => x.at));
+          if (role === 'p' && clauseSubject != null && clauseSubject >= 0 && living(clauseSubject) && !seen.some((x) => x.at > subjAt && x.at < it.at && x.key !== clauseSubject && (x.key === -1 || living(x.key))) && GROOM.test(prev) && BODY.test((p.text.slice(it.end).match(/^\s+(?:(?:left|right|own|tired|sore|wet|cold)\s+)?([\p{L}]+)/u) || [])[1] || '')) {
+            p.refs.set(it.at, { key: clauseSubject, strong: true, alt: [], body: true });
+            info.keys.add(clauseSubject);
+            continue;
+          }
           // a subject goes on with this sentence's subject, else the last sentence's;
           // an owner is its clause's subject, else the same
           const prefer = role === 's' ? [sentSubject, sentSubject == null ? subjectBefore : null] : role === 'p' ? [clauseSubject, clauseSubject == null && sentSubject == null ? subjectBefore : null] : [];
@@ -1894,5 +1906,18 @@ module.exports = function canonEditor(C) {
     return { calls, dropped, kept, cast, ch, pronouns: pron, narrator: me ? (me.entry || made.get(me.key) || null) : null };
   }
 
-  return { EDITOR_PROMPT, writtenNames, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
+  // The chapter's reading of its pronouns for the pass (round 3): per
+  // paragraph, Map(start → { id, strong, body }) by entry id, from the entries
+  // as they stand. → [Map] in paragraph order
+  function readingRefs(paras, entries) {
+    const ch = chapterModel(paras);
+    const live = entries.filter((e) => !e.locked);
+    const cast = live.map((e, i) => ({ key: i, name: e.name, kind: e.kind, aliases: e.aliases || [], entry: e }));
+    const hits = chapterHits(ch, cast);
+    const sexOf = (k) => { const f = cast[k] && cast[k].entry.facts.find((x) => x.attr === 'sex' && ['verified', 'yours'].includes(x.state)); return f ? f.value : null; };
+    resolveRefs(ch, hits, cast, sexOf);
+    return ch.paras.map((p) => new Map([...(p.refs || new Map())].map(([at, r]) => [at, { id: cast[r.key].entry.id, strong: r.strong, body: !!r.body }])));
+  }
+
+  return { EDITOR_PROMPT, readingRefs, resolveRefs, writtenNames, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
 };

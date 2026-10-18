@@ -1173,6 +1173,17 @@
         }
       }
 
+      // (round 3) "He rubbed her eyes": a body part the subject's own verb
+      // handles is the subject's; a pronoun of the other sex there is a slip
+      for (const [at, r] of opts.refs || []) {
+        if (!r.body || !r.strong || at < s.start || at >= s.end) continue;
+        const k = world.get(r.id);
+        const wi = words.findIndex((w) => w.start === at);
+        const w = words[wi];
+        if (!k || !k.sex || !w || !PRONOUNS[w.lw] || PRONOUNS[w.lw] === k.sex.value || out.some((c) => c.start === w.start)) continue;
+        const kind = pronounAt(words, wi, text);
+        if (kind) add({ kind: 'pronoun', strength: 'strong', id: r.id, attr: 'sex', fact: k.sex, start: w.start, end: w.end, to: swapPronoun(w.w, kind) });
+      }
       // He, opening a sentence after one that names one sexed entry (weak)
       const first = words[0];
       if (first && ['he', 'she', 'his', 'her'].includes(first.lw) && si > 0) {
@@ -1246,7 +1257,10 @@
             (det && det.lw === 'my' && free(det.start, det.end)) ||
             (det && /['’]s$/.test(det.w) && words[words.indexOf(det) - 1] && words[words.indexOf(det) - 1].lw === 'my' && /(?:^|\s)I\s+(?:had|have|’ve got|'ve got|got)\s+my\s/u.test(s.text) && free(s.start, s.end)))
             ? { id: opts.narrator, start: (det || c).start, end: (det || c).end } : null;
-          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver || noteHead || mine;
+          // or the one the chapter's reading is sure "her" or "his" means ("Mara woke before Tobias…, and her brown eyes")
+          const read = det && ['her', 'his'].includes(det.lw) && opts.refs && opts.refs.get(det.start);
+          const byReading = read && read.strong && world.get(read.id) ? { id: read.id, start: det.start, end: det.end } : null;
+          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver || noteHead || mine || byReading;
           const k = owner && world.get(owner.id);
           if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, colourWord(k[attr])) });
           // or, in a sentence naming no one, "his blue eyes" of the one person
@@ -1307,10 +1321,14 @@
       if (stop && stop()) break;
       const slips = [];
       const found = [];
-      for (const p of sourceParas(src.html)) {
+      // (round 3) whom the narration's pronouns mean, as the editor's reading has it
+      const srcParas = sourceParas(src.html);
+      let reading = null;
+      try { reading = Editor && !isNote(src) ? Editor.readingRefs(srcParas, entries) : null; } catch { reading = null; }
+      for (const [pi, p] of srcParas.entries()) {
         if (paraOk && !paraOk(src, p)) continue;
         const sents = sentences(p.text);
-        for (const c of paraCandidates(p.text, idx, world, names, { narrator: narrators[src.bookId] || null, notes: isNote(src) })) found.push({ c, p, s: sents[c.si] });
+        for (const c of paraCandidates(p.text, idx, world, names, { narrator: narrators[src.bookId] || null, notes: isNote(src), refs: reading ? reading[pi] : null })) found.push({ c, p, s: sents[c.si] });
       }
       // a word the dictionary knows (Corwyn, Bramblee are not words; "Brambles" is) is no slip of the pen
       const odd = [...new Set(found.filter((x) => x.c.kind === 'name').map((x) => x.c.word))];
@@ -1511,7 +1529,10 @@
     const every = mentions(p.text, idx).filter((m) => !talk.some(([a, b]) => m.start < b && m.end > a));
     const sents = sentences(p.text);
     for (const [si, s] of sents.entries()) {
-      if (PLAN.test(s.text) || talk.some(([a, b]) => a < s.end && b > s.start)) continue;
+      // (round 3: talk elsewhere in the sentence is no reason — "The Lantern
+      // House had nine floors, and Mara said they were nine too many…"; the
+      // words marked must be the narration's)
+      if (PLAN.test(s.text) || talk.some(([a, b]) => a <= s.start && b >= s.end)) continue;
       // an exception told as one ("for the first time anyone could remember") says
       // otherwise of nothing: it is the habit's exception
       if (EXCEPTION.test(s.text)) continue;
@@ -1529,6 +1550,7 @@
           if (o.e.id !== id || o.pos >= pos) continue;
           const detail = Editor.clashDetail(o.f, o.quote, s.text, [e.name, ...e.aliases]);
           if (!detail) continue;
+          { const at0 = s.start + s.text.indexOf(detail.span); if (talk.some(([a, b]) => at0 < b && at0 + detail.span.length > a)) continue; }
           const span = detail.span;
           const fact = factKey(o.e, o.f);
           const sentenceHash = textHash(norm(s.text));
