@@ -1128,6 +1128,9 @@
             // may be the one acted on; after "on", "in", "with"… the subject)
             const prevW = i > 0 && words[i - 1].start >= m.end ? words[i - 1] : null;
             if (OWNING.has(kind) && ['her', 'his'].includes(w.lw) && prevW && HANDLING.test(prevW.lw)) break;
+            // (round 3: not when the chapter's reading is sure it is someone else's — "and Moss at his heels", Tobiah's)
+            const read = opts.refs && opts.refs.get(w.start);
+            if (read && read.strong && read.id !== m.id) break;
             if (OWNING.has(kind) && PRONOUNS[w.lw] !== k.sex.value) add({ kind: 'pronoun', strength: 'strong', id: m.id, attr: 'sex', fact: k.sex, start: w.start, end: w.end, to: swapPronoun(w.w, kind) });
             break;
           }

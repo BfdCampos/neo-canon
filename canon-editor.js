@@ -1371,8 +1371,8 @@ module.exports = function canonEditor(C) {
 
   const INTRO_NOUN = new Set(['man', 'woman', 'girl', 'boy', 'lad', 'lass', 'child', 'fellow', 'figure', 'person', 'creature', 'gentleman', 'lady']);
   const ADJ_SLOT = {};
-  for (const w of ['tall', 'short', 'tallest', 'shortest', 'taller', 'long', 'towering']) ADJ_SLOT[w] = ['appearance', 'height'];
-  for (const w of ['thin', 'narrow', 'heavy', 'big', 'broad', 'stout', 'slight', 'lean', 'square', 'stooped', 'small', 'plump', 'fat', 'wiry', 'burly', 'slender', 'skinny', 'gaunt', 'bony', 'stocky', 'large', 'hefty', 'straight-backed', 'hunched', 'frail', 'sturdy', 'muscular', 'tiny', 'little']) ADJ_SLOT[w] = ['appearance', 'build'];
+  for (const w of ['tall', 'short', 'tallest', 'shortest', 'taller', 'towering', 'lanky', 'long-legged']) ADJ_SLOT[w] = ['appearance', 'height'];
+  for (const w of ['long', 'thin', 'narrow', 'heavy', 'big', 'broad', 'stout', 'slight', 'lean', 'square', 'stooped', 'small', 'plump', 'fat', 'wiry', 'burly', 'slender', 'skinny', 'gaunt', 'bony', 'stocky', 'large', 'hefty', 'straight-backed', 'hunched', 'frail', 'sturdy', 'muscular', 'tiny', 'little']) ADJ_SLOT[w] = ['appearance', 'build'];
   for (const w of ['old', 'young', 'elderly', 'middle-aged', 'ancient', 'aged']) ADJ_SLOT[w] = ['age', 'age'];
   for (const w of ['bald', 'balding', 'grey-haired', 'gray-haired', 'sandy-haired', 'red-haired', 'fair-haired', 'dark-haired', 'white-haired', 'black-haired', 'curly-haired', 'shaven-headed']) ADJ_SLOT[w] = ['appearance', 'hair'];
   for (const w of ['freckled', 'pale', 'sunburnt', 'sunburned', 'bearded', 'clean-shaven', 'scarred', 'one-eyed', 'weathered', 'pock-marked', 'ruddy']) ADJ_SLOT[w] = ['appearance', 'face'];
@@ -1397,6 +1397,8 @@ module.exports = function canonEditor(C) {
     const rest = head ? text.slice(head.end - s.start) : text.replace(/^\s*\S+/, '');
     const m = /^\s+(?:was|is)\s+(.+?)[.!?]*$/u.exec(rest);
     if (!m) return [];
+    // (round 3) a moment, not a trait: "He was quiet for a long while"
+    if (/(?<![\p{L}])for (?:a |an )?(?:long |little |short |good |few )?(?:while|moment|time|minute|minutes|second|seconds|spell|instant|hour|hours)(?![\p{L}])|(?<![\p{L}])(?:now|then|at last|again|suddenly)(?![\p{L}])/iu.test(m[1])) return [];
     // a place's or thing's: "Brennock was a grey slate town that climbed…", "Dock Three was the station’s only way out"
     if (c.kind !== 'person') {
       if (!head) return [];
@@ -1467,7 +1469,8 @@ module.exports = function canonEditor(C) {
       if (!word) return null;
       const v = SEX_WORDS[word] ? SEX_WORDS[word][0] : word;
       if (!w.some((x) => (SEX_WORDS[x] && SEX_WORDS[x][0] === v))) return { attr: 'sex', value: v, as: '' }; // (a pronoun's: the rule decides)
-      return { attr: 'sex', value: v, as: SEX_WORDS[word] ? word : '' };
+      // (the quote's own word for it, when the value is only "male" or "female": "a thin boy of fourteen")
+      return { attr: 'sex', value: v, as: SEX_WORDS[word] ? word : (wordsOf(quote).find((x) => SEX_WORDS[x] && SEX_WORDS[x][0] === v && !SEX_WORDS[x][2]) || '') };
     }
     if (key === 'appearance.hair' || key === 'appearance.eyes') {
       const c = vw.find((x) => COLOURS[x]);
@@ -1621,10 +1624,17 @@ module.exports = function canonEditor(C) {
     // a word against one of the value's, of the same one (near a word the two share)
     const named = new Set(names.flatMap((n) => content(n)));
     const shared = new Set(bs.filter((w, k) => w.length >= 3 && !STOPW.has(b[k]) && !NEGATORS.has(w) && (own.has(w) || named.has(w))));
+    // (round 3: of the same thing — "the low streets" says nothing against "the high side of the square")
+    const vtok = tokens(f.value).map(stem);
+    const nextNoun = (arr, k) => { for (let j = k + 1; j < Math.min(arr.length, k + 3); j++) if (!STOPW.has(arr[j]) && !ANT.has(arr[j])) return arr[j]; return null; };
     for (const [i, w] of bs.entries()) {
       const against = ANT.get(w);
       if (!against || ![...against].some((x) => vs.includes(x)) || vs.includes(w)) continue;
       if (vs.length > 1 && !bs.slice(Math.max(0, i - 6), i + 7).some((x) => x !== w && shared.has(x))) continue;
+      const vi = vtok.findIndex((x) => against.has(x));
+      const nv = vi >= 0 ? nextNoun(vtok, vi) : null;
+      const nb = nextNoun(bs, i);
+      if (nv && nb && nv !== nb && !inBag(nv, new Set([nb]))) continue;
       const m = mark(i);
       if (m) return { span: m, q: `is ${who} ${rawAt(i)}?` };
     }
