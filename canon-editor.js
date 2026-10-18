@@ -1123,8 +1123,17 @@ module.exports = function canonEditor(C) {
     {
       const vtoks = tokens(f.value.split(/\s(?:with|on|in|at|by|of|and|that|which|where)\s/i)[0]);
       const vclass = vtoks.map(classOf).filter(Boolean);
+      const heads = new Set([...content(f.value), ...names.flatMap((n) => content(n))].filter((w) => !classOf(w)));
+      // (or the quote's word for a thing the value names: "his old Rover, a green P6" for "drives old Rover")
+      const qt = tokens(quote);
+      qt.forEach((w, i) => {
+        const k = classOf(w);
+        if (!k) return;
+        const after = qt.slice(i + 1, i + 3).map(stem).some((x) => heads.has(x));
+        const appos = qt.slice(Math.max(0, i - 4), i).some((x, j, arr) => heads.has(stem(x)) && ['a', 'an', 'the'].includes(arr[j + 1]));
+        if (after || appos) vclass.push(k);
+      });
       if (vclass.length) {
-        const heads = new Set([...content(f.value), ...names.flatMap((n) => content(n))].filter((w) => !classOf(w)));
         const raw = [...sentence.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)];
         for (let i = 0; i < raw.length - 1; i++) {
           const w = norm(raw[i][0]);
