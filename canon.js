@@ -1334,7 +1334,7 @@
   // `story` (storyIndex), `rank` (book/ch → place in reading order) and
   // `rare` (rarity) let the reader check a sentence against the story's
   // key points (STORY.md §5); without them, or a reader, it isn't.
-  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null, story = null, rank = null, rare = null, open = null, kin = null, narrators = {} }) {
+  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null, story = null, rank = null, rare = null, open = null, kin = null, narrators = {}, deeds = null }) {
     const idx = mentionIndex(entries);
     const world = worldOf(entries, out);
     const names = nameTokens(entries);
@@ -1440,12 +1440,30 @@
           });
         }
       }
+      // (round 4) a deed done once given later to someone else, by rule
+      for (const d of deeds || []) {
+        if (!d.against || d.src.bookId !== src.bookId || d.src.chId !== src.chId) continue;
+        if (paraOk && !paraOk(src, d.para)) continue;
+        const who = byId.get(d.against.doer);
+        const other = byId.get(d.doer);
+        if (!who || !other) continue;
+        const fact = `${who.id}/event/${textHash(norm(d.against.sentence)).split(':')[0]}`;
+        const sentenceHash = textHash(norm(d.sentence));
+        if (dismissed.has(fact + '|' + sentenceHash)) continue;
+        const span = d.para.text.slice(d.span[0], d.span[1]);
+        const firstSpan = d.against.para.text.slice(d.against.span[0], d.against.span[1]);
+        slips.push({
+          seq: all.length + slips.length, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: d.para.hash, sentence: d.sentence, sat: d.sat, sentenceHash, at: d.span[0], span,
+          to: firstSpan !== span ? firstSpan : who.name, kind: 'event', strength: 'strong', entry: who.id, name: who.name, attr: 'event', value: d.against.sentence, as: '', fact,
+          sources: [{ label: `${d.against.src.book}, ${d.against.src.label}`, quote: d.against.sentence }], more: 0, written: false, note: true
+        });
+      }
       if (story && story.length && rank && rare && reader && typeof reader.contradicts === 'function') {
         const paras = sourceParas(src.html);
         for (const [j, p] of paras.entries()) {
           if (stop && stop()) break;
           if (paraOk && !paraOk(src, p)) continue;
-          for (const x of await deedSlips({ src, p, pos: rank.get(src.bookId + '/' + src.chId) * 1e4 + j, idx, byId, story, rare, reader, dismissed })) slips.push({ ...x, seq: all.length + slips.length });
+          for (const x of await deedSlips({ src, p, pos: rank.get(src.bookId + '/' + src.chId) * 1e4 + j, idx, byId, story, rare, reader, dismissed })) if (!slips.some((y) => y.kind === 'event' && y.para === x.para && y.sat === x.sat)) slips.push({ ...x, seq: all.length + slips.length });
         }
       }
       // what the story bible keeps in its own words (open facts), said otherwise later
@@ -1462,6 +1480,88 @@
     }
     // the slips, and apart from them the ones worth a look (`ask`)
     return { slips: all.filter((x) => !x.ask), asks: all.filter((x) => x.ask), facts };
+  }
+
+  // Deeds done once, by rule (round 4: the real reader answered "no" to
+  // every who-did-it question, and a deed given to the next generation went
+  // through). "Absalom Kerr the Elder built the mill race", then "the mill
+  // race, which Absalom Kerr the Younger had built": the same deed (one verb
+  // of making or ending, done once: built, founded, planted, dug, carved,
+  // painted, killed…) of the same thing ("the mill race"; "the cedar on the
+  // front lawn" is the cedar's), told in the narration with another doer
+  // named. The first in reading order stands; a later one that names someone
+  // else is a slip on that name, no question asked. A deed done again, done
+  // together, denied, remembered, planned or said is no slip; nor one of a
+  // thing that comes many to a shelf ("a fence", "another well").
+  const ONCE = { built: 'build', founded: 'found', planted: 'plant', dug: 'dig', carved: 'carve', painted: 'paint', wrote: 'write', written: 'write', invented: 'invent',
+    designed: 'design', forged: 'forge', laid: 'lay', killed: 'kill', shot: 'shoot', stole: 'steal', stolen: 'steal', burned: 'burn', burnt: 'burn', drowned: 'drown', sank: 'sink', sunk: 'sink',
+    felled: 'fell', buried: 'bury', carved: 'carve', sewed: 'sew', sewn: 'sew', knitted: 'knit', bought: 'buy', sold: 'sell', named: 'name', christened: 'christen', poisoned: 'poison', murdered: 'murder', rescued: 'rescue', saved: 'save', drew: 'draw', drawn: 'draw', composed: 'compose', made: 'make', cut: 'cut', broke: 'break', broken: 'break', set: 'set' };
+  const ONCE_VERB = new RegExp(`(?<![\\p{L}])(${Object.keys(ONCE).join('|')})(?![\\p{L}])`, 'giu');
+  const DEED_NOT = /(?<![\p{L}])(?:not|never|nobody|no one|n['’]t|again|also|too|another|helped|help|with|re-?built|rebuilt|remember\w*|imagin\w*|dream\w*|pretend\w*|wish\w*|thought|believed?|if|would|could|should|might|may|perhaps|maybe|supposed|said|says|claimed|swore)(?![\p{L}])/iu;
+  const OBJ_STOP = /^(?:at|in|on|by|for|from|of|with|to|into|onto|over|under|near|beside|behind|before|after|during|when|while|the|that|which|who|and|but|or|nor|as|so|than|then|last|that|this|every|each|year|spring|summer|autumn|winter|himself|herself|themselves|itself|once|alone|together)$/i;
+  function deedIndex(sources, entries) {
+    const doers = entries.filter((e) => !e.locked && ['person', 'creature'].includes(e.kind));
+    const idx = mentionIndex(doers);
+    const things = mentionIndex(entries.filter((e) => !e.locked && !['person', 'creature'].includes(e.kind)));
+    const out = [];
+    const first = new Map();
+    sources.forEach((src, order) => {
+      if (isNote(src)) return;
+      sourceParas(src.html).forEach((p, pi) => {
+        const talk = talkSpans(p.text);
+        const ms = mentions(p.text, idx).filter((m) => !talk.some(([a, b]) => m.start < b && m.end > a));
+        for (const s of sentences(p.text)) {
+          if (PLAN.test(s.text) || talk.some(([a, b]) => a < s.end && b > s.start)) continue;
+          for (const v of s.text.matchAll(ONCE_VERB)) {
+            const vAt = s.start + v.index;
+            const lemma = ONCE[norm(v[1])];
+            const before = s.text.slice(0, v.index);
+            const after = s.text.slice(v.index + v[0].length);
+            // the clause round the verb: never denied, repeated, shared, remembered or said
+            const clauseA = before.slice(Math.max(before.lastIndexOf(','), before.lastIndexOf(';')) + 1);
+            const clauseB = after.split(/[,;]/)[0];
+            if (DEED_NOT.test(clauseA.split(/\s+/).slice(-6).join(' ')) || DEED_NOT.test(clauseB.split(/\s+/).slice(0, 6).join(' '))) continue;
+            // the thing made: "the mill race" after the verb, or before it in a relative clause
+            const np = (txt) => { const ws = txt.trim().split(/\s+/); const outW = []; for (const w of ws) { const c = norm(w.replace(/[.,;:!?”"’)]+$/, '')); if (!c || OBJ_STOP.test(c) || /^\d/.test(c)) break; outW.push(c); if (/[.,;:!?]$/.test(w)) break; } return outW.length && outW.length <= 3 ? outW : null; };
+            let obj = null;
+            let doer = null;
+            const m1 = /^\s+(?:the|(?:\p{Lu}[\p{L}'’-]+['’]s))\s+(.*)$/u.exec(after);
+            if (m1) {
+              obj = np(m1[1]);
+              // the doer: named just before the verb ("Absalom Kerr the Elder built", "Mr Wilde had planted")
+              const d = ms.filter((m) => m.end <= vAt && m.start >= s.start).pop();
+              if (d && /^\s*(?:(?:had|has|once|himself|herself|first|then|alone)\s+){0,2}$/i.test(p.text.slice(d.end, vAt))) doer = d;
+            }
+            if (!obj || !doer) {
+              // "the mill race, which Absalom Kerr the Younger had built"; "the cedar that Hester Pell had planted"; "built by"
+              const rel = /(?:^|\s)the\s+((?:[\p{Ll}-]+\s+){0,2}[\p{Ll}-]+),?\s+(?:that\s+|which\s+)?$/u;
+              const d = ms.filter((m) => m.end <= vAt && m.start >= s.start).pop();
+              if (d && /^\s*(?:had|has)?\s*$/i.test(p.text.slice(d.end, vAt))) {
+                const r = rel.exec(p.text.slice(s.start, d.start));
+                if (r) { obj = np(r[1]); doer = d; }
+              }
+              const by = /^\s+by\s+$/.exec(after.slice(0, (/^\s+by\s+/.exec(after) || [''])[0].length));
+              if (!doer && by) {
+                const d2 = ms.find((m) => m.start >= vAt + v[0].length && m.start <= vAt + v[0].length + 5);
+                const r = /(?:^|\s)the\s+((?:[\p{Ll}-]+\s+){0,2}[\p{Ll}-]+)\s+(?:was|had been|has been|were)\s+$/u.exec(p.text.slice(s.start, vAt));
+                if (d2 && r) { obj = np(r[1]); doer = d2; }
+              }
+            }
+            if (!obj || !doer) continue;
+            // (a thing named as an entry is that entry: "the Corn Exchange")
+            const thing = mentions(s.text, things).find((m) => norm(s.text.slice(m.start, m.end)).includes(obj[obj.length - 1]));
+            const key = lemma + '|' + (thing ? '#' + thing.id : obj.map((w) => w.replace(/s$/, '')).join(' '));
+            const x = { src, order, pi, para: p, sentence: s.text, sat: s.start, lemma, key, obj, doer: doer.id, span: [doer.start, doer.end] };
+            const was = first.get(key) || [...first.values()].find((f) => f.lemma === lemma && f.obj[f.obj.length - 1] === obj[obj.length - 1] && (f.obj.length === 1 || obj.length === 1 || f.obj.some((w) => obj.includes(w))));
+            if (!was) { first.set(key, x); out.push(x); continue; }
+            // (the first doer named here too: together, or the first remembered)
+            if (was.doer === doer.id || ms.some((m) => m.id === was.doer && m.start >= s.start && m.end <= s.end)) continue;
+            out.push({ ...x, against: was });
+          }
+        }
+      });
+    });
+    return out;
   }
 
   // A sentence that gives an earlier key point's deed to someone else
@@ -1640,7 +1740,7 @@
     if (!at.length) return null;
     return Slots.clashOf(fc, Slots.claimsAbout(s.text, at, here.filter((m) => m.id !== e.id).map(rel), e.kind));
   }
-  function editorSuspects({ paras, entries, kept = [], told = [], rare = null, notes = new Set(), inNotes = false }) {
+  function editorSuspects({ paras, entries, kept = [], told = [], rare = null, notes = new Set(), inNotes = false, deedSents = null }) {
     const prose = (f) => inNotes || (f.sources || []).some((x) => x.written || !notes.has(x.book + '/' + x.ch));
     const ids = new Set();
     const live = entries.filter((e) => !e.locked);
@@ -1659,6 +1759,8 @@
     const model = paras.map((p) => { const ss = sentences(p.text).map((x) => ({ ...x, id: ++n })); return { p, ss }; });
     for (const { p, ss } of model) {
       for (const c of paraCandidates(p.text, idx, world, names)) if (c.kind !== 'name' && ss[c.si]) ids.add(ss[c.si].id);
+      // (round 4) a deed done once that an earlier sentence gives someone else
+      if (deedSents) for (const x of ss) if (deedSents.has(norm(x.text))) ids.add(x.id);
     }
     // open facts said otherwise: earlier ones, of the one a sentence names
     const opens = [...live.flatMap((e) => e.facts.filter((f) => (f.attr === 'other' || f.attr === 'state') && firm(f)).map((f) => ({ e, f }))), ...kept.filter((k) => k.f.attr === 'other' || k.f.attr === 'state')].filter((k) => prose(k.f));
@@ -2670,7 +2772,8 @@
         const shelfAll = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId))
           .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
         const kin = kinMentions(shelfAll, entries, meta.narrators || {});
-        return checkSources({ sources, entries, notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk, kin, narrators: meta.narrators || {}, ...told });
+        const deeds = deedIndex(shelfAll, entries);
+        return checkSources({ sources, entries, notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk, kin, narrators: meta.narrators || {}, deeds, ...told });
       },
 
       // Changing a fact across the series (PRODUCT §4.7), once the writer
@@ -2825,7 +2928,9 @@
               });
             }
             const earlier = [...told.values()].flat();
-            const suspect = editorSuspects({ paras, entries, kept: keptRead, told: earlier, rare: rarity(sources.filter((x) => !isNote(x))), notes: new Set(sources.filter(isNote).map((x) => x.bookId + '/' + x.chId)), inNotes: isNote(src) });
+            const upTo = sources.slice(0, sources.findIndex((x) => x.bookId === src.bookId && x.chId === src.chId) + 1);
+            const deedSents = new Set(deedIndex(upTo, entries).filter((d) => d.against && d.src.bookId === src.bookId && d.src.chId === src.chId).map((d) => norm(d.sentence)));
+            const suspect = editorSuspects({ paras, entries, kept: keptRead, told: earlier, rare: rarity(sources.filter((x) => !isNote(x))), notes: new Set(sources.filter(isNote).map((x) => x.bookId + '/' + x.chId)), inNotes: isNote(src), deedSents });
             const sexOf = (e) => { const f = e.facts.find((x) => x.attr === 'sex' && ['verified', 'yours'].includes(x.state)); return f ? f.value : null; };
             const narrator = narrators.get(src.bookId) || entries.find((e) => !e.locked && e.id === (meta.narrators || {})[src.bookId]) || null;
             let r;
@@ -3800,6 +3905,6 @@
     newEntry, parseEntry, serialiseEntry, dedupFacts, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader,
     shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces,
-    gateEvent, storyIndex, rarity, STORY_SCHEMA, kinMentions, kinClash, nonEntity
+    gateEvent, storyIndex, rarity, STORY_SCHEMA, kinMentions, kinClash, nonEntity, deedIndex
   };
 });

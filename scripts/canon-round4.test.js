@@ -93,3 +93,38 @@ test('slots in a read: a later value under another label is never a second fact;
   assert.ok(!slipOn(fr, 'next to the sports hall'));
   assert.ok(lookOn(fr, 'next to the sports hall'), 'worth a look');
 });
+
+/* ---------- 2 · deeds ---------- */
+
+test('deeds by rule: one done once, given later to another (a generation, a relative clause) is a slip with no question asked; done again, together, denied or said is none', () => {
+  const mk = (id, name, kind, aliases = []) => ({ ...Canon.newEntry(name, kind, id), aliases });
+  const ents = [mk('elder', 'Absalom Kerr the Elder', 'person', ['the Elder']), mk('younger', 'Absalom Kerr the Younger', 'person', ['the Younger']), mk('hester', 'Hester Pell', 'person', ['Hester']), mk('wilde', 'Jonah Wilde', 'person', ['Mr Wilde'])];
+  const src = (id, ps) => ({ bookId: 'b', chId: id, book: 'B', label: id, html: ps.map((p) => `<p>${p}</p>`).join('') });
+  const shelf = [
+    src('c1', ['Absalom Kerr the Elder built the mill race at Hobb’s Ford in the spring of 1871.', 'Mr Wilde had planted the cedar on the front lawn.', 'The Younger kept the ledgers.']),
+    src('c2', [
+      'Visitors came to see the mill race, which Absalom Kerr the Younger had built in the spring of 1871.',
+      'Nobody had touched the cedar that Hester Pell had planted on the front lawn.',
+      'Hester planted a cedar of her own.',
+      'The Younger built the mill race again after the flood.',
+      'The Younger and the Elder built the mill race together, Sal thought.',
+      '“The Younger built the mill race,” Sal said.',
+      'Hester kept the ledgers that year.',
+      'The Younger never built the mill race.'
+    ])
+  ];
+  const slips = Canon.deedIndex(shelf, ents).filter((d) => d.against).map((d) => `${d.doer} ← ${d.against.doer}: ${d.sentence}`);
+  assert.deepEqual(slips, [
+    'younger ← elder: Visitors came to see the mill race, which Absalom Kerr the Younger had built in the spring of 1871.',
+    'hester ← wilde: Nobody had touched the cedar that Hester Pell had planted on the front lawn.'
+  ]);
+});
+
+test('deeds in a read: the drift reader (no to every who-did-it question) still meets both dev3 deed slips, and none is kept as the new doer\'s history', async () => {
+  const km = await run('dev3/kerrs-mill');
+  const s = slipOn(km, 'which Absalom Kerr the Younger had built');
+  assert.ok(s && s.kind === 'event' && s.span === 'Absalom Kerr the Younger' && s.to === 'Absalom Kerr the Elder', JSON.stringify(s));
+  const fr = await run('dev3/form-room');
+  assert.ok(slipOn(fr, 'the cedar that Hester Pell had planted'));
+  assert.ok(!shown(entry(fr.entries, 'Hester Pell')).some((f) => /cedar/.test(f.value)), lines(entry(fr.entries, 'Hester Pell')).join('\n'));
+});
