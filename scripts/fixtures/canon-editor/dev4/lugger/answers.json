@@ -264,7 +264,7 @@
     {
      "attr": "age",
      "value": "twenty-four",
-     "quote": "He was twenty-four, a clerk at the harbour office",
+     "quote": "He was twenty-four, a clerk at the harbour office.",
      "ch": "c1",
      "weight": "must",
      "alt": [
@@ -277,7 +277,7 @@
     {
      "attr": "occupation",
      "value": "clerk at the harbour office",
-     "quote": "a clerk at the harbour office",
+     "quote": "He was twenty-four, a clerk at the harbour office.",
      "ch": "c1",
      "weight": "must",
      "alt": [
@@ -290,7 +290,7 @@
     {
      "attr": "appearance.hair",
      "value": "ginger",
-     "quote": "with ginger hair and brown eyes behind steel spectacles",
+     "quote": "Carew had ginger hair and brown eyes behind steel spectacles.",
      "ch": "c1",
      "weight": "must",
      "alt": [
@@ -301,7 +301,7 @@
     {
      "attr": "appearance.eyes",
      "value": "brown",
-     "quote": "with ginger hair and brown eyes behind steel spectacles",
+     "quote": "Carew had ginger hair and brown eyes behind steel spectacles.",
      "ch": "c1",
      "weight": "should",
      "alt": [
@@ -311,7 +311,7 @@
     {
      "attr": "appearance.other",
      "value": "steel spectacles",
-     "quote": "with ginger hair and brown eyes behind steel spectacles",
+     "quote": "Carew had ginger hair and brown eyes behind steel spectacles.",
      "ch": "c1",
      "weight": "should",
      "alt": [
@@ -356,7 +356,7 @@
     {
      "attr": "sex",
      "value": "male",
-     "quote": "He was twenty-four, a clerk at the harbour office",
+     "quote": "He was twenty-four, a clerk at the harbour office.",
      "ch": "c1",
      "weight": "must",
      "alt": [
@@ -619,7 +619,7 @@
    "to": "ginger",
    "against": {
     "ch": "c1",
-    "quote": "with ginger hair and brown eyes behind steel spectacles"
+    "quote": "Carew had ginger hair and brown eyes behind steel spectacles."
    },
    "weight": "must"
   },
@@ -661,7 +661,7 @@
   },
   {
    "ch": "c1",
-   "sentence": "Thomas Carew had the back room. He was twenty-four, a clerk at the harbour office, with ginger hair and brown eyes behind steel spectacles.",
+   "sentence": "Thomas Carew had the back room. He was twenty-four, a clerk at the harbour office. Carew had ginger hair and brown eyes behind steel spectacles.",
    "why": "the prose’s brown against the notebook’s green is Which is right?, never a mark"
   },
   {

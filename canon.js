@@ -583,17 +583,55 @@
     sister: ['female', 'brother'], brother: ['male', 'sister'], daughter: ['female', 'son'], son: ['male', 'daughter'],
     mother: ['female', 'father'], father: ['male', 'mother'], wife: ['female', 'husband'], husband: ['male', 'wife'],
     queen: ['female', 'king'], king: ['male', 'queen'], aunt: ['female', 'uncle'], uncle: ['male', 'aunt'], niece: ['female', 'nephew'], nephew: ['male', 'niece'],
-    bitch: ['female', 'dog', 'dog']
+    bitch: ['female', 'dog', 'dog'], tom: ['male', 'she-cat', 'cat'], tomcat: ['male', 'she-cat', 'cat']
   };
   const PRONOUNS = { she: 'female', her: 'female', hers: 'female', herself: 'female', he: 'male', him: 'male', his: 'male', himself: 'male' };
   const PRONOUN_SWAP = { he: 'she', she: 'he', him: 'her', her: 'his', hers: 'his', himself: 'herself', herself: 'himself', his: 'her' };
-  const COLOURS = { grey: 'grey', gray: 'grey', brown: 'brown', green: 'green', blue: 'blue', black: 'black', red: 'red', fair: 'fair', blond: 'fair', blonde: 'fair', golden: 'fair', white: 'white', hazel: 'hazel', amber: 'amber' };
+  const COLOURS = { grey: 'grey', gray: 'grey', brown: 'brown', green: 'green', blue: 'blue', black: 'black', red: 'red', fair: 'fair', blond: 'fair', blonde: 'fair', golden: 'fair', white: 'white', hazel: 'hazel', amber: 'amber',
+    // (round 5: the shades a writer gives hair and eyes — "ginger hair", "his dark hair", "iron-grey hair")
+    ginger: 'red', auburn: 'red', copper: 'red', carroty: 'red', sandy: 'fair', flaxen: 'fair', silver: 'grey', silvery: 'grey', dark: 'dark' };
+  for (const [w, v] of Object.entries({ grey: 'grey', black: 'black', blue: 'blue', green: 'green', brown: 'brown', white: 'white', red: 'red' })) {
+    for (const pre of ['iron', 'steel', 'silver', 'ash', 'slate', 'jet', 'coal', 'pitch', 'raven', 'sky', 'sea', 'ice', 'bottle', 'nut', 'chestnut', 'snow', 'pale', 'light', 'dark', 'deep']) COLOURS[`${pre}-${w}`] = v;
+  }
+  // two colour words that can't both be true of one pair of eyes or one head of hair
+  // ("dark" is black or brown; "dark" against blue, red or fair is a slip)
+  const DARKISH = new Set(['dark', 'black', 'brown']);
+  const colourClash = (a, b) => !!a && !!b && a !== b && !(DARKISH.has(a) && DARKISH.has(b) && (a === 'dark' || b === 'dark'));
   const SPECIES = { horse: 'horse', pony: 'horse', mule: 'mule', donkey: 'donkey', wolf: 'wolf', dog: 'dog', hound: 'dog', cat: 'cat', hawk: 'hawk', falcon: 'falcon', raven: 'raven', crow: 'crow', ox: 'cattle', cattle: 'cattle', sheep: 'sheep', goat: 'goat', fox: 'fox', bear: 'bear', dragon: 'dragon',
     // (round 4: a breed is its kind — an animal the reader called a person was "a wire-haired terrier")
     terrier: 'dog', spaniel: 'dog', collie: 'dog', sheepdog: 'dog', lurcher: 'dog', mastiff: 'dog', retriever: 'dog', setter: 'dog', pointer: 'dog', beagle: 'dog', whippet: 'dog', greyhound: 'dog', poodle: 'dog',
     labrador: 'dog', alsatian: 'dog', dachshund: 'dog', bulldog: 'dog', corgi: 'dog', puppy: 'dog', pup: 'dog', mongrel: 'dog', kitten: 'cat', tabby: 'cat', tomcat: 'cat', moggy: 'cat', cob: 'horse', foal: 'horse',
     carthorse: 'horse', nag: 'horse', lamb: 'sheep', calf: 'cattle', heifer: 'cattle', bullock: 'cattle', pig: 'pig', sow: 'pig', boar: 'pig', piglet: 'pig', goose: 'goose', gander: 'goose', duck: 'duck', owl: 'owl', parrot: 'parrot', rabbit: 'rabbit', hare: 'hare', ferret: 'ferret', mouse: 'mouse', rat: 'rat' };
   for (const [w, [, , sp]] of Object.entries(SEX_WORDS)) if (sp) SPECIES[w] = sp;
+  // (round 5) breeds: a dog's, a cat's or a horse's kind within its kind. Each is
+  // [as written, key, family]: two breeds clash when their keys differ and neither
+  // is the other's family ("terrier" holds of a fox terrier; a Jack Russell doesn't)
+  const BREEDS = [
+    ['wire-haired fox terrier', 'fox terrier', 'terrier'], ['smooth fox terrier', 'fox terrier', 'terrier'], ['fox terrier', 'fox terrier', 'terrier'], ['jack russell terrier', 'jack russell', 'terrier'], ['jack russell', 'jack russell', 'terrier'],
+    ['border terrier', 'border terrier', 'terrier'], ['yorkshire terrier', 'yorkshire terrier', 'terrier'], ['yorkie', 'yorkshire terrier', 'terrier'], ['airedale', 'airedale', 'terrier'], ['scottie', 'scottish terrier', 'terrier'], ['scottish terrier', 'scottish terrier', 'terrier'],
+    ['westie', 'west highland terrier', 'terrier'], ['bull terrier', 'bull terrier', 'terrier'], ['cairn terrier', 'cairn terrier', 'terrier'], ['cairn', 'cairn terrier', 'terrier'], ['terrier', 'terrier', 'terrier'],
+    ['golden retriever', 'golden retriever', 'retriever'], ['labrador retriever', 'labrador', 'retriever'], ['labrador', 'labrador', 'retriever'], ['retriever', 'retriever', 'retriever'],
+    ['cocker spaniel', 'cocker spaniel', 'spaniel'], ['springer spaniel', 'springer spaniel', 'spaniel'], ['king charles spaniel', 'king charles spaniel', 'spaniel'], ['spaniel', 'spaniel', 'spaniel'],
+    ['border collie', 'border collie', 'collie'], ['collie', 'collie', 'collie'], ['old english sheepdog', 'old english sheepdog', 'sheepdog'], ['sheepdog', 'sheepdog', 'sheepdog'],
+    ['alsatian', 'alsatian', 'alsatian'], ['german shepherd', 'alsatian', 'alsatian'], ['whippet', 'whippet', 'hound'], ['greyhound', 'greyhound', 'hound'], ['lurcher', 'lurcher', 'hound'], ['deerhound', 'deerhound', 'hound'], ['wolfhound', 'wolfhound', 'hound'],
+    ['bloodhound', 'bloodhound', 'hound'], ['beagle', 'beagle', 'hound'], ['basset hound', 'basset', 'hound'], ['basset', 'basset', 'hound'], ['dachshund', 'dachshund', 'dachshund'], ['bulldog', 'bulldog', 'bulldog'], ['corgi', 'corgi', 'corgi'], ['poodle', 'poodle', 'poodle'], ['pug', 'pug', 'pug'],
+    ['mastiff', 'mastiff', 'mastiff'], ['dalmatian', 'dalmatian', 'dalmatian'], ['setter', 'setter', 'setter'], ['pointer', 'pointer', 'pointer'], ['pekinese', 'pekinese', 'pekinese'], ['pekingese', 'pekinese', 'pekinese'], ['pomeranian', 'pomeranian', 'pomeranian'], ['schnauzer', 'schnauzer', 'schnauzer'],
+    ['siamese', 'siamese', 'siamese'], ['persian', 'persian', 'persian'], ['manx', 'manx', 'manx'], ['tortoiseshell', 'tortoiseshell', 'tortoiseshell'], ['tabby', 'tabby', 'tabby'],
+    ['shetland pony', 'shetland', 'pony'], ['shetland', 'shetland', 'pony'], ['welsh cob', 'welsh cob', 'cob'], ['clydesdale', 'clydesdale', 'clydesdale'], ['shire horse', 'shire', 'shire'], ['thoroughbred', 'thoroughbred', 'thoroughbred'], ['arab mare', 'arab', 'arab'], ['arab stallion', 'arab', 'arab']
+  ];
+  const BREED_RE = new RegExp(`(?<![\\p{L}-])(${BREEDS.map(([w]) => w.replace(/[-\s]/g, '[-\\s]')).join('|')})s?(?![\\p{L}-])`, 'giu');
+  const breedOf = (w) => { const n = norm(w).replace(/-/g, ' ').replace(/\s+/g, ' '); const b = BREEDS.find(([x]) => x.replace(/-/g, ' ') === n || x.replace(/-/g, ' ') + 's' === n); return b ? { key: b[1], fam: b[2] } : null; };
+  // the breeds a text names → [{ text, word (its last word, the kind), key, fam, start, end }]
+  function breedsIn(text) {
+    const out = [];
+    for (const m of String(text || '').matchAll(BREED_RE)) {
+      const b = breedOf(m[1]);
+      if (b) out.push({ text: m[1], word: m[1].split(/[-\s]/).pop(), ...b, species: /^(?:siamese|persian|manx|tortoiseshell|tabby)$/.test(b.key) ? 'cat' : /^(?:shetland|welsh cob|clydesdale|shire|thoroughbred|arab)$/.test(b.key) ? 'horse' : 'dog', start: m.index, end: m.index + m[1].length });
+    }
+    return out;
+  }
+  const breedIn = (text) => breedsIn(text)[0] || null;
+  const breedClash = (a, b) => !!a && !!b && a.key !== b.key && a.key !== b.fam && b.key !== a.fam;
   const KIN = { younger: 'younger', youngest: 'younger', elder: 'elder', eldest: 'elder', older: 'elder', oldest: 'elder', twin: 'twin' };
   const KIN_SWAP = { younger: 'elder', elder: 'younger' };
 
@@ -634,7 +672,10 @@
     }
     if (attr === 'species') {
       const word = wordsOf(v).find((x) => SPECIES[x]) || wordsOf(as).find((x) => SPECIES[x]);
-      return word ? { value: SPECIES[word], as: '' } : (v && !/\s/.test(v) ? { value: norm(v), as: '' } : null);
+      // (round 5: the breed, as written, is kept — "dog (wire-haired fox terrier)")
+      const breed = breedIn(as) || breedIn(v);
+      const keep = breed && SPECIES[word] && breed.species === SPECIES[word] ? breed.text : '';
+      return word ? { value: SPECIES[word], as: keep } : (v && !/\s/.test(v) ? { value: norm(v), as: '' } : null);
     }
     if (attr === 'sibling') return v ? { value: v, as: KIN[norm(as)] || w.map((x) => KIN[x]).find(Boolean) || '' } : null;
     return v ? { value: v, as: String(as || '').trim() } : null;
@@ -1339,7 +1380,7 @@
           const pronHaver = leadK && leadK.sex && PRONOUNS[words[0].lw] === leadK.sex.value && i <= 16 && words.slice(2, i).some((x) => x.lw === 'with') && !/[;:—–()"“”]/.test(text.slice(words[1].end, c.start)) && !/\b(?:and|but)\s+(?:he|she|they|it)\b/i.test(text.slice(words[1].end, c.start)) ? { id: lead.id, start: words[0].start, end: words[0].end } : null;
           const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver || noteHead || mine || byReading || pronHaver;
           const k = owner && world.get(owner.id);
-          if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, colourWord(k[attr])) });
+          if (k && k[attr] && c && colourClash(COLOURS[c.lw], k[attr].value)) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, colourWord(k[attr])) });
           // or, in a sentence naming no one, "his blue eyes" of the one person
           // the paragraph named before: strong when the entry's sex agrees,
           // close by; weak when its sex isn't known, or it's "their"
@@ -1347,7 +1388,7 @@
             const r = referent(text, det.start, si, ctx, PRONOUNS[det.lw]);
             const f = r && r.k[attr];
             const agree = r && r.k.sex && det.lw !== 'their' ? PRONOUNS[det.lw] === r.k.sex.value : null;
-            if (f && agree !== false && COLOURS[c.lw] !== f.value) {
+            if (f && agree !== false && colourClash(COLOURS[c.lw], f.value)) {
               add({ kind: 'colour', strength: agree && !r.weak ? 'strong' : 'weak', id: r.id, attr, fact: f, start: c.start, end: c.end, to: keepCase(c.w, colourWord(f)), ref: { start: det.start, end: det.end }, initials: r.initials });
             }
           }
@@ -1394,6 +1435,8 @@
     const byId = new Map(entries.map((e) => [e.id, e]));
     const dismissed = new Set(notSlips.map((n) => n.fact + '|' + n.sentence));
     const facts = [...world.values()].reduce((n, k) => n + k.rel.length + Object.keys(ATTRS).filter((a) => k[a]).length, 0);
+    const notePages = new Set(sources.filter(isNote).map((x) => x.bookId + '/' + x.chId));
+    const noteSrc = (x) => notePages.has(x.book + '/' + x.ch);
     const all = [];
     let n = 0;
     for (const src of sources) {
@@ -1416,6 +1459,9 @@
       const known = (odd.length || lower.length) && knownWords ? await knownWords([...odd, ...lower]) : {};
       for (const { c, p, s } of found) {
         if (c.kind === 'name' && (!knownWords || known[c.word] !== false)) continue;
+        // (round 5) the writer's notes are never marked against the prose: a value the
+        // prose gives and the notes say otherwise is Which is right?, asked when it is read
+        if (isNote(src) && c.fact && c.fact.state !== 'yours' && !c.fact.sources.some((x) => x.written || noteSrc(x))) continue;
         if ((c.initials || []).some((w) => known[w.toLowerCase()] === false)) continue;
         const e = byId.get(c.id);
         const key = c.fact ? factKey(e, c.fact) : `${e.id}/name`;
@@ -4059,7 +4105,7 @@
   const Editor = typeof require === 'function' && typeof module === 'object' && module.exports ? (() => {
     try {
       return require('./canon-editor.js')({ norm, normMap, textHash, sentences, speechSpans, reportedSpans, mentions, mentionIndex, nameParts, wordsOf, slug, newEntry,
-        findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, ATTRS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, nonEntity, stripTitles, talkSpans, referent, paraCtx, KIN, KIN_NOUNS: () => KIN_NOUNS });
+        findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, ATTRS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, nonEntity, stripTitles, talkSpans, referent, paraCtx, KIN, KIN_NOUNS: () => KIN_NOUNS, colourClash, breedIn, breedsIn, breedClash, breedOf });
     } catch { return null; }
   })() : null;
 
@@ -4076,7 +4122,7 @@
     inSpans, nameParts, WORD, replaceInHtml,
     parseLinks, resolveName, entryLinks, linkGraph, backlinks, paraEntries, snippetAround, worldIndex, mentionPassages, searchPassages,
     ATTRS, KINDS, STATES, SEX_WORDS, PRONOUNS, PRONOUN_SWAP, KIN_SWAP, COLOURS, SPECIES, KIN, slug, attrOf, labelOf, normaliseFact, handFact, factKey,
-    pronounEvidence, pronounSex, quoteIn,
+    pronounEvidence, pronounSex, quoteIn, colourClash, breedsIn, breedIn, breedClash, breedOf,
     newEntry, parseEntry, serialiseEntry, dedupFacts, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader,
     shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces,

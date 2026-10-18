@@ -387,7 +387,7 @@ async function runSheet(fixture, { mode = 'perfect', setting = '' } = {}) {
     const log = [];
     const packs = new Map();
     // ('credulous': the drift reader, but yes to every slip question — what a false slip needs)
-    const reader = mode === 'drift' || mode === 'credulous'
+    const reader = mode === 'drift' || mode === 'credulous' || mode === 'drift5'
       ? (() => { const base = sheetReader(sheet, { mode: 'perfect', setting, log, packs }); return driftReader(sheet, base, { log, wrongSet: base.wrongSet, hash: (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7), N, Canon, yesToSlips: mode === 'credulous' }); })()
       : sheetReader(sheet, { mode, setting, log, packs });
     const engine = Canon.createEngine({ io, reader });

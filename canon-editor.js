@@ -1170,6 +1170,19 @@ module.exports = function canonEditor(C) {
     const gapPunct = (a, b) => /[,;:—–()]/.test(s.text.slice(toks[a].end - s.start, toks[b].start - s.start));
     // "a black-and-white collie bitch called Moss"
     for (const x of cand) if (x.i > ci && x.i - ci <= 4 && !gapPunct(ci, x.i) && x.key !== undefined && /^(?:called|named)$/.test((toks[x.i - 1] || {}).lw || '')) return x.key;
+    // (round 5) a creature brought in by its name — "Her dog was a wire-haired fox terrier called
+    // Pickle, a bitch with one black ear, who barked at every boat"; "She kept a black Labrador
+    // called Ness, …, who slept under the chart table": the noun phrase before "called", and the
+    // apposition and relative clause after the name, are the creature's (not the owner's, not the subject's)
+    {
+      const x = cand.find((y) => !y.pron && y.key !== undefined && /^(?:called|named)$/.test((toks[y.i - 1] || {}).lw || '') && (ctx.cast || []).some((o) => o.key === y.key && o.kind === 'creature'));
+      if (x) {
+        const between = (a, b) => s.text.slice(toks[a].end - s.start, toks[b].start - s.start);
+        const others = (a, b) => cand.some((y) => y.i > a && y.i < b && y.key !== x.key && !y.poss && !y.pron && y.key !== undefined);
+        if (ci < x.i && !others(ci, x.i) && !/[;:]/.test(between(ci, x.i)) && toks.slice(ci, x.i).every((t) => !/^(?:and|but|while|when)$/.test(t.lw))) return x.key;
+        if (ci > x.i && !others(x.i, ci) && !/[;:]/.test(between(x.i, ci)) && !/,\s+(?:and|but)\s+(?:he|she|they|i|it)\b|\s(?:and|but)\s+(?:he|she|they|i)\s/i.test(between(x.i, ci))) return x.key;
+      }
+    }
     // (a possessive in c's own apposition or predicate is c: "Clem, his grey
     // mare", "Clem: Ivo’s grey mare", "He was my mother’s younger brother")
     for (const x of cand) {
@@ -1553,7 +1566,7 @@ module.exports = function canonEditor(C) {
     'pale flushed crying weeping sobbing shaking trembling shivering laughing smiling frowning grinning lying sitting standing kneeling crouching curled leaning folded waiting sleeping dozing hunched slumped panting sweating').split(' '));
   const POSTURE = /(?<![\p{L}])(?:stood|stands|sat|sits|lay|lies|knelt|kneels|leaned|leant|crouched|waited|slept|dozed|fell asleep|curled|perched|slumped|huddled|paced)(?![\p{L}])/iu;
   const CONDITION = /(?<![\p{L}])(?:when|if|while|until|till|as soon as|once)\s+(?:\p{L}+\s+){0,3}$/iu;
-  const KIND_NOUN = /(?<![\p{L}])(?:a|an)\s+(?:[\p{L}-]+\s+){0,2}?(?:man|woman|girl|boy|child|person|sort|kind|type|creature|dog|cat|horse|soul|fellow|lad|lass|lady|gentleman|bitch|mare|beast|thing)(?![\p{L}])/iu;
+  const KIND_NOUN = /(?<![\p{L}])(?:a|an)\s+(?:[\p{L}-]+,?\s+){0,2}?(?:man|woman|girl|boy|child|person|sort|kind|type|creature|dog|cat|horse|soul|fellow|lad|lass|lady|gentleman|bitch|mare|beast|thing)(?![\p{L}])/iu;
   const STANDING = /(?<![\p{L}])(?:by nature|by temperament|all (?:his|her|their|its) life|since (?:he|she|it) was|had always|was always|is always|always|never|every|whenever|easily|of (?:dogs|horses|thunder|the dark|water|heights|strangers|crowds|fire|spiders))(?![\p{L}])/iu;
   // (what a place, a group or a thing can be in a lasting way of these: a cold room, a quiet street)
   const PLACE_OK = new Set(['cold', 'freezing', 'chilled', 'wet', 'quiet', 'silent', 'calm', 'late', 'pale', 'alone', 'folded', 'curled', 'waiting', 'sitting', 'sleeping', 'standing', 'lying', 'dozing']);
@@ -1563,6 +1576,8 @@ module.exports = function canonEditor(C) {
     if (['role', 'origin', 'history', 'age', 'sex', 'name', 'membership', 'species', 'rule'].includes(fam) || key === 'relationship.kin' || key === 'location.home') return false;
     const living = ['person', 'creature'].includes(c.kind);
     const vt = tokens(value);
+    // (round 5) a colour is a look, never a moment: "pale grey" eyes, "pale" though it is
+    if (vt.some((w) => COLOURS[w]) && (/(?:eyes|hair|face|build|skin|mark|coat|fur)$/.test(key) || fam === 'appearance')) return false;
     const words = vt.filter((w) => MOMENT_WORDS.has(w) && (living || !PLACE_OK.has(w)));
     const cw = content(value);
     // (the clauses that hold the value's words: "The girls were frightened of Mr Wilde, who never raised his voice" — the never is the voice's)
@@ -1588,7 +1603,7 @@ module.exports = function canonEditor(C) {
     const at = (w) => { const i = norm(text).search(new RegExp(`(?<![\\p{L}])${escRe(w)}(?![\\p{L}])`, 'u')); return i < 0 ? null : norm(text).slice(0, i); };
     if (words.some((w) => { const b = at(w); return b != null && CONDITION.test(b); })) return true;
     if (HABITUAL.test(text) || STANDING.test(text)) return false;
-    if (words.some((w) => new RegExp(KIND_NOUN.source.replace('(?:[\\p{L}-]+\\s+){0,2}?', `(?:[\\p{L}-]+\\s+){0,2}?${escRe(w)}\\s+(?:[\\p{L}-]+\\s+)?`), 'iu').test(text))) return false;
+    if (words.some((w) => new RegExp(KIND_NOUN.source.replace('(?:[\\p{L}-]+,?\\s+){0,2}?', `(?:[\\p{L}-]+,?\\s+){0,2}?${escRe(w)},?\\s+(?:[\\p{L}-]+,?\\s+)?`), 'iu').test(text))) return false;
     // the same word in another sentence of the pack about them
     const others = part.lines.filter((l) => ['name', 'chain'].includes(l.why) && !cited.includes(l));
     if (words.length && words.every((w) => others.some((l) => tokens(l.s.text).includes(w)))) return false;
@@ -1713,11 +1728,16 @@ module.exports = function canonEditor(C) {
     if (key === 'appearance.hair' || key === 'appearance.eyes') {
       const c = vw.find((x) => COLOURS[x]);
       if (!c || !wordsOf(quote).includes(c)) return null;
-      return { attr: key === 'appearance.hair' ? 'hair' : 'eyes', value: COLOURS[c], as: norm(value) === c ? '' : value };
+      return { attr: key === 'appearance.hair' ? 'hair' : 'eyes', value: COLOURS[c], as: norm(value) === c && c === COLOURS[c] ? '' : value };
     }
     if (key === 'species') {
-      const s = vw.find((x) => SPECIES[x]);
-      return s && wordsOf(quote).includes(s) ? { attr: 'species', value: SPECIES[s], as: '' } : null;
+      // (round 5) any kind word of the value that the quote holds: "dog, a black Labrador" from "a black Labrador called Ness";
+      // the breed, when the quote gives one, is how it's written ("wire-haired fox terrier")
+      const qw = wordsOf(quote);
+      const s = vw.find((x) => SPECIES[x] && qw.includes(x));
+      if (!s) return null;
+      const breed = C.breedIn ? C.breedIn(quote) : null;
+      return { attr: 'species', value: SPECIES[s], as: breed && breed.species === SPECIES[s] ? breed.text : '' };
     }
     return null;
   }
