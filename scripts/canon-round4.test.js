@@ -314,3 +314,20 @@ test('profiles in a read: the drift reader\'s sentences that say more than their
   fs.rmSync(root, { recursive: true, force: true });
   assert.ok(mara.profile && !/thirty-four/.test(mara.profile.text) && /Coldharbour/.test(mara.profile.text), mara.profile && mara.profile.text);
 });
+
+/* ---------- 8 · Which is right? ---------- */
+
+test('Which is right?: the notes against the prose in one slot whatever the labels (the subject taught, the school year) — every value waits, none merged into another', async () => {
+  for (const mode of ['perfect', 'drift']) {
+    const fr = await run('dev3/form-room', mode);
+    const h = entry(fr.entries, 'Hester Pell');
+    const ask = h.facts.filter((f) => f.state === 'disagree').map((f) => f.value).join(' | ');
+    for (const w of ['chemistry', 'biology', 'Year Ten', 'Year Eleven']) assert.ok(ask.includes(w), `${mode}: ${w} in ${ask}`);
+    assert.equal(fr.score.needs.found, 2, mode);
+    // (and none of them a slip: the writer is asked instead)
+    assert.ok(!fr.slips.some((s) => /biology|Year Eleven/.test(s.sentence)), mode);
+  }
+  // the notebook's brown eyes against the prose's green (dev2): asked too
+  const li = await run('dev2/lisle', 'perfect');
+  assert.equal(li.score.needs.found, 2, li.score.needs.missed.join('; '));
+});

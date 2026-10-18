@@ -3483,7 +3483,10 @@
             const keep = [];
             for (const f of open) {
               const k = factKind(f);
-              const same = keep.find((g) => labelFamily(factKind(g)) === labelFamily(k) && Editor.overlap(g.value, f.value) >= 0.6);
+              // (round 4: never two values of one slot, "teaches chemistry" and "teaches biology", merged as one)
+              const fq0 = (f.sources.find(live) || {}).quote || '';
+              const slotsApart = (g) => Slots && Slots.clashOf(Slots.factClaims(g, (g.sources.find(live) || {}).quote || '', e.kind), Slots.factClaims(f, fq0, e.kind));
+              const same = keep.find((g) => labelFamily(factKind(g)) === labelFamily(k) && Editor.overlap(g.value, f.value) >= 0.6 && !slotsApart(g));
               if (same) {
                 for (const x of f.sources) if (!same.sources.some((y) => sameSrc(y, x))) same.sources.push(x);
                 e.facts.splice(e.facts.indexOf(f), 1);

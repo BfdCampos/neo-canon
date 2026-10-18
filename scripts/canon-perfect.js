@@ -138,6 +138,20 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
         if (isWrong) wrong.add(N(name + '|' + f.value));
       };
       if (e) for (const f of e.facts) push(e.name, f, false);
+      // (round 4) the other side of a Which is right?, where the pack holds it: the writer's
+      // notes say one thing ("teaches chemistry"), the prose another; a reader lists both
+      for (const nd of (sheet.needs || []).filter((x) => e && x.entity === e.id)) {
+        for (const v of nd.values) {
+          for (const [n, line] of [...text.matchAll(/\[(\d+)\] ([^[]*)/g)].map((m) => [+m[1], m[2].trim()])) {
+            const seg = line.split(/[.;]\s+|:\s+/).find((x) => new RegExp(`(?<![\\p{L}])${v}(?![\\p{L}])`, 'iu').test(x));
+            if (!seg || out.some((o) => o.s.includes(n) && N(o.v).includes(N(v)))) continue;
+            const { g, a } = groupOf(nd.attr);
+            const v1 = seg.replace(/[.]+$/, '').trim();
+            out.push({ g, a, v: v1, s: [n], x: 0 });
+            log.push({ entity: name, attr: nd.attr, value: v1, v: v1, quote: line, wrong: false, of: e.name, supported: true, need: true });
+          }
+        }
+      }
       if (adversary) {
         // another's fact whose quote is in this pack, filed under this one
         for (const o of ix.all) {
@@ -155,6 +169,9 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
     },
     async verify({ name, label, value, negated, other, lasting, moment }) {
       const madeUp = wrong.has(N(name + '|' + value));
+      // (a Which is right? value the pack holds is what that passage says)
+      const need = log.some((y) => y.need && N(y.entity) === N(name) && N(y.v) === N(value));
+      if (need) return negated || other || moment ? 'no' : 'yes';
       const t = ix.truth(name, label, value);
       if (adversary && madeUp) return negated || other || moment ? 'no' : 'yes';
       if (negated || other || moment) return t ? 'no' : 'yes';
@@ -162,6 +179,7 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
       return t ? 'yes' : (adversary ? 'yes' : 'no');
     },
     async whose({ name, label, value, options }) {
+      if (log.some((y) => y.need && N(y.entity) === N(name) && N(y.v) === N(value))) return name;
       if (adversary && wrong.has(N(name + '|' + value))) return name;
       if (ix.truth(name, label, value)) return name;
       const o = (options || []).find((n) => ix.truth(n, label, value));
