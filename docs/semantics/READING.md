@@ -255,3 +255,42 @@ The evaluation lead ran Careful on six stories the builder had never seen (`/tmp
 Model time (Careful): dev 1,870 s, dev2 5,182 s (2,480 words); Thorough on dev2 10,777 s. Thorough's precision now meets the bar (99%, was 86% on dev in round 1): the whose and wrong-about questions take away the yes it gave too readily; its recall is lower than Careful's on this run (51% must), not yet looked into. about the round-1 engine's per word: the second questions (whose, wrong-about) cost ~3 s each, and code reads the introductions.
 
 What the numbers are not: dev2 was written for the failure types and the rules were tuned on it, so it is a second dev set, not a held-out estimate. The held-out brief's 37% must and ~55–72% precision were on prose the builder had never read; the final gate is a new unseen batch. Recall on dev fell a little (Hesper's Spared, her friend Coll and the Weighhouse's routines still need the reader; a habit "she kept her hands still" is no longer a habit), and that was the trade the owner asked for: precision first.
+
+## 13. Round 3: the code around the reader, measured with readers made from the answers
+
+The in-app QA (fake reader, its own chapter, real input events) found that the losses were the code's, not the model's: a fully described place got no facts (its paragraph was given to the town it names in passing), a lead lost her scar and a boy his whole introduction (a possessive with no subject pronoun; an introduction after a line of his speech), and of ~54 facts a perfect reader proposed about 35% survived, while "Height: long" ("quiet for a long while") and a mare's age on her rider were kept as checked. Round 3 measures that code directly, with two readers built from the answer sheets (`scripts/canon-perfect.js`):
+
+- **perfect**: proposes every sheet fact whose quote reached the entity's pack, citing the sentences that hold it, in the sheet's words (or an alternative, when the quote doesn't hold them), and answers every question as the sheet would. A correct fact it proposes and the code drops is a fault in a gate.
+- **adversarial**: also files, under each entity, the facts of the others whose quotes sit in its pack, and believes them (yes, its own name to *whose*, no to *is it wrong*). Whatever of these survives is a fault in the code.
+
+QA's chapter is a fixture now (`scripts/fixtures/canon-editor/qa`, with QA's own reader answers for it and for the Tutorial's story). Fixed, each with its test (`scripts/canon-round3.test.js`, and the e2e):
+
+| What QA found | What decides now |
+|---|---|
+| A sentence belonged to one entity, the first named | It belongs to everyone it is about: by name, alias or the noun its own description gives ("a round tower of black stone" → *the tower*), by a pronoun the chapter's reading resolves (`resolveRefs`), by the paragraph a place opens as its subject; a little context (the definition just before) |
+| Pronouns followed only a sentence-opening he or she | A subject pronoun goes on with the last sentence's subject (not the name in its *than*: Juniper, not Wren); an owning *her* with its clause's subject; an object never its own clause's subject ("said Tobias, coming down to meet her"); "Her name was Ines Garrow" is Ines; *it* and *its* mean a place that was a subject; a body part the subject's own verb handles is the subject's ("He rubbed her eyes": the boy's, so *her* is a slip) |
+| Whose a claim is, by the nearest name | A name before a noun of its own is a modifier (the Dunmere breakwater; the Salt Cod inn is the Salt Cod's); a noun phrase's owner is the name it leads to (his old Rover; His wife, Constance); a relation's other end is not its owner (her apprentice); a fronted clause's subject comes after the claim; a definite apposition is the name just before it unless its noun is this one's own; a part of a place is the place's; a pronoun that cannot be this one (it, they, the other sex, one the reading gives others) never is |
+| Moments kept as traits, lasting things dropped as moments | A while is no height and no personality; a place stands, runs and smells; what one keeps, wears or carries, what has gone on since, what is done every morning, a mark a deed left, a way they are told as a thing they have: lasting |
+| Said kept as true | A tag after a quotation reports nothing past it; "would never have said out loud" and "Nobody said" report nothing; what is said is quoted inside its marks |
+| Traits from the reading | The trait word owned by its name, or by a pronoun the reading is sure of, ties it (`canon.json` `ties`); the narration's he and she as resolved give a sex (`pron`); an Eyes or Hair fact never cites a passage whose words give another colour |
+| Which is right? | Resolves open facts too (the values asked against step aside, recoverable); one birthplace (Saltmarsh in the notes against Coldharbour in the prose waits; a later one in the prose is the pass's); a notebook colour against "a tall woman with … grey eyes": the notes stand, the prose is a slip; one question per label, counted as the pane lists them |
+| Identity | "the Guild" joins "the Guild of Wick-Trimmers"; a surname the shelf gives two people is no one's alias (Ivo had become female through "Tamsin Marchetti, Ivo's elder sister"); Dr and Mrs Haddon are never one by a shared alias |
+| The pass | The chapter's reading tells it whose "her brown eyes" are among two named; an open-fact slip in narration isn't passed over for talk later in its sentence; an antonym says otherwise only of the same thing; the one at someone's heels is not the heels' owner |
+| The Canon page | Read the Shelf in the reader's line on every Canon page; Keep a Canon from the offer pins both panes; Try Again starts the reader before saying anything; the failure said once; a press during a read waits for it |
+
+### Results, round 3 (no model: the sheet readers; `node scripts/canon-perfect.js`)
+
+On dev, dev2's five stories and QA's chapter (379 sheet facts, 205 must); before: the round-2 engine (`cda47d9`) with the same readers.
+
+| | Round 2 | Round 3 |
+|---|---|---|
+| Pack coverage, must quotes in the right entity's pack | 176/205 (86%) | **203/205 (99%)** |
+| Pack coverage, every quote | 321/379 (85%) | 358/379 (94%) |
+| Perfect reader: of what it proposes (in the quote's words, not on a slip's sentence), kept | 218/299 (73%) | **317/333 (95%)** |
+| Perfect reader: every sheet fact, kept | 224/361 (62%) | 326/361 (90%) |
+| Wrong facts kept with a perfect reader | 2 | **0** |
+| Adversary's misattributions kept | 48/242 (20%) | **7/252 (3%)** |
+| Slips found (must) / false | 11/17 / 1 | **16/17 / 0** |
+| QA's chapter: Lantern House facts; Tobias's | 0; 0 | 10; 6 |
+
+What is still lost with a perfect reader is mostly round 2's deliberate precision: a habit with no word that it recurs ("She kept her hands still"), a moment ("That night… she lay…"), a setting's routine told as a person's deed, a fact read between the lines (the town afraid of her). What these numbers are not: the readers are the sheets, so they measure the code, not a model; a real reader proposes less and worse, and the held-out estimate is still the evaluation lead's.
