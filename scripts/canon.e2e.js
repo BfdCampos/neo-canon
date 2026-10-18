@@ -128,6 +128,10 @@ test('a shelf without a Canon: the Canon tab says what Canon is and offers one, 
   assert.equal(await js(`document.querySelector('.cn-invite .cn-tutorial button').textContent`), 'Open the Tutorial');
   assert.equal(fs.existsSync(path.join(LIB, CANON, 'canon.json')), true); // (the fixture's, not taken up yet)
   assert.equal(JSON.parse(fs.readFileSync(libFile, 'utf8')).shelves[0].canonId, undefined);
+  // Keep a Canon from the offer itself: the tab becomes the Canon's, both panes pinned as on a first open (round 3)
+  await js(`localStorage.removeItem('neo-pinned-panes'); keepCanon(library.shelves[0])`);
+  await until(`!!document.querySelector('#canon-view .cn-home') && $('#nav-pane').dataset.pinned === '1' && $('#side-pane').dataset.pinned === '1'`);
+  assert.equal(await js(`$('#nav-pane').classList.contains('open') && $('#side-pane').classList.contains('open')`), true);
   await js(`switchTab('manuscript')`);
 });
 
@@ -362,16 +366,19 @@ test('the reader, always findable: Reader ready · CPU at the top of an entry; H
   await until(`!!document.querySelector('#canon-reader')`);
   await js(`document.querySelector('#canon-reader .rs-close').click()`);
   await until(`!document.querySelector('#canon-reader')`);
-  // a reader that couldn't start here: said in one line, Try Again and Reader settings, never a dead end
-  await js(`canon.reader.failed = { tier: canon.reader.installed }; canonReaderRedraw()`);
-  await until(`/^The reader couldn’t start on this computer\. Try AgainReader settings$/.test(document.querySelector('#canon-view .cn-reader-line').textContent)`);
+  // Read the Shelf is in the line too, whatever entry is open (round 3: once an entry was open it was out of reach)
+  assert.equal(await js(`document.querySelector('#canon-view .cn-reader-line .cn-rl-read')?.textContent`), 'Read the Shelf');
+  // a reader that couldn't start here: said once, in the line, with Try Again and Reader settings, never a dead end
+  await js(`canon.reader.failed = { tier: canon.reader.installed }; canonRdr = { ...canonRdr, failed: canon.reader.failed }; canonReaderRedraw()`);
+  await until(`/^The reader couldn’t start on this computer[.] Reader settings can try CPU only, or the Quick reader[.] Until then, the checks run without it[.] Try AgainReader settings$/.test(document.querySelector('#canon-view .cn-reader-line').textContent)`);
   await js(`canonShown = null; renderCanon()`);
-  await until(`!!document.querySelector('#canon-view .cn-failed')`);
-  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-failed button')].map((b) => b.textContent)`), ['Try Again', 'Reader settings']);
+  await until(`!!document.querySelector('#canon-view .cn-home')`);
+  assert.equal(await js(`(document.querySelector('#canon-view').textContent.match(/couldn’t start/g) || []).length`), 1);
+  assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-reader-line button')].map((b) => b.textContent)`), ['Try Again', 'Reader settings']);
   await tick(200);
   await shot('canon-reader-failed.png');
-  await js(`document.querySelector('#canon-view .cn-failed button').click()`);
-  await until(`!canon.reader.failed && !!document.querySelector('#canon-view .cn-read')`);
+  await js(`document.querySelector('#canon-view .cn-reader-line button').click()`);
+  await until(`!canonRdr.failed && !!document.querySelector('#canon-view .cn-read') && !!document.querySelector('#canon-view .cn-rl-read')`);
 });
 
 const chapterFiles = () => ['c1', 'c2', 'c3'].map((c) => fs.readFileSync(path.join(LIB, SALT, 'chapters', c + '.html'), 'utf8'));

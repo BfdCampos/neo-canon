@@ -286,7 +286,7 @@ test('the writer\'s notes against the prose: "Which is right?", both sources, no
     const r = await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).readShelf();
     const ilsa = () => readEntries(where.dir).find((e) => e.id === 'ilsa-varr');
     assert.deepEqual(ilsa().facts.filter((f) => f.attr === 'eyes').map((f) => `${f.value} ${f.state} ${f.sources.map((s) => s.ch).join('+')}`).sort(), ['brown disagree p2', 'grey disagree c1']);
-    assert.equal(r.needs, 4);
+    assert.equal(r.needs, 3); // (one Which is right? for the eyes, as the pane lists it: round 3)
     const slips = await Canon.createEngine({ io, reader: Canon.fakeReader(answers) }).check({ bookId: SALT });
     assert.ok(!slips.slips.some((s) => s.attr === 'eyes'));
     // the writer picks grey: it's theirs, brown steps aside, and the slip is back

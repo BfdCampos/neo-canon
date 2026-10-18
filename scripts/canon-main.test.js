@@ -36,6 +36,8 @@ function loadMain(dir, opts = {}) {
   // answers come from another realm: plain copies compare as values
   const call = (name, ...args) => {
     const out = handlers.get(name)(null, ...args);
+    // (an async handler's answer, once it comes: as the window would get it)
+    if (out && typeof out.then === 'function') return out.then((x) => (x === undefined ? x : JSON.parse(JSON.stringify(x))));
     return out === undefined ? out : JSON.parse(JSON.stringify(out));
   };
   call.context = context;
@@ -176,7 +178,7 @@ describe('canon files', { concurrency: 1 }, () => {
   });
 
   // Which reader suits this computer: the graphics card first, then memory
-  test('the reader recommended from the hardware: an 8 GB GPU → thorough, 6 GB or Apple silicon with 16 GB → careful; the processor alone → quick', () => {
+  test('the reader recommended from the hardware: an 8 GB GPU → thorough, 6 GB or Apple silicon with 16 GB → careful; the processor alone → quick', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-pick-'));
     try {
       const call = loadMain(dir);
@@ -212,10 +214,10 @@ describe('canon files', { concurrency: 1 }, () => {
       assert.equal(R.thorough.thoughts, 'discourage');
       assert.equal(R.quick.editor, undefined);
       // Reader settings: the hardware and the reader chosen are kept in settings.json
-      const r = call('canon:readerSettings', { hardware: 'cpu' });
+      const r = await call('canon:readerSettings', { hardware: 'cpu' });
       assert.equal(r.hardware, 'cpu');
       assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).readerHardware, 'cpu');
-      assert.equal(call('canon:readerSettings', { hardware: 'auto' }).hardware, 'auto');
+      assert.equal((await call('canon:readerSettings', { hardware: 'auto' })).hardware, 'auto');
       assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).readerHardware, undefined);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
@@ -255,8 +257,11 @@ describe('canon files', { concurrency: 1 }, () => {
       assert.equal((await call.handler('canon:check')({ sender: { isDestroyed: () => true } }, { canonId, bookId, scope: 'book', html: {} })).readerFailed, true);
       assert.equal((await call.handler('canon:readShelf')({ sender: { isDestroyed: () => true } }, canonId, {})).error, 'reader-failed');
       assert.equal(forks.length, n);
-      // Try Again forgets it
-      assert.equal(call('canon:readerSettings', { retry: true }).failed, null);
+      // Try Again tries it (round 3: never "Reader ready" for a reader that can't start): Automatic, then the processor, again
+      const tried = forks.length;
+      const again = await call('canon:readerSettings', { retry: true });
+      assert.deepEqual(forks.slice(tried).filter((m) => m.type === 'load').map((m) => m.cpu), [false, true]);
+      assert.equal(again.failed.tier, 'careful');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

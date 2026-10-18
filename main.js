@@ -2427,6 +2427,13 @@ ipcMain.handle('canon:stop', () => {
 // One read at a time; progress goes to the window as it goes.
 let canonReading = null;
 ipcMain.handle('canon:readShelf', async (e, canonId, opts = {}) => {
+  // (round 3: a read already going — the one after a pause in typing — is
+  // waited for, then this one reads what's left; never "couldn't read")
+  for (let n = 0; n < 3; n++) {
+    const going = canonReading;
+    if (!going) break;
+    try { await going; } catch { /* its own caller says so */ }
+  }
   if (canonReading) return { error: 'busy' };
   const { reader, failed } = await canonReaderReady();
   if (failed) return { error: 'reader-failed' };
@@ -2891,7 +2898,7 @@ ipcMain.handle('canon:readerStatus', () => {
 // Reader settings: the hardware (Automatic, or CPU only) and which reader.
 // A change of hardware starts the reader afresh on it; a reader that isn't
 // here yet is downloaded.
-ipcMain.handle('canon:readerSettings', (_e, change = {}) => {
+ipcMain.handle('canon:readerSettings', async (_e, change = {}) => {
   const s = readSettings();
   if (change.hardware === 'cpu' || change.hardware === 'auto') {
     const was = s.readerHardware === 'cpu' ? 'cpu' : 'auto';
@@ -2902,6 +2909,11 @@ ipcMain.handle('canon:readerSettings', (_e, change = {}) => {
   if (change.retry) { delete s.readerFailed; canonWorkerStop(); }
   writeSettings(s);
   if (change.choice && canonInstalled() !== change.choice) canonDownload(change.choice);
+  // (round 3) Try Again tries: the reader is started now, and what it says
+  // is what the window shows — never "ready" for a reader that can't start
+  if (change.retry && canonInstalled() && !(!app.isPackaged && process.env.NEO_CANON_FAKE)) {
+    try { await canonLoadModel(); } catch (err) { if (!(err && err.code === 'failed')) logError('canon reader retry', err); }
+  }
   const r = canonReaderStatus();
   if (!r.device) canonProbe();
   return r;

@@ -3333,8 +3333,19 @@
           verified: facts.filter((f) => f.state === 'verified' || f.state === 'yours').length,
           // what waits for the writer: notes against the prose, and what's only said or planned
           // (a line whose value the facts already hold asks nothing)
-          needs: entries.flatMap((e) => e.facts.filter((f) => f.state === 'disagree' || (f.state === 'unverified' && talkOnly(f) && f.attr !== 'other'
-            && !e.facts.some((x) => x !== f && sameFact(x, f) && !talkOnly(x) && (x.state === 'yours' || x.state === 'verified'))))).length
+          // (round 3: counted as the pane lists them — one Which is right? per label, Skip remembered)
+          needs: (() => {
+            const skipped = new Set(meta.skipped || []);
+            const asked = new Set();
+            for (const e of entries) {
+              for (const f of e.facts) {
+                if (f.state === 'disagree') { const k = e.id + '|' + f.attr + (f.attr === 'other' ? '|' + norm(labelOf(f) || '') : ''); if (!skipped.has(k)) asked.add(k); continue; }
+                const k = e.id + '|' + f.attr + '|' + f.value;
+                if (f.state === 'unverified' && talkOnly(f) && f.attr !== 'other' && !skipped.has(k) && !e.facts.some((x) => x !== f && sameFact(x, f) && !talkOnly(x) && (x.state === 'yours' || x.state === 'verified'))) asked.add(k);
+              }
+            }
+            return asked.size;
+          })()
         };
       }
     };

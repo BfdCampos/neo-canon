@@ -16642,7 +16642,8 @@ async function keepCanon(shelf) {
     await openBook(id);
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
   }
-  if (book && book.id === id) { canonTabUpdate(); switchTab('canon'); }
+  // (round 3: on the tab already — its invitation — the panes now pin as a shelf that keeps one opens)
+  if (book && book.id === id) { canonTabUpdate(); switchTab('canon'); if (canonPinning()) panePins(); }
 }
 
 // The offer names the shelf. A shelf named for where its books stand (the
@@ -17282,12 +17283,17 @@ function canonReaderLine(cls = 'cn-reader-line', inWindow = false) {
   const say = (text) => { const x = document.createElement('span'); x.textContent = text; box.appendChild(x); };
   const button = (label, fn, c = 'cn-btn cn-rl-go') => { const b = document.createElement('button'); b.className = c; b.textContent = label; b.onclick = fn; box.appendChild(b); return b; };
   const best = r.recommend === 'short' ? null : r.recommend;
-  if (r.installed && r.failed && dl.state !== 'downloading') {
-    say(t('The reader couldn’t start on this computer.') + ' ');
+  if (r.trying) {
+    say(t('Starting the reader…'));
+  } else if (r.installed && r.failed && dl.state !== 'downloading') {
+    // (said once, here: the Canon page doesn't say it again)
+    say(t('The reader couldn’t start on this computer. Reader settings can try CPU only, or the Quick reader. Until then, the checks run without it.') + ' ');
     button(t('Try Again'), () => canonReaderRetry());
   } else if (r.installed && dl.state !== 'downloading' && dl.state !== 'paused') {
     const dev = canonDevice(r);
     say(t('Reader ready') + (dev ? ' · ' + dev : ''));
+    // (round 3: Read the Shelf is always at hand, whatever entry is open)
+    if (!inWindow && canon && !canonReading) button(t('Read the Shelf'), () => canonReadShelfNow(), 'cn-btn cn-rl-go cn-rl-read');
   } else if (dl.state === 'downloading') {
     say(t('Downloading the reader… {n}%', { n: canonPct(dl) }) + ' · ');
     button(t('Pause'), () => window.neo.canonPauseDownload());
@@ -17315,7 +17321,10 @@ function canonReaderLine(cls = 'cn-reader-line', inWindow = false) {
 }
 // Try Again, after the reader couldn't start: Canon forgets that and tries it
 async function canonReaderRetry() {
+  // (round 3: it is tried, which takes a moment; the line says so meanwhile)
+  if (canonRdr) { canonRdr = { ...canonRdr, trying: true }; canonReaderRedraw(); }
   canonRdr = await window.neo.canonReaderSettings({ retry: true });
+  if (canonRdr && canonRdr.failed) toast(t('The reader still couldn’t start. Reader settings can try CPU only, or the Quick reader.'));
   canonReadLine = '';
   if (canon) canon.reader = canonRdr;
   canonReaderRedraw();
@@ -17493,7 +17502,8 @@ function canonNeeds() {
     const which = new Map();
     for (const f of x.data.facts) {
       if (f.state === 'disagree') {
-        const key = x.id + '|' + f.attr;
+        // (one question per label: an open fact's Age and Origin are two questions, never one card — round 3)
+        const key = x.id + '|' + f.attr + (f.attr === 'other' ? '|' + Canon.norm(canonLabel(f) || '') : '');
         if (skipped.has(key)) continue;
         if (!which.has(key)) { which.set(key, { e: x.data, f, key, all: [] }); out.push(which.get(key)); }
         which.get(key).all.push(f);
@@ -17650,20 +17660,8 @@ function canonHome() {
   } else say(t('Canon reads every book and notebook on this shelf, and only what changed since it last read. Facts you wrote or confirmed are never changed.'));
   if (canonReading) { box.appendChild(canonReadProgress()); return box; }
   // a reader that couldn't start here: Try Again, or Reader settings (never the same crash on every click)
-  if (canon.reader.failed) {
-    say(t('The reader couldn’t start on this computer. Reader settings can try CPU only, or the Quick reader. Until then, the checks run without it.'), 'cn-note cn-read-line');
-    const row = document.createElement('div');
-    row.className = 'cn-failed';
-    for (const [label, fn, cls] of [[t('Try Again'), () => canonReaderRetry(), 'btn-gold'], [t('Reader settings'), () => showCanonReader(), 'cn-btn']]) {
-      const b = document.createElement('button');
-      b.className = cls;
-      b.textContent = label;
-      b.onclick = fn;
-      row.appendChild(b);
-    }
-    box.appendChild(row);
-    return box;
-  }
+  // (round 3: the reader line at the top of the page says so, with Try Again and Reader settings: not twice)
+  if (canon.reader.failed) return box;
   const go = document.createElement('button');
   go.className = 'cn-read btn-gold';
   go.textContent = t('Read the Shelf');
