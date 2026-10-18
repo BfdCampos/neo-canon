@@ -2407,8 +2407,10 @@ module.exports = function canonEditor(C) {
           }
           if (got) break;
         }
-        const fact = c.entry && c.entry.facts.some((f) => f.attr === 'other' && /^rank$/i.test(f.label || ''));
-        if (!got || (had && R.rankClash(had.text, got.r.text)) || (fact && R.rankKey(had.text) === got.r.key)) continue;
+        const fact = c.entry && c.entry.facts.find((f) => f.attr === 'other' && /^rank$/i.test(f.label || ''));
+        // a Rank fact already kept: the same rank is no news (compare with what was kept when nothing is held here)
+        const kept0 = had ? had.text : fact && fact.value;
+        if (!got || (had && R.rankClash(had.text, got.r.text)) || (fact && kept0 && R.rankKey(kept0) === got.r.key)) continue;
         const quote = gateQuote(fit(got.s.text, content(got.r.text)), ch.text) || gateQuote(got.s.text, ch.text);
         if (!quote) continue;
         kept.push({ e: entryOf(c), f: { attr: 'other', label: 'Rank', value: got.r.text, as: '', state: 'unverified', sources: [{ label: book, quote, book: src.bookId, ch: src.chId }] }, tied: true });
