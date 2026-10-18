@@ -150,10 +150,12 @@ module.exports = function canonSlots(C) {
   // any clash between two lists of claims → the first { a, b, sure } or null
   function clashOf(as, bs) {
     let look = null;
-    for (const a of as) for (const b of bs) {
-      const c = clash(a, b);
-      if (c && c.sure) return { a, b, sure: true };
-      if (c && !look) look = { a, b, sure: false };
+    for (const a of as) {
+      for (const b of bs) {
+        const c = clash(a, b);
+        if (c && c.sure) return { a, b, sure: true };
+        if (c && !look) look = { a, b, sure: false };
+      }
     }
     return look;
   }

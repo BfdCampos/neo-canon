@@ -302,7 +302,7 @@ function driftReader(sheet, base, { log, wrongSet, hash, N, Canon }) {
       return base.verify({ ...q, label: 'other' });
     },
     async whose(q) { return wrongSet.has(N(q.name + '|' + q.value)) ? q.name : base.whose({ ...q, label: 'other' }); },
-    async refers(q) { return 'yes'; },
+    async refers() { return 'yes'; },
     // sentences that cite real facts and say more than they do
     async profile({ name, kind, facts }) {
       if (!facts.length) return [];
