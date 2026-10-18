@@ -759,7 +759,7 @@ module.exports = function canonEditor(C) {
     // house on Bridge Street…"; "The back bedroom, which was mine, looked
     // out…" in the Salt House's paragraph): someone else's (-1)
     if (!before.some((x) => !x.poss && !object(x) && x.key !== undefined) && ['place', 'thing'].includes(c.kind)) {
-      const lead = /^[\s“"‘']*(?:[Tt]he|[Ii]ts|[Hh]is|[Hh]er|[Mm]y|[Tt]heir|[Oo]ur|\p{Lu}\p{L}*['’]s)\s+(?:\p{Ll}+['’]s\s+)?(?:[\p{Ll}-]+\s+){0,2}?([\p{Ll}-]+)(?:,[^,]{1,40},)?\s+(?:itself\s+)?(?:was|were|is|are|had|has|stood|looked|ran|lay)\b/u.exec(s.text);
+      const lead = /^[\s“"‘']*(?:[Tt]he|[Ii]ts|[Hh]is|[Hh]er|[Mm]y|[Tt]heir|[Oo]ur|\p{Lu}\p{L}*['’]s)\s+(?:\p{Ll}+['’]s\s+)?(?:[\p{Ll}-]+\s+){0,2}?([\p{Ll}-]+)(?:,[^,]{1,40},|\s+(?:at|in|of|on)\s+[^,.;]{1,40}?)?\s+(?:itself\s+)?(?:was|were|is|are|had|has|stood|looked|ran|lay)\b/u.exec(s.text);
       const mine = cand.filter((x) => x.key === c.key && !x.pron);
       const objectOf = (x) => { let k = x.i - 1; while (k >= 0 && SKIP_DET.has(toks[k].lw)) k--; return k >= 0 && PREP.has(toks[k].lw) || (k >= 0 && toks[k].lw === 'of'); };
       const head = norm(c.name).split(/\s+/).pop();
@@ -914,6 +914,9 @@ module.exports = function canonEditor(C) {
     // rows") is the scene; an apposition before the verb ("Clem, his grey
     // mare, was waiting") still describes. Roles, routines, history, kin: not this.
     if (actionPredicate(cited, grounded, c, key)) return { why: 'once' };
+    // a day or a month for a value ("Role: Thursdays"), or a look that is only where it was seen ("in the instrument light")
+    if (content(value).length && content(value).every((w) => nonEntity(w))) return { why: 'empty' };
+    if (labelFamily(key) === 'appearance' && /^(?:in|on|at|by|under|from|through)\s/i.test(value)) return { why: 'once' };
     // "sweeping the floor", "carrying fence posts": what they were doing then
     if (['other', 'state', 'location', 'appearance', 'personality', 'description'].includes(labelFamily(key)) && /^(?!being\b|living\b|wearing\b)\p{L}+ing\s+(?:the|a|an|his|her|their|its|some|\p{L}+s)\b/u.test(value) && !HABITUAL.test(citedText)) return { why: 'once' };
     // a place's location that names the place itself ("smell of the press-house") says nothing of where it is
