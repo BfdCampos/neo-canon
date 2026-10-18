@@ -2472,14 +2472,24 @@ ipcMain.handle('canon:unNotSlip', (_e, canonId, record) => {
 });
 
 // ---- Canon's reader: the model on this computer (canon-worker.js) ----
-// Two readers to choose from, each one GGUF file pinned to a commit with its
+// Readers to choose from, each one GGUF file pinned to a commit with its
 // size and sha256. Weights live in userData/models, never in the library.
+// Thorough and Deep (Qwen3-8B, Qwen3-14B) are hybrid-thinking models, loaded
+// with their thinking turned off (`thoughts`). `editor`: the reader reads
+// like an editor (docs/semantics/READING.md): cast, dossiers, a verifier,
+// profiles; the quick one keeps the per-paragraph reading. `sequences`: how
+// many prompts a graphics card answers at once (one on the processor).
 const READERS = {
+  thorough: { file: 'Qwen3-8B-Q4_K_M.gguf', size: 5027783488, sha256: 'd98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785',
+    url: 'https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/7c41481f57cb95916b40956ab2f0b139b296d974/Qwen3-8B-Q4_K_M.gguf', licence: 'Apache-2.0', thoughts: 'discourage', editor: true, sequences: 4 },
+  deep: { file: 'Qwen3-14B-Q4_K_M.gguf', size: 9001752960, sha256: '500a8806e85ee9c83f3ae08420295592451379b4f8cf2d0f41c15dffeb6b81f0',
+    url: 'https://huggingface.co/Qwen/Qwen3-14B-GGUF/resolve/530227a7d994db8eca5ab5ced2fb692b614357fd/Qwen3-14B-Q4_K_M.gguf', licence: 'Apache-2.0', thoughts: 'discourage', editor: true, sequences: 2 },
   careful: { file: 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf', size: 2497281120, sha256: '3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597',
-    url: 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf', licence: 'Apache-2.0' },
+    url: 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf', licence: 'Apache-2.0', editor: true, sequences: 4 },
   quick: { file: 'qwen2.5-1.5b-instruct-q4_k_m.gguf', size: 1117320736, sha256: '6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e',
     url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf', licence: 'Apache-2.0' }
 };
+const READER_ORDER = ['thorough', 'deep', 'careful', 'quick'];
 // a development build can be pointed at another catalogue (the e2e test
 // serves a small file from its own server); a packaged NEO never looks
 function canonReaders() {
@@ -2489,33 +2499,48 @@ function canonReaders() {
 }
 const modelsDir = () => (FRESH ? FRESH.models : path.join(app.getPath('userData'), 'models'));
 // the reader on this computer: the one chosen in Reader settings if it's
-// here, else the careful one if both are
+// here, else the most thorough one that is
 function canonInstalled() {
   const all = canonReaders();
   const here = (tier) => all[tier] && fileSize(path.join(modelsDir(), all[tier].file)) === all[tier].size;
   const chosen = readSettings().readerChoice;
   if (here(chosen)) return chosen;
-  return ['careful', 'quick'].find(here) || null;
+  return READER_ORDER.find(here) || null;
 }
 const fileSize = (file) => { try { return fs.statSync(file).size; } catch { return -1; } };
-// Which reader suits this computer. A graphics card with 6 GB of its own
-// memory, or Apple silicon with 16 GB (shared by the GPU), runs the careful
-// one well; otherwise memory decides: 16 GB the careful reader, 8 GB the
-// quick one, less is short.
-// On the processor alone (no such card, not Apple silicon) the careful
-// reader can't start inside NEO (canonFailed), so the quick one is
-// recommended there; and once a reader has failed here, the other.
+// Which reader suits this computer. A graphics card with 8 GB of its own
+// memory (the owner's RTX 3080 has 10) runs the thorough one; 6 GB, or Apple
+// silicon with 16 GB (shared by the GPU), the careful one, and Apple silicon
+// with 24 GB the thorough one; otherwise memory decides: 8 GB the quick one,
+// less is short. The deep reader is never picked: Reader settings offers it
+// on a card with 12 GB.
+// On the processor alone (no such card, not Apple silicon) a reader whose
+// weights need one block over 2 GiB can't start inside NEO (canonFailed),
+// so only the quick one is recommended there; and once a reader has failed
+// here, the next one down.
 function readerPick({ totalGB, platform, arch, vramGB = 0, failed = null }) {
-  const pick = vramGB >= 6 ? 'careful'
-    : platform === 'darwin' && arch === 'arm64' ? (totalGB >= 15 ? 'careful' : totalGB >= 7.5 ? 'quick' : 'short')
+  const apple = platform === 'darwin' && arch === 'arm64';
+  const pick = vramGB >= 8 ? 'thorough' : vramGB >= 6 ? 'careful'
+    : apple ? (totalGB >= 23 ? 'thorough' : totalGB >= 15 ? 'careful' : totalGB >= 7.5 ? 'quick' : 'short')
       : totalGB >= 7.5 ? 'quick' : 'short';
-  return pick === 'careful' && failed === 'careful' ? 'quick' : pick;
+  // (a reader that failed here: the next one down from it, and from anything bigger)
+  const size = ['quick', 'careful', 'thorough', 'deep'];
+  if (failed && size.includes(failed) && size.indexOf(pick) >= size.indexOf(failed) && failed !== 'quick') return size[size.indexOf(failed) - 1];
+  return pick;
 }
-function canonRecommend() {
+// what Reader settings offers here: the deep reader only on a card with 12 GB,
+// the thorough one only with a graphics card of 8 GB or Apple silicon
+function readerOffered({ totalGB, platform, arch, vramGB = 0 }) {
+  const apple = platform === 'darwin' && arch === 'arm64';
+  return READER_ORDER.filter((tier) => tier === 'deep' ? vramGB >= 12 || (apple && totalGB >= 31)
+    : tier === 'thorough' ? vramGB >= 8 || (apple && totalGB >= 15) : true);
+}
+const canonHere = () => {
   const s = readSettings();
   const dev = s.readerDevice;
-  return readerPick({ totalGB: os.totalmem() / 2 ** 30, platform: process.platform, arch: process.arch, vramGB: dev && dev.gpu ? (dev.vram || 0) / 2 ** 30 : 0, failed: s.readerFailed && s.readerFailed.tier });
-}
+  return { totalGB: os.totalmem() / 2 ** 30, platform: process.platform, arch: process.arch, vramGB: dev && dev.gpu && s.readerHardware !== 'cpu' ? (dev.vram || 0) / 2 ** 30 : 0, failed: s.readerFailed && s.readerFailed.tier };
+};
+const canonRecommend = () => readerPick(canonHere());
 // What the reader runs on, kept in settings.json once known: found by a
 // probe the first time the reader's status is asked for (never at launch),
 // and again by every load. A fall back to the processor is logged.
@@ -2651,7 +2676,7 @@ let canonChild = null;
 let canonSeq = 0;
 let canonLoaded = null; // the model file the worker has loaded
 // (each worker answers its own questions: one that dies leaves the next alone)
-function canonWorker(msg) {
+function canonWorker(msg, given = null) {
   return new Promise((resolve) => {
     if (!canonChild) {
       try {
@@ -2675,7 +2700,7 @@ function canonWorker(msg) {
         return;
       }
     }
-    const id = ++canonSeq;
+    const id = given || ++canonSeq;
     canonChild.waiting.set(id, resolve);
     canonChild.postMessage({ ...msg, id });
   });
@@ -2702,18 +2727,26 @@ function canonFailed(tier, why) {
   canonBroadcast({ type: 'hardware', ...canonReaderStatus() });
 }
 const canonFailedNow = () => { const f = readSettings().readerFailed; return f && f.tier === canonInstalled() ? f : null; };
-async function canonLoadModel() {
+let canonLoading = null; // (prompts asked at once wait for the one load)
+function canonLoadModel() {
+  if (!canonLoading) canonLoading = canonLoadOnce().finally(() => { canonLoading = null; });
+  return canonLoading;
+}
+async function canonLoadOnce() {
   const tier = canonInstalled();
-  const file = tier && path.join(modelsDir(), canonReaders()[tier].file);
+  const r0 = tier && canonReaders()[tier];
+  const file = tier && path.join(modelsDir(), r0.file);
   if (!file) throw Object.assign(new Error('no reader'), { code: 'gone' });
   if (canonLoaded === file) return;
   if (canonFailedNow()) throw Object.assign(new Error('failed'), { code: 'failed' });
   const threads = Math.max(1, os.cpus().length - 2);
   const cpu = readSettings().readerHardware === 'cpu';
-  let r = await canonWorker({ type: 'load', chat: file, threads, cpu });
+  // the editor's reading needs a chapter in view (READING.md §5)
+  const opts = { chat: file, threads, ctx: r0.editor ? 8192 : 2048, sequences: r0.sequences || 1, thoughts: r0.thoughts };
+  let r = await canonWorker({ type: 'load', ...opts, cpu });
   if (!r.ok && !cpu) {
     logError('canon reader', new Error('load failed on Automatic, trying the processor: ' + r.error + (r.code != null ? ' (exit ' + r.code + ')' : '')));
-    r = await canonWorker({ type: 'load', chat: file, threads, cpu: true });
+    r = await canonWorker({ type: 'load', ...opts, cpu: true });
     if (r.ok) { const s = readSettings(); s.readerFellBack = tier; writeSettings(s); }
   }
   if (!r.ok) {
@@ -2723,16 +2756,23 @@ async function canonLoadModel() {
   const s = readSettings();
   if (s.readerFailed) { delete s.readerFailed; writeSettings(s); }
   canonDeviceKeep(r.result);
+  canonParallel = Math.max(1, (r.result && r.result.sequences) || 1);
   canonLoaded = file;
 }
-let canonRunning = null; // the prompt being answered, so typing can stop it
+let canonParallel = 1;  // prompts the loaded reader answers at once
+const canonRunningNow = new Map(); // prompt id → stop it, so typing can stop them all
+let canonRunning = null; // stops every prompt being answered (and the fake reader's wait)
 async function canonAsk(msg, urgent = false) {
   await canonLoadModel();
   // (a pass the writer started isn't stopped by their typing)
-  const id = canonSeq + 1;
-  if (!urgent) canonRunning = () => canonWorker({ type: 'abort', target: id });
-  const r = await canonWorker({ type: 'prompt', ...msg });
-  if (!urgent) canonRunning = null;
+  const id = ++canonSeq;
+  if (!urgent) {
+    canonRunningNow.set(id, () => canonWorker({ type: 'abort', target: id }));
+    canonRunning = () => { for (const stop of canonRunningNow.values()) stop(); canonRunningNow.clear(); };
+  }
+  const r = await canonWorker({ type: 'prompt', ...msg }, id);
+  canonRunningNow.delete(id);
+  if (!canonRunningNow.size && !urgent) canonRunning = null;
   if (r.ok) return r.result;
   throw Object.assign(new Error(r.error), r.error === 'aborted' || r.error === 'gone' ? { code: r.error } : {});
 }
@@ -2779,7 +2819,14 @@ function canonPausable(reader) {
       }
     }
   };
-  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)), events: wrap(reader.events.bind(reader)), contradicts: wrap(reader.contradicts.bind(reader)) };
+  return canonWrapAll(reader, wrap);
+}
+// every question a reader can be asked, wrapped the same way (not abort or pick)
+const CANON_ASKS = ['propose', 'judge', 'refers', 'events', 'contradicts', 'cast', 'dossier', 'verify', 'merge', 'profile', 'clash'];
+function canonWrapAll(reader, wrap) {
+  const out = Object.defineProperties({}, Object.getOwnPropertyDescriptors(reader)); // (getters stay getters: parallel)
+  for (const k of CANON_ASKS) if (typeof reader[k] === 'function') out[k] = wrap(reader[k].bind(reader));
+  return out;
 }
 
 // For tests and development a fake reader answers from a file, as slowly as
@@ -2792,7 +2839,7 @@ function canonFake() {
     const t = setTimeout(() => { canonRunning = null; resolve(fn(...args)); }, ms);
     canonRunning = () => { clearTimeout(t); reject(Object.assign(new Error('aborted'), { code: 'aborted' })); };
   });
-  return { ...fake, propose: slow(fake.propose.bind(fake)), judge: slow(fake.judge.bind(fake)), refers: slow(fake.refers.bind(fake)), events: slow(fake.events.bind(fake)), contradicts: slow(fake.contradicts.bind(fake)) };
+  return canonWrapAll(fake, slow);
 }
 // A pass the writer started (canon:check, not a quiet one) runs at once:
 // it doesn't wait out the ten seconds after a key, and a key doesn't stop it
@@ -2807,14 +2854,18 @@ function canonUrgent(reader) {
       }
     }
   };
-  return { ...reader, propose: wrap(reader.propose.bind(reader)), judge: wrap(reader.judge.bind(reader)), refers: wrap(reader.refers.bind(reader)), events: wrap(reader.events.bind(reader)), contradicts: wrap(reader.contradicts.bind(reader)) };
+  return canonWrapAll(reader, wrap);
 }
 function canonReader({ urgent = false } = {}) {
   const tier = canonInstalled();
   if (!tier) return null;
   const hold = urgent ? canonUrgent : canonPausable;
   if (!app.isPackaged && process.env.NEO_CANON_FAKE) return hold(canonFake());
-  return hold(Canon.localReader({ id: tier + '-' + canonReaders()[tier].sha256.slice(0, 8), tier, ask: (m) => canonAsk(m, urgent) }));
+  const r = canonReaders()[tier];
+  // (`parallel` is read when a pass starts: the worker says how many it holds once loaded)
+  const reader = Canon.localReader({ id: tier + '-' + r.sha256.slice(0, 8), tier, editor: !!r.editor, ask: (m) => canonAsk(m, urgent) });
+  Object.defineProperty(reader, 'parallel', { get: () => canonParallel, enumerable: true });
+  return hold(reader);
 }
 function canonReaderStatus() {
   const all = canonReaders();
@@ -2823,6 +2874,7 @@ function canonReaderStatus() {
   return {
     installed: canonInstalled(),
     recommend: canonRecommend(),
+    offered: readerOffered(canonHere()),
     catalogue: Object.fromEntries(Object.entries(all).map(([tier, r]) => [tier, { size: r.size, licence: r.licence }])),
     download: canonDlState(),
     hardware: s.readerHardware === 'cpu' ? 'cpu' : 'auto',

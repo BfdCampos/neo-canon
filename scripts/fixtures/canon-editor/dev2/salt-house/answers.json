@@ -1,0 +1,151 @@
+{
+  "about": "dev2 · The Salt House (Saltmarsh shelf). First-person narrator named once, in someone's speech addressed to her (Nell; Eleanor at home); kin with its side (her mother's mother, her mother's younger brother); a house and a room in it; months, weekdays and a language in passing. Ch 2 holds a kin-side slip, a hair-colour slip and a misspelt name, and a lie in dialogue. Written by the builder for round 2; same schema as dev/answers.json. notEntities: words a reader must not make entries of.",
+  "set": "dev2/salt-house",
+  "shelf": "Saltmarsh",
+  "book": "book-the-salt-house-sh1",
+  "chapters": { "c1": "Ch 1", "c2": "Ch 2" },
+  "notEntities": ["July", "March", "Sundays", "Sunday", "Saturdays", "Welsh", "Bible", "Nobody", "Not", "Granny", "Uncle"],
+  "entities": [
+    {
+      "id": "nell", "name": "Nell", "kind": "person", "aliases": ["Eleanor", "the narrator"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "I was the only girl in my class who could not swim", "ch": "c1", "weight": "must", "hard": true, "alt": ["girl"] },
+        { "attr": "age", "value": "eleven", "quote": "I was eleven the year this happened.", "ch": "c1", "weight": "must", "alt": ["11"] },
+        { "attr": "appearance.eyes", "value": "grey", "quote": "I had my father’s grey eyes", "ch": "c1", "weight": "must", "hard": true, "alt": ["father's grey eyes"] },
+        { "attr": "personality", "value": "says nothing when frightened", "quote": "my mother’s habit of saying nothing when I was frightened", "ch": "c1", "weight": "should", "alt": ["silent when frightened", "saying nothing when frightened"] },
+        { "attr": "personality", "value": "frightened of almost everything in the house", "quote": "I was frightened of almost everything in that house", "ch": "c1", "weight": "nice", "alt": ["frightened"] },
+        { "attr": "relationship.kin", "value": "granddaughter of Granny Ruth, on her mother's side", "quote": "Granny Ruth was my mother’s mother.", "ch": "c1", "weight": "must", "alt": ["Granny Ruth", "grandmother Granny Ruth", "mother's mother"] },
+        { "attr": "relationship.kin", "value": "niece of Tobiah, her mother's younger brother", "quote": "He was my mother’s younger brother", "ch": "c1", "weight": "must", "also": ["My uncle Tobiah lived with her."], "alt": ["uncle Tobiah", "Tobiah", "mother's younger brother"] },
+        { "attr": "name", "value": "Eleanor at home", "quote": "At home I was Eleanor, all of it, always", "ch": "c1", "weight": "should", "alt": ["Eleanor"] },
+        { "attr": "routine", "value": "sent to the Salt House every summer in the second week of July", "quote": "every summer of my childhood I was sent there in the second week of July", "ch": "c1", "weight": "should", "alt": ["sent every summer", "every summer", "second week of July"] },
+        { "attr": "skill", "value": "cannot swim", "quote": "I was the only girl in my class who could not swim", "ch": "c1", "weight": "should", "alt": ["could not swim"] },
+        { "attr": "location.home", "value": "the back bedroom is hers", "quote": "The back bedroom, which was mine", "ch": "c1", "weight": "nice", "alt": ["back bedroom"] },
+        { "attr": "habit", "value": "carries the basket to Saltby on Saturdays", "quote": "On Saturdays Granny Ruth walked there for her groceries, and I carried the basket.", "ch": "c1", "weight": "nice", "alt": ["carried the basket"] }
+      ],
+      "traps": [
+        { "attr": "age", "value": "twenty", "why": "Tobiah's age when he lost his fingers" },
+        { "attr": "relationship.kin", "value": "father's brother", "why": "Ch 2's slip" },
+        { "attr": "appearance.hair", "value": "black", "why": "Ch 2's slip is Granny Ruth's hair" }
+      ]
+    },
+    {
+      "id": "granny-ruth", "name": "Granny Ruth", "kind": "person", "aliases": ["Ruth", "gran", "grandmother"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "She was a small, straight-backed woman", "ch": "c1", "weight": "must", "hard": true, "alt": ["woman", "grandmother"] },
+        { "attr": "relationship.kin", "value": "the narrator's mother's mother", "quote": "Granny Ruth was my mother’s mother.", "ch": "c1", "weight": "must", "alt": ["mother's mother", "grandmother", "Nell"] },
+        { "attr": "appearance.build", "value": "small, straight-backed", "quote": "She was a small, straight-backed woman", "ch": "c1", "weight": "must", "alt": ["small", "straight-backed"] },
+        { "attr": "appearance.hair", "value": "white", "quote": "white hair she wore in a knot", "ch": "c1", "weight": "must", "hard": true, "alt": ["white hair", "white, in a knot"] },
+        { "attr": "appearance.hair", "value": "worn in a knot", "quote": "white hair she wore in a knot", "ch": "c1", "weight": "should", "alt": ["knot"] },
+        { "attr": "location.home", "value": "the Salt House, since the day she married", "quote": "she had lived in the Salt House since the day she married", "ch": "c1", "weight": "must", "alt": ["Salt House"] },
+        { "attr": "routine", "value": "rises at five every morning to light the range", "quote": "She rose at five every morning to light the range, winter and summer", "ch": "c1", "weight": "must", "alt": ["rose at five", "lights the range at five"] },
+        { "attr": "habit", "value": "will not have a clock in the kitchen", "quote": "she would not have a clock in the kitchen", "ch": "c1", "weight": "should", "alt": ["no clock in the kitchen"] },
+        { "attr": "routine", "value": "reads her Bible in Welsh in the evenings", "quote": "In the evenings Granny Ruth read her Bible in Welsh", "ch": "c1", "weight": "should", "alt": ["reads the Bible in Welsh", "Bible in Welsh"] },
+        { "attr": "skill", "value": "Welsh, learnt from her own mother", "quote": "which she had learnt from her own mother", "ch": "c1", "weight": "nice", "alt": ["speaks Welsh", "Welsh"] },
+        { "attr": "routine", "value": "walks to Saltby for groceries on Saturdays", "quote": "On Saturdays Granny Ruth walked there for her groceries", "ch": "c1", "weight": "should", "alt": ["groceries on Saturdays", "walks to Saltby"] },
+        { "attr": "rule", "value": "nobody goes out on the marsh after dark", "quote": "There was one rule in the Salt House, and it was Granny Ruth’s: nobody went out on the marsh after dark.", "ch": "c1", "weight": "should", "alt": ["no one on the marsh after dark"] },
+        { "attr": "routine", "value": "brushes her hair out every night, a hundred strokes", "quote": "brushed it out, a hundred strokes, the way she did every night", "ch": "c2", "weight": "should", "alt": ["a hundred strokes", "brushes her hair every night"] }
+      ],
+      "traps": [
+        { "attr": "appearance.hair", "value": "black", "why": "Ch 2's slip" },
+        { "attr": "appearance.build", "value": "big, slow", "why": "Tobiah's" }
+      ]
+    },
+    {
+      "id": "tobiah", "name": "Tobiah", "kind": "person", "aliases": ["Uncle Tobiah", "uncle"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "male", "quote": "He was my mother’s younger brother, a big slow man", "ch": "c1", "weight": "must", "hard": true, "alt": ["man", "brother"] },
+        { "attr": "relationship.kin", "value": "the narrator's uncle, her mother's younger brother", "quote": "He was my mother’s younger brother", "ch": "c1", "weight": "must", "also": ["My uncle Tobiah lived with her."], "alt": ["mother's younger brother", "uncle", "Nell's uncle"] },
+        { "attr": "location.home", "value": "lives with Granny Ruth", "quote": "My uncle Tobiah lived with her.", "ch": "c1", "weight": "must", "alt": ["Salt House", "lives with her"] },
+        { "attr": "appearance.build", "value": "big, slow", "quote": "a big slow man", "ch": "c1", "weight": "must", "alt": ["big", "big slow man"] },
+        { "attr": "appearance.face", "value": "a beard the colour of rust", "quote": "a beard the colour of rust", "ch": "c1", "weight": "must", "alt": ["rust beard", "rust-coloured beard", "beard"] },
+        { "attr": "occupation", "value": "mends nets for the boats at Saltby", "quote": "he mended nets for the boats at Saltby", "ch": "c1", "weight": "must", "alt": ["mends nets", "net mender"] },
+        { "attr": "appearance.mark", "value": "lost two fingers of his left hand to a winch at twenty", "quote": "He had lost two fingers of his left hand to a winch when he was twenty.", "ch": "c1", "weight": "must", "alt": ["two fingers missing", "lost two fingers", "missing fingers"] },
+        { "attr": "personality", "value": "does not talk much", "quote": "He did not talk much", "ch": "c1", "weight": "should", "alt": ["quiet", "talks little"] },
+        { "attr": "routine", "value": "on Sundays takes the narrator along the dyke for samphire", "quote": "on Sundays he took me out along the dyke to look for samphire", "ch": "c1", "weight": "should", "alt": ["samphire on Sundays", "Sundays along the dyke"] },
+        { "attr": "routine", "value": "splices rope by the window in the evenings", "quote": "Tobiah sat by the window splicing rope", "ch": "c1", "weight": "nice", "alt": ["splicing rope"] },
+        { "attr": "possession", "value": "a dog, Moss", "quote": "Uncle Tobiah had a dog, a black-and-white collie bitch called Moss.", "ch": "c1", "weight": "should", "alt": ["Moss", "dog"] },
+        { "attr": "history", "value": "has never been out on the marsh in the dark", "quote": "“I have never once been out on that marsh in the dark,” Tobiah said", "ch": "c2", "weight": "nice", "said": true }
+      ],
+      "traps": [
+        { "attr": "relationship.kin", "value": "father's brother", "why": "Ch 2's slip" },
+        { "attr": "appearance.build", "value": "small, straight-backed", "why": "Granny Ruth's" },
+        { "attr": "appearance.hair", "value": "white", "why": "Granny Ruth's" }
+      ]
+    },
+    {
+      "id": "moss", "name": "Moss", "kind": "creature", "aliases": [], "weight": "must", "profile": false,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "a black-and-white collie bitch called Moss", "ch": "c1", "weight": "must", "hard": true, "alt": ["bitch"] },
+        { "attr": "species", "value": "dog", "quote": "Uncle Tobiah had a dog, a black-and-white collie bitch called Moss.", "ch": "c1", "weight": "must", "hard": true, "alt": ["collie", "dog, a collie"] },
+        { "attr": "appearance", "value": "black-and-white collie", "quote": "a black-and-white collie bitch called Moss", "ch": "c1", "weight": "must", "alt": ["black-and-white", "black and white"] },
+        { "attr": "possession", "value": "Tobiah's dog", "quote": "Uncle Tobiah had a dog, a black-and-white collie bitch called Moss.", "ch": "c1", "weight": "should", "alt": ["Tobiah", "belongs to Tobiah", "owner Tobiah"] },
+        { "attr": "habit", "value": "sleeps by the range", "quote": "She slept by the range", "ch": "c1", "weight": "should", "alt": ["slept by the range"] },
+        { "attr": "habit", "value": "follows Tobiah everywhere", "quote": "followed him everywhere", "ch": "c1", "weight": "should", "alt": ["follows him everywhere"] },
+        { "attr": "habit", "value": "will not come to the narrator", "quote": "she would not come to me", "ch": "c1", "weight": "nice", "alt": ["won't come to me"] },
+        { "attr": "personality", "value": "particular", "quote": "“She’s particular,” Tobiah said.", "ch": "c1", "weight": "nice", "said": true }
+      ],
+      "traps": []
+    },
+    {
+      "id": "the-salt-house", "name": "the Salt House", "kind": "place", "aliases": ["Salt House", "the house"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "location", "value": "at the end of Wrack Lane, the last house before the marsh", "quote": "My grandmother’s house stood at the end of Wrack Lane, the last house before the marsh", "ch": "c1", "weight": "must", "alt": ["end of Wrack Lane", "last house before the marsh"] },
+        { "attr": "description", "value": "brick, low and long", "quote": "The house itself was brick, low and long", "ch": "c1", "weight": "must", "alt": ["brick", "low and long"] },
+        { "attr": "description", "value": "slate roof the gulls walk on in the mornings", "quote": "with a slate roof that the gulls walked on in the mornings", "ch": "c1", "weight": "should", "also": ["In the morning the gulls were walking on the slate roof again"], "alt": ["slate roof"] },
+        { "attr": "location.part", "value": "four rooms downstairs and three up", "quote": "It had four rooms downstairs and three up.", "ch": "c1", "weight": "should", "alt": ["seven rooms", "four rooms downstairs"] },
+        { "attr": "atmosphere", "value": "smells of salt and coal smoke", "quote": "The whole house smelt of salt and coal smoke.", "ch": "c1", "weight": "must", "also": ["the whole house smelt of coal smoke"], "alt": ["salt and coal smoke", "smelt of salt"] },
+        { "attr": "rule", "value": "nobody goes out on the marsh after dark", "quote": "There was one rule in the Salt House, and it was Granny Ruth’s: nobody went out on the marsh after dark.", "ch": "c1", "weight": "must", "alt": ["no one on the marsh after dark", "not on the marsh after dark"] },
+        { "attr": "residents", "value": "Granny Ruth and Tobiah", "quote": "she had lived in the Salt House since the day she married", "ch": "c1", "weight": "nice", "alt": ["Granny Ruth", "Tobiah"] }
+      ],
+      "traps": [
+        { "attr": "description", "value": "walls sweated in wet weather", "why": "the back bedroom's" },
+        { "attr": "description", "value": "looks out over the marsh to the sea wall", "why": "the back bedroom's" },
+        { "attr": "description", "value": "fishing village", "why": "Saltby's" }
+      ]
+    },
+    {
+      "id": "the-back-bedroom", "name": "the back bedroom", "kind": "place", "aliases": ["back bedroom"], "weight": "nice", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "looks out over the marsh to the sea wall", "quote": "The back bedroom, which was mine, looked out over the marsh to the sea wall", "ch": "c1", "weight": "nice", "alt": ["over the marsh"] },
+        { "attr": "description", "value": "its walls sweat in wet weather", "quote": "its walls sweated in wet weather", "ch": "c1", "weight": "nice", "alt": ["walls sweated"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "saltby", "name": "Saltby", "kind": "place", "aliases": [], "weight": "should", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "a fishing village a mile off along the lane", "quote": "Saltby was a mile off along the lane, a fishing village with a chapel", "ch": "c1", "weight": "must", "alt": ["fishing village", "a mile off"] },
+        { "attr": "location.part", "value": "a chapel, a pub called the Anchor and a harbour", "quote": "a fishing village with a chapel, a pub called the Anchor and a harbour that dried out at low tide", "ch": "c1", "weight": "should", "alt": ["chapel", "the Anchor", "pub"] },
+        { "attr": "description", "value": "a harbour that dries out at low tide", "quote": "a harbour that dried out at low tide", "ch": "c1", "weight": "should", "alt": ["harbour dries out"] }
+      ],
+      "traps": [{ "attr": "description", "value": "brick, low and long", "why": "the Salt House" }]
+    },
+    {
+      "id": "the-anchor", "name": "the Anchor", "kind": "place", "aliases": ["Anchor"], "weight": "nice", "profile": false,
+      "facts": [{ "attr": "description", "value": "a pub in Saltby", "quote": "a pub called the Anchor", "ch": "c1", "weight": "nice", "alt": ["pub"] }],
+      "traps": []
+    },
+    {
+      "id": "wrack-lane", "name": "Wrack Lane", "kind": "place", "aliases": [], "weight": "nice", "profile": false,
+      "facts": [], "traps": []
+    }
+  ],
+  "keyPoints": [
+    { "ch": "c1", "who": ["granny-ruth", "nell"], "did": "Granny Ruth gave Nell bread and dripping the first evening", "quote": "put a plate of bread and dripping in front of me", "weight": "should" },
+    { "ch": "c2", "who": ["tobiah", "nell"], "did": "Tobiah showed Nell how to tie a bowline", "quote": "He sat at the table instead and showed me how to tie a bowline with his good hand.", "weight": "must" },
+    { "ch": "c2", "who": ["tobiah"], "did": "Tobiah came in off the marsh after midnight with a lantern", "quote": "From my window I saw Tobaiah coming in off the marsh with a lantern, wet to the knees, and Moss at his heels.", "weight": "must" },
+    { "ch": "c2", "who": ["granny-ruth"], "did": "Granny Ruth unpinned her hair and brushed it out", "quote": "Granny Ruth unpinned her black hair at the window and brushed it out", "weight": "nice" }
+  ],
+  "slips": [
+    { "ch": "c2", "kind": "kin", "entity": "tobiah", "attr": "relationship.kin", "sentence": "He was my father’s brother, and he had my father’s way of not looking at you when he was pleased.", "span": "father’s brother", "to": "mother’s brother", "against": { "ch": "c1", "quote": "He was my mother’s younger brother" }, "weight": "must" },
+    { "ch": "c2", "kind": "trait", "entity": "granny-ruth", "attr": "appearance.hair", "sentence": "Granny Ruth unpinned her black hair at the window and brushed it out, a hundred strokes, the way she did every night.", "span": "black", "to": "white", "against": { "ch": "c1", "quote": "white hair she wore in a knot" }, "weight": "must" },
+    { "ch": "c2", "kind": "name", "entity": "tobiah", "attr": "name", "sentence": "From my window I saw Tobaiah coming in off the marsh with a lantern, wet to the knees, and Moss at his heels.", "span": "Tobaiah", "to": "Tobiah", "weight": "must" }
+  ],
+  "decoys": [
+    { "ch": "c2", "sentence": "“I have never once been out on that marsh in the dark,” Tobiah said, when she had gone up.", "why": "a lie in dialogue: no fact, no slip" },
+    { "ch": "c2", "sentence": "In the morning the gulls were walking on the slate roof again, and the whole house smelt of coal smoke, and nobody said a word about the night.", "why": "agrees with Ch 1" },
+    { "ch": "c2", "sentence": "He sat at the table instead and showed me how to tie a bowline with his good hand.", "why": "agrees with the lost fingers" },
+    { "ch": "c1", "sentence": "My mother had told me the same thing in March, before I came, and she had been told it herself as a girl.", "why": "the girl is the narrator's mother" }
+  ],
+  "needs": []
+}

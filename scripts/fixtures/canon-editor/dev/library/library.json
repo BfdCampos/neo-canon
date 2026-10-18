@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-wh",
+      "name": "The Weighhouse",
+      "bookIds": [
+        "book-under-the-line-wh1"
+      ],
+      "canonId": "canon-the-weighhouse-shelf-wh"
+    }
+  ]
+}

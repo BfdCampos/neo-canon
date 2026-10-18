@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-gs",
+      "name": "The Gale Cases",
+      "bookIds": [
+        "book-gull-street-gs1"
+      ],
+      "canonId": "canon-gale-cases-shelf-gs"
+    }
+  ]
+}

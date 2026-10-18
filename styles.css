@@ -2169,7 +2169,7 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 .st-verified .cn-dot { background: #8a8478; border-color: #8a8478; }
 .st-yours .cn-dot { border-radius: 1px 50% 1px 50%; transform: rotate(45deg); background: var(--accent); border-color: var(--accent); }
 .st-disagree .cn-dot { background: linear-gradient(90deg, #8a8478 50%, transparent 50%); }
-.cn-fl { color: #8a8478; margin-right: 0.35em; }
+.cn-fl { color: #8a8478; margin-right: 0.35em; flex: none; white-space: nowrap; }
 .cn-ctl { margin-left: auto; display: flex; gap: 12px; opacity: 0; transition: opacity 0.12s; }
 .cn-fact:hover .cn-ctl, .cn-ctl:focus-within { opacity: 1; }
 .cn-src { margin: 2px 0 0 18px; font-size: 0.86em; color: #5f5a50; }
@@ -2184,6 +2184,23 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 .cn-words { min-height: 3em; outline: none; white-space: pre-wrap; }
 .cn-words:empty::before { content: attr(data-ph); color: #b9b4a8; font-style: italic; }
 .cn-src span.cn-where { text-decoration: none; }
+/* The profile (READING.md §4): Canon's few sentences, each source a small
+   number that opens its passage; a section heading per kind of fact */
+.cn-profile { margin: 4px 0 6px; }
+.cn-profile .cn-h { margin: 0 0 8px; }
+.cn-profile-head { align-items: baseline; }
+.cn-profile-head .cn-tag { margin-left: 10px; }
+.cn-profile:hover .cn-ctl, .cn-profile .cn-ctl:focus-within { opacity: 1; }
+.cn-profile-text { margin: 0; line-height: 1.65; }
+.cn-profile.st-note .cn-profile-text { opacity: 0.92; }
+.cn-cites { white-space: nowrap; }
+.cn-cite { background: none; border: none; padding: 0 1px; margin-left: 1px; font-size: 0.68em; vertical-align: super; line-height: 0; color: #9a9384; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.cn-cite:hover, .cn-cite:focus-visible { color: var(--accent); }
+.cn-h.cn-group { margin: 18px 0 8px; letter-spacing: 1.5px; font-size: 10.5px; opacity: 0.85; }
+/* a fact's controls lie over the end of its line on hover, so a long value
+   (an open fact: "the Spared were the ones born inside") keeps the width */
+.cn-fact > .cn-row { position: relative; }
+.cn-fact > .cn-row > .cn-ctl { position: absolute; right: 0; top: 0; padding-left: 28px; background: linear-gradient(to right, transparent, var(--paper) 24px); }
 
 /* A Continuity Pass: slips under a muted gold dotted line, never in the file */
 ::highlight(neo-slip) {

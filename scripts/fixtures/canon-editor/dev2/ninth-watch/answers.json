@@ -1,0 +1,147 @@
+{
+  "about": "dev2 · Ninth Watch (Halden Deep shelf). An institution under the ice; the lead named in full once and otherwise Nine (a number) or she; a second cadet known by a first name and a number (Ada, Fourteen); people called by surname only (Okafor, Voss), by rank, and by an epithet (the Old Woman); a rule told in dialogue. Ch 2 holds an eye-colour slip on the nickname and a misspelt surname; decoys: another's green eyes red from crying, a black beard grey in the light. Written by the builder for round 2.",
+  "set": "dev2/ninth-watch",
+  "shelf": "Halden Deep",
+  "book": "book-ninth-watch-hd1",
+  "chapters": { "c1": "Ch 1", "c2": "Ch 2" },
+  "notEntities": ["Commander", "Cadet", "Mr", "Someone", "Nobody", "She", "Her"],
+  "entities": [
+    {
+      "id": "teodora-kask", "name": "Teodora Kask", "kind": "person", "aliases": ["Nine", "Kask", "Cadet Kask", "Teodora"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "She was nineteen, narrow and quick", "ch": "c1", "weight": "must", "hard": true, "alt": ["she"] },
+        { "attr": "age", "value": "nineteen", "quote": "She was nineteen, narrow and quick", "ch": "c1", "weight": "must", "alt": ["19"] },
+        { "attr": "name", "value": "Nine, for three years, since she was issued bunk nine", "quote": "Teodora Kask had been Nine for three years", "ch": "c1", "weight": "must", "alt": ["Nine", "called Nine"] },
+        { "attr": "membership", "value": "a cadet", "quote": "since the morning they had issued her bunk nine in the cadet dormitory", "ch": "c1", "weight": "must", "also": ["“Cadet Kask,” said Okafor."], "alt": ["cadet"] },
+        { "attr": "appearance.build", "value": "narrow and quick", "quote": "She was nineteen, narrow and quick", "ch": "c1", "weight": "must", "alt": ["narrow", "quick"] },
+        { "attr": "appearance.hair", "value": "a shaved head", "quote": "with a shaved head and a burn scar across the back of her right hand", "ch": "c1", "weight": "must", "alt": ["shaved head", "shaved"] },
+        { "attr": "appearance.mark", "value": "a burn scar across the back of her right hand", "quote": "a burn scar across the back of her right hand", "ch": "c1", "weight": "must", "alt": ["burn scar", "scar on her right hand"] },
+        { "attr": "appearance.eyes", "value": "brown", "quote": "Her eyes were the brown of strong tea.", "ch": "c1", "weight": "must", "hard": true, "alt": ["brown of strong tea"] },
+        { "attr": "habit", "value": "always eats standing up", "quote": "She ate standing up, always", "ch": "c1", "weight": "should", "alt": ["eats standing up"] },
+        { "attr": "habit", "value": "never wastes a ration chit", "quote": "she never wasted a ration chit", "ch": "c1", "weight": "should", "alt": ["never wasted a ration chit"] },
+        { "attr": "relationship.friend", "value": "Ada, friends since their first week", "quote": "they had been friends since their first week", "ch": "c1", "weight": "should", "alt": ["Ada", "friend Ada"] },
+        { "attr": "history", "value": "had never been outside the station", "quote": "Nine had never been outside.", "ch": "c1", "weight": "should", "alt": ["never been outside"] },
+        { "attr": "location.home", "value": "bunk nine in the cadet dormitory", "quote": "they had issued her bunk nine in the cadet dormitory", "ch": "c1", "weight": "nice", "also": ["That night Nine lay in bunk nine and listened to the pumps"], "alt": ["bunk nine"] }
+      ],
+      "traps": [
+        { "attr": "appearance.eyes", "value": "green", "why": "Ada's, and Ch 2's slip" },
+        { "attr": "appearance.build", "value": "big, freckled", "why": "Ada's" },
+        { "attr": "name", "value": "Fourteen", "why": "Ada's number" },
+        { "attr": "age", "value": "sixty", "why": "Okafor's" },
+        { "attr": "origin", "value": "from the farm domes", "why": "Ada's" }
+      ]
+    },
+    {
+      "id": "ada", "name": "Ada", "kind": "person", "aliases": ["Fourteen"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "female", "quote": "a big freckled girl from the farm domes", "ch": "c1", "weight": "must", "hard": true, "alt": ["girl"] },
+        { "attr": "name", "value": "Fourteen", "quote": "Ada was Fourteen, a year below her", "ch": "c1", "weight": "must", "alt": ["called Fourteen"] },
+        { "attr": "membership", "value": "a cadet a year below Nine", "quote": "Ada was Fourteen, a year below her", "ch": "c1", "weight": "should", "alt": ["a year below", "cadet"] },
+        { "attr": "appearance.build", "value": "big and freckled", "quote": "a big freckled girl from the farm domes", "ch": "c1", "weight": "must", "alt": ["big", "freckled"] },
+        { "attr": "origin", "value": "from the farm domes", "quote": "a big freckled girl from the farm domes", "ch": "c1", "weight": "must", "alt": ["farm domes"] },
+        { "attr": "appearance.eyes", "value": "green", "quote": "with green eyes and a laugh you could hear two decks away", "ch": "c1", "weight": "must", "hard": true, "also": ["her green eyes were red from not sleeping"], "alt": ["green eyes"] },
+        { "attr": "personality", "value": "a laugh you could hear two decks away", "quote": "with green eyes and a laugh you could hear two decks away", "ch": "c1", "weight": "should", "alt": ["loud laugh", "laugh"] },
+        { "attr": "location.home", "value": "the bunk under Nine's", "quote": "Ada shared the bunk under hers", "ch": "c1", "weight": "nice", "alt": ["bunk under hers"] },
+        { "attr": "relationship.friend", "value": "Nine, friends since their first week", "quote": "they had been friends since their first week", "ch": "c1", "weight": "should", "alt": ["Nine", "Teodora Kask", "friend"] }
+      ],
+      "traps": [
+        { "attr": "appearance.eyes", "value": "brown", "why": "Nine's" },
+        { "attr": "appearance.eyes", "value": "red", "why": "red from not sleeping is no eye colour" },
+        { "attr": "appearance.hair", "value": "shaved head", "why": "Nine's" },
+        { "attr": "age", "value": "nineteen", "why": "Nine's" }
+      ]
+    },
+    {
+      "id": "okafor", "name": "Okafor", "kind": "person", "aliases": ["Commander Okafor", "the commander", "the Old Woman", "Commander"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "role", "value": "commander; runs Halden Deep", "quote": "Commander Okafor ran Halden Deep.", "ch": "c1", "weight": "must", "alt": ["commander", "runs Halden Deep"] },
+        { "attr": "sex", "value": "female", "quote": "She was a tall grey-haired woman of sixty", "ch": "c1", "weight": "must", "hard": true, "alt": ["woman"] },
+        { "attr": "appearance.height", "value": "tall", "quote": "She was a tall grey-haired woman of sixty", "ch": "c1", "weight": "must" },
+        { "attr": "appearance.hair", "value": "grey", "quote": "She was a tall grey-haired woman of sixty", "ch": "c1", "weight": "must", "hard": true, "alt": ["grey-haired"] },
+        { "attr": "age", "value": "sixty", "quote": "She was a tall grey-haired woman of sixty", "ch": "c1", "weight": "must", "alt": ["60"] },
+        { "attr": "history", "value": "has served on the ice for thirty years", "quote": "who had served on the ice for thirty years", "ch": "c1", "weight": "should", "alt": ["thirty years on the ice"] },
+        { "attr": "appearance.other", "value": "walks with a stick since the accident at Dock Three", "quote": "she walked with a stick since the accident at Dock Three", "ch": "c1", "weight": "must", "alt": ["walks with a stick", "stick"] },
+        { "attr": "name", "value": "the cadets call her the Old Woman", "quote": "The cadets called her the Old Woman, though never where she could hear.", "ch": "c1", "weight": "should", "alt": ["the Old Woman", "Old Woman"] }
+      ],
+      "traps": [
+        { "attr": "age", "value": "nineteen", "why": "Nine's" },
+        { "attr": "appearance.build", "value": "heavy", "why": "Voss's" }
+      ]
+    },
+    {
+      "id": "marek-voss", "name": "Marek Voss", "kind": "person", "aliases": ["Voss", "Mr Voss", "Marek"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "sex", "value": "male", "quote": "a heavy man with a black beard", "ch": "c1", "weight": "must", "hard": true, "alt": ["man"] },
+        { "attr": "occupation", "value": "the chief engineer", "quote": "Marek Voss was the chief engineer", "ch": "c1", "weight": "must", "alt": ["chief engineer", "engineer"] },
+        { "attr": "appearance.build", "value": "heavy", "quote": "a heavy man with a black beard", "ch": "c1", "weight": "must", "alt": ["heavy man"] },
+        { "attr": "appearance.face", "value": "a black beard", "quote": "a heavy man with a black beard", "ch": "c1", "weight": "must", "also": ["his black beard was flecked with grey in the instrument light"], "alt": ["black beard"] },
+        { "attr": "appearance.other", "value": "oil in every crease of his knuckles", "quote": "oil in every crease of his knuckles", "ch": "c1", "weight": "should", "alt": ["oily knuckles", "oil in his knuckles"] },
+        { "attr": "history", "value": "built half the pumps on the station with his own hands", "quote": "he had built half the pumps on the station with his own hands", "ch": "c1", "weight": "should", "alt": ["built half the pumps"] }
+      ],
+      "traps": [
+        { "attr": "appearance.hair", "value": "grey", "why": "Okafor's; his beard is only grey in the light" },
+        { "attr": "appearance.mark", "value": "burn scar", "why": "Nine's" }
+      ]
+    },
+    {
+      "id": "halden-deep", "name": "Halden Deep", "kind": "place", "aliases": ["the station"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "description", "value": "a research station sunk two hundred metres under the Vell ice shelf", "quote": "Halden Deep was a research station sunk two hundred metres under the Vell ice shelf.", "ch": "c1", "weight": "must", "alt": ["research station", "under the Vell ice shelf", "two hundred metres under the ice"] },
+        { "attr": "function", "value": "runs on geothermal heat and recycled air", "quote": "It ran on geothermal heat and recycled air", "ch": "c1", "weight": "should", "alt": ["geothermal heat", "recycled air"] },
+        { "attr": "residents", "value": "sixty-two people", "quote": "it held sixty-two people", "ch": "c1", "weight": "must", "alt": ["62 people", "holds sixty-two"] },
+        { "attr": "description", "value": "corridors painted the same pale green from end to end", "quote": "Its corridors were painted the same pale green from end to end", "ch": "c1", "weight": "should", "alt": ["pale green corridors"] },
+        { "attr": "atmosphere", "value": "the hum of the pumps never stops", "quote": "the hum of the pumps never stopped", "ch": "c1", "weight": "should", "alt": ["hum of the pumps"] },
+        { "attr": "routine", "value": "the klaxon for second shift goes at 0600 every day", "quote": "The klaxon for second shift went at 0600, as it did every day on Halden Deep", "ch": "c1", "weight": "must", "alt": ["klaxon at 0600", "second shift at 0600"] },
+        { "attr": "location.part", "value": "nine decks joined by the Spine", "quote": "the Spine, the long vertical shaft that joined all nine decks", "ch": "c1", "weight": "should", "alt": ["nine decks"] },
+        { "attr": "rule", "value": "no one leaves the station alone, and no one stays out past four hours", "quote": "no one leaves the station alone, and no one stays out past four hours", "ch": "c1", "weight": "should", "said": true }
+      ],
+      "traps": [
+        { "attr": "description", "value": "cold steel hangar", "why": "Dock Three's" },
+        { "attr": "atmosphere", "value": "smells of oil and seawater", "why": "Dock Three's" }
+      ]
+    },
+    {
+      "id": "dock-three", "name": "Dock Three", "kind": "place", "aliases": [], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "function", "value": "the station's only way out", "quote": "Dock Three was the station’s only way out.", "ch": "c1", "weight": "must", "alt": ["only way out"] },
+        { "attr": "description", "value": "a cold steel hangar at the bottom of the Spine", "quote": "It was a cold steel hangar at the bottom of the Spine", "ch": "c1", "weight": "must", "alt": ["cold steel hangar", "bottom of the Spine"] },
+        { "attr": "atmosphere", "value": "smells of oil and seawater", "quote": "it smelt of oil and seawater", "ch": "c1", "weight": "should", "alt": ["oil and seawater"] },
+        { "attr": "description", "value": "two submersibles hang in cradles over the moon pool", "quote": "Two submersibles hung in cradles over the moon pool.", "ch": "c1", "weight": "should", "alt": ["two submersibles", "moon pool"] },
+        { "attr": "history", "value": "Okafor's accident happened there", "quote": "she walked with a stick since the accident at Dock Three", "ch": "c1", "weight": "nice", "alt": ["the accident"] }
+      ],
+      "traps": [{ "attr": "description", "value": "pale green corridors", "why": "the station's" }]
+    },
+    {
+      "id": "the-spine", "name": "the Spine", "kind": "place", "aliases": ["Spine"], "weight": "should", "profile": false,
+      "facts": [{ "attr": "description", "value": "the long vertical shaft that joins all nine decks", "quote": "the Spine, the long vertical shaft that joined all nine decks", "ch": "c1", "weight": "must", "alt": ["vertical shaft", "joins all nine decks"] }],
+      "traps": [{ "attr": "description", "value": "cold steel hangar", "why": "Dock Three's" }]
+    },
+    {
+      "id": "the-petrel", "name": "the Petrel", "kind": "thing", "aliases": ["Petrel"], "weight": "should", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "cramped and loud", "quote": "The Petrel was cramped and loud", "ch": "c2", "weight": "should", "alt": ["cramped", "loud"] },
+        { "attr": "atmosphere", "value": "smells of Voss's coffee", "quote": "it smelt of Voss’s coffee", "ch": "c2", "weight": "nice", "alt": ["coffee"] }
+      ],
+      "traps": []
+    },
+    { "id": "the-galley", "name": "the galley", "kind": "place", "aliases": ["galley"], "weight": "nice", "profile": false, "facts": [], "traps": [] },
+    { "id": "vell-ice-shelf", "name": "the Vell ice shelf", "kind": "place", "aliases": ["Vell"], "weight": "nice", "profile": false, "facts": [], "traps": [] }
+  ],
+  "keyPoints": [
+    { "ch": "c1", "who": ["okafor", "teodora-kask", "marek-voss"], "did": "Okafor sent Nine down to the north vent in the Petrel with Voss", "quote": "You will take the Petrel down to the north vent with Mr Voss.", "weight": "should" },
+    { "ch": "c1", "who": ["teodora-kask"], "did": "Nine said yes before her voice could shake", "quote": "She said yes, Commander, before her voice could shake.", "weight": "must" },
+    { "ch": "c2", "who": ["teodora-kask", "marek-voss"], "did": "Nine and Voss came back through Dock Three with eleven minutes to spare", "quote": "They came back through Dock Three with eleven minutes to spare.", "weight": "must" },
+    { "ch": "c2", "who": ["ada"], "did": "Ada waited at the top of the Spine with two mugs", "quote": "Ada was waiting at the top of the Spine with two mugs", "weight": "should" }
+  ],
+  "slips": [
+    { "ch": "c2", "kind": "trait", "entity": "teodora-kask", "attr": "appearance.eyes", "sentence": "Nine rubbed her green eyes and tried to read the depth gauge.", "span": "green", "to": "brown", "against": { "ch": "c1", "quote": "Her eyes were the brown of strong tea." }, "weight": "must" },
+    { "ch": "c2", "kind": "name", "entity": "okafor", "attr": "name", "sentence": "Commander Okafur’s voice came over the radio at the second hour, calm and dry, asking for a reading.", "span": "Okafur", "to": "Okafor", "weight": "must" }
+  ],
+  "decoys": [
+    { "ch": "c2", "sentence": "Voss whistled through his teeth, steering with one hand; his black beard was flecked with grey in the instrument light.", "why": "the beard is still black; grey only in the light" },
+    { "ch": "c2", "sentence": "Ada was waiting at the top of the Spine with two mugs, and her green eyes were red from not sleeping.", "why": "red from not sleeping is no eye colour; green agrees" },
+    { "ch": "c2", "sentence": "“The Old Woman likes you,” Voss said.", "why": "the epithet in speech" },
+    { "ch": "c2", "sentence": "That night Nine lay in bunk nine and listened to the pumps, and for once she did not mind the hum.", "why": "agrees" }
+  ],
+  "needs": []
+}

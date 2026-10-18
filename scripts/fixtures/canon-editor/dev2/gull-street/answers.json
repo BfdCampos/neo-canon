@@ -1,0 +1,120 @@
+{
+  "about": "dev2 · Gull Street (The Gale Cases shelf). Dialogue-heavy crime: a suspect's lies in curly and straight quotes, his age in reported speech against his file, a single-quoted confession, a witness's age said otherwise by a hedge. Ch 2 holds a kin slip (brother → cousin) and an age slip in narration; decoys: the lies, the hedge, the one exception told as one, and \"He’s\" in speech. Written by the builder for round 2.",
+  "set": "dev2/gull-street",
+  "shelf": "The Gale Cases",
+  "book": "book-gull-street-gs1",
+  "chapters": { "c1": "Ch 1", "c2": "Ch 2" },
+  "notEntities": ["Inspector", "Ask", "Nobody", "Detective", "Ford", "Harbour"],
+  "entities": [
+    {
+      "id": "rhona-gale", "name": "Rhona Gale", "kind": "person", "aliases": ["Gale", "Detective Inspector Rhona Gale", "Inspector", "Rhona", "Detective Inspector Gale"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "role", "value": "Detective Inspector, Harbour division, for nine years", "quote": "Detective Inspector Rhona Gale had worked the Harbour division for nine years", "ch": "c1", "weight": "must", "alt": ["Detective Inspector", "inspector", "detective"] },
+        { "attr": "history", "value": "never once late for an interview", "quote": "had never once been late for an interview", "ch": "c1", "weight": "should", "alt": ["never late"] },
+        { "attr": "sex", "value": "female", "quote": "She was a square, sandy-haired woman of forty-four", "ch": "c1", "weight": "must", "hard": true, "alt": ["woman"] },
+        { "attr": "appearance.build", "value": "square", "quote": "She was a square, sandy-haired woman of forty-four", "ch": "c1", "weight": "must" },
+        { "attr": "appearance.hair", "value": "sandy", "quote": "She was a square, sandy-haired woman of forty-four", "ch": "c1", "weight": "must", "alt": ["sandy-haired"] },
+        { "attr": "age", "value": "forty-four", "quote": "She was a square, sandy-haired woman of forty-four", "ch": "c1", "weight": "must", "alt": ["44"] },
+        { "attr": "appearance.clothing", "value": "the same navy raincoat in every weather", "quote": "wore the same navy raincoat in every weather", "ch": "c1", "weight": "must", "alt": ["navy raincoat"] },
+        { "attr": "habit", "value": "takes her tea black", "quote": "took her tea black", "ch": "c1", "weight": "should", "alt": ["tea black", "black tea"] },
+        { "attr": "habit", "value": "keeps a pencil behind her ear and never uses it", "quote": "She kept a pencil behind her ear and never used it.", "ch": "c1", "weight": "should", "alt": ["pencil behind her ear"] },
+        { "attr": "personality", "value": "lets suspects talk", "quote": "Gale let him talk.", "ch": "c1", "weight": "nice", "alt": ["patient"] }
+      ],
+      "traps": [
+        { "attr": "age", "value": "seventy-three", "why": "Mrs Peake's" },
+        { "attr": "appearance.build", "value": "thin", "why": "Danny's" },
+        { "attr": "habit", "value": "wrote something down", "why": "once, the exception" }
+      ]
+    },
+    {
+      "id": "danny-fell", "name": "Danny Fell", "kind": "person", "aliases": ["Danny", "Daniel Fell", "Fell"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "age", "value": "twenty-six", "quote": "He was twenty-six, by his file", "ch": "c1", "weight": "must", "alt": ["26"] },
+        { "attr": "sex", "value": "male", "quote": "a thin lad with a shaved head", "ch": "c1", "weight": "must", "hard": true, "alt": ["lad", "man"] },
+        { "attr": "appearance.build", "value": "thin", "quote": "a thin lad with a shaved head", "ch": "c1", "weight": "must", "alt": ["thin lad"] },
+        { "attr": "appearance.hair", "value": "a shaved head", "quote": "a thin lad with a shaved head", "ch": "c1", "weight": "must", "alt": ["shaved head", "shaved"] },
+        { "attr": "appearance.other", "value": "a gold ring in one ear", "quote": "a gold ring in one ear", "ch": "c1", "weight": "must", "alt": ["gold earring", "gold ring"] },
+        { "attr": "occupation", "value": "works nights at the bottling plant on Quay Road", "quote": "he worked nights at the bottling plant on Quay Road", "ch": "c1", "weight": "must", "alt": ["bottling plant", "works nights"] },
+        { "attr": "relationship.kin", "value": "brother of Kieran", "quote": "His brother Kieran had been in the same room last spring.", "ch": "c1", "weight": "must", "alt": ["Kieran", "brother Kieran"] },
+        { "attr": "possession", "value": "a silver Ford Focus", "quote": "it was registered to Daniel Fell of Mercer Row", "ch": "c1", "weight": "must", "also": ["The car outside 14 Gull Street on the night of the fire had been a silver Ford Focus"], "alt": ["silver Ford Focus", "Ford Focus", "car"] },
+        { "attr": "location.home", "value": "Mercer Row", "quote": "it was registered to Daniel Fell of Mercer Row", "ch": "c1", "weight": "should", "alt": ["of Mercer Row"] },
+        { "attr": "history", "value": "was at his mum's all night", "quote": "“I was at my mum’s all night,” Danny said", "ch": "c1", "weight": "nice", "said": true },
+        { "attr": "possession", "value": "does not own a car", "quote": "“I don’t even own a car,” he said.", "ch": "c1", "weight": "nice", "said": true },
+        { "attr": "age", "value": "thirty-one", "quote": "he was thirty-one, not twenty-six, and could prove it", "ch": "c1", "weight": "nice", "said": true }
+      ],
+      "traps": [
+        { "attr": "age", "value": "twenty-nine", "why": "Ch 2's slip" },
+        { "attr": "relationship.kin", "value": "cousin of Kieran", "why": "Ch 2's slip" },
+        { "attr": "appearance.build", "value": "square", "why": "Gale's" },
+        { "attr": "age", "value": "seventy-three", "why": "Mrs Peake's" }
+      ]
+    },
+    {
+      "id": "kieran", "name": "Kieran", "kind": "person", "aliases": [], "weight": "should", "profile": false,
+      "facts": [
+        { "attr": "relationship.kin", "value": "Danny Fell's brother", "quote": "His brother Kieran had been in the same room last spring.", "ch": "c1", "weight": "must", "alt": ["Danny", "Danny Fell", "brother"] },
+        { "attr": "sex", "value": "male", "quote": "His brother Kieran had been in the same room last spring.", "ch": "c1", "weight": "should", "hard": true, "alt": ["brother"] },
+        { "attr": "history", "value": "was in the same interview room last spring", "quote": "His brother Kieran had been in the same room last spring.", "ch": "c1", "weight": "should", "alt": ["in the same room last spring"] },
+        { "attr": "history", "value": "a record for arson, two counts, both on Quay Road", "quote": "Danny’s cousin Kieran had a record for arson, two counts, both on Quay Road.", "ch": "c2", "weight": "should", "alt": ["record for arson", "arson"] }
+      ],
+      "traps": [{ "attr": "relationship.kin", "value": "cousin", "why": "Ch 2's slip" }]
+    },
+    {
+      "id": "agnes-peake", "name": "Agnes Peake", "kind": "person", "aliases": ["Mrs Peake", "Mrs Agnes Peake", "Agnes"], "weight": "must", "profile": true,
+      "facts": [
+        { "attr": "age", "value": "seventy-three", "quote": "Mrs Peake was seventy-three", "ch": "c1", "weight": "must", "alt": ["73"] },
+        { "attr": "sex", "value": "female", "quote": "She sat very upright in a wing chair with a tartan rug on her knees.", "ch": "c2", "weight": "should", "hard": true, "alt": ["she"] },
+        { "attr": "location.home", "value": "has lived on Gull Street all her life", "quote": "had lived on Gull Street all her life", "ch": "c1", "weight": "must", "alt": ["Gull Street"] },
+        { "attr": "role", "value": "a neighbour who saw the car there at ten", "quote": "A neighbour, Mrs Agnes Peake, had seen it there at ten.", "ch": "c1", "weight": "should", "alt": ["neighbour", "witness"] },
+        { "attr": "personality", "value": "never forgets a car", "quote": "she told Gale that she never forgot a car", "ch": "c1", "weight": "nice", "said": true },
+        { "attr": "appearance.other", "value": "sits very upright", "quote": "She sat very upright in a wing chair", "ch": "c2", "weight": "nice", "alt": ["upright"] }
+      ],
+      "traps": [
+        { "attr": "age", "value": "eighty", "why": "she only looked it" },
+        { "attr": "appearance.other", "value": "blind as a bat", "why": "Danny's claim" },
+        { "attr": "age", "value": "forty-four", "why": "Gale's" }
+      ]
+    },
+    {
+      "id": "gull-street", "name": "Gull Street", "kind": "place", "aliases": [], "weight": "should", "profile": false,
+      "facts": [{ "attr": "history", "value": "a fire at number 14", "quote": "The car outside 14 Gull Street on the night of the fire had been a silver Ford Focus", "ch": "c1", "weight": "should", "alt": ["fire", "number 14"] }],
+      "traps": []
+    },
+    {
+      "id": "the-interview-room", "name": "the interview room", "kind": "place", "aliases": ["interview room"], "weight": "should", "profile": false,
+      "facts": [
+        { "attr": "description", "value": "no window", "quote": "The interview room at Harbour Street station had no window.", "ch": "c1", "weight": "must", "alt": ["windowless"] },
+        { "attr": "description", "value": "a table bolted to the floor, three plastic chairs and a radiator that clanks", "quote": "It had a table bolted to the floor, three plastic chairs and a radiator that clanked", "ch": "c1", "weight": "should", "alt": ["table bolted to the floor", "three plastic chairs", "radiator"] },
+        { "attr": "atmosphere", "value": "smells of instant coffee", "quote": "it smelt of instant coffee", "ch": "c1", "weight": "should", "alt": ["instant coffee"] }
+      ],
+      "traps": []
+    },
+    {
+      "id": "quay-road", "name": "Quay Road", "kind": "place", "aliases": [], "weight": "nice", "profile": false,
+      "facts": [{ "attr": "location.part", "value": "the bottling plant", "quote": "the bottling plant on Quay Road", "ch": "c1", "weight": "nice", "alt": ["bottling plant"] }],
+      "traps": []
+    },
+    { "id": "mercer-row", "name": "Mercer Row", "kind": "place", "aliases": [], "weight": "nice", "profile": false, "facts": [], "traps": [] },
+    { "id": "harbour-street-station", "name": "Harbour Street station", "kind": "place", "aliases": ["Harbour Street"], "weight": "nice", "profile": false, "facts": [], "traps": [] }
+  ],
+  "keyPoints": [
+    { "ch": "c1", "who": ["agnes-peake"], "did": "Mrs Peake saw the silver Focus on Gull Street at ten", "quote": "A neighbour, Mrs Agnes Peake, had seen it there at ten.", "weight": "should" },
+    { "ch": "c1", "who": ["rhona-gale"], "did": "Gale opened the folder", "quote": "Gale opened the folder.", "weight": "nice" },
+    { "ch": "c2", "who": ["danny-fell", "rhona-gale"], "did": "Danny Fell asked to speak to Gale", "quote": "asked to speak to her", "weight": "must" },
+    { "ch": "c2", "who": ["rhona-gale"], "did": "Gale wrote something down with the pencil from behind her ear", "quote": "Gale took the pencil from behind her ear and, for the first time anyone could remember, wrote something down.", "weight": "must" },
+    { "ch": "c2", "who": ["agnes-peake"], "did": "Agnes Peake poured the tea with a steady hand", "quote": "poured the tea with a steady hand", "weight": "nice" }
+  ],
+  "slips": [
+    { "ch": "c2", "kind": "kin", "entity": "danny-fell", "attr": "relationship.kin", "sentence": "Danny’s cousin Kieran had a record for arson, two counts, both on Quay Road.", "span": "cousin", "to": "brother", "against": { "ch": "c1", "quote": "His brother Kieran had been in the same room last spring." }, "weight": "must" },
+    { "ch": "c2", "kind": "open", "entity": "danny-fell", "attr": "age", "sentence": "At six o’clock Danny Fell, all twenty-nine years of him, asked to speak to her.", "span": "twenty-nine", "to": "twenty-six", "against": { "ch": "c1", "quote": "He was twenty-six, by his file" }, "weight": "must" }
+  ],
+  "decoys": [
+    { "ch": "c2", "sentence": "Agnes Peake, who looked eighty if she was a day, poured the tea with a steady hand.", "why": "how she looks, not her age" },
+    { "ch": "c2", "sentence": "Gale took the pencil from behind her ear and, for the first time anyone could remember, wrote something down.", "why": "the exception, told as one" },
+    { "ch": "c1", "sentence": "He told her that the old woman was blind as a bat and that he was thirty-one, not twenty-six, and could prove it.", "why": "a lie in reported speech" },
+    { "ch": "c1", "sentence": "“I don’t even own a car,” he said.", "why": "a lie in dialogue" },
+    { "ch": "c2", "sentence": "“He’s a good boy, really,” she said.", "why": "speech; the contraction that crashed the swap" },
+    { "ch": "c2", "sentence": "He was sitting with his head in his hands, and he said, without looking up, ‘I was there. I didn’t start it. I went to get Kieran out.’", "why": "a confession in single quotes" }
+  ],
+  "needs": []
+}

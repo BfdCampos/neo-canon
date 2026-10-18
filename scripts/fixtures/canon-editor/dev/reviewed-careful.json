@@ -1,0 +1,15 @@
+{
+ "_about": "Judged by the builder (Claude), not the evaluation lead, for the Careful dev run in READING.md §11: a kept fact not on the sheet is true when its label and value hold of that entity in the text (a scene detail counts); wrong when it says what the text does not, or calls one moment a habit.",
+ "coll|position|already in the line": true,
+ "coll|relationship|was the nearest thing she had to a friend": true,
+ "the gift|effect on health|coll had been sick on it for three": true,
+ "hesper|condition|had known since yesterday": true,
+ "hesper|condition|up before last stroke": true,
+ "hesper|possession|a pocket": true,
+ "hesper|condition|heart going like a bird's": true,
+ "the ledger|appearance|a red one": false,
+ "the long room|rule|nobody allowed slippers before weighing": true,
+ "the mountain|location|seen through infirmary window": true,
+ "spared|habit|drank grey thick chalky drink every morning": true,
+ "the yard|relative position|past the infirmary": true
+}

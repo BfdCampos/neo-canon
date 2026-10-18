@@ -1,0 +1,17 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-li",
+      "name": "Lisle",
+      "bookIds": [
+        "book-lisle-notes-li0",
+        "book-the-orchard-li1"
+      ],
+      "canonId": "canon-lisle-shelf-li"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-hd",
+      "name": "Halden Deep",
+      "bookIds": [
+        "book-ninth-watch-hd1"
+      ],
+      "canonId": "canon-halden-deep-shelf-hd"
+    }
+  ]
+}
