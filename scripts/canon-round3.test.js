@@ -263,3 +263,19 @@ test('a notebook\'s colour against "a tall woman with … grey eyes": the notes 
     assert.ok(slips.some((s) => s.name === 'Mara Venn' && s.span === 'grey' && s.to === 'brown'), slips.map((s) => s.span).join(', '));
   } finally { fs.rmSync(S.root, { recursive: true, force: true }); }
 });
+
+test('what is said: a tag after a quotation reports nothing past it; the narrator\'s "would never have said out loud" and "Nobody said" report nothing', () => {
+  const t1 = '"You are slow tonight," said Tobias, coming down to meet her with a taper in each fist.';
+  assert.deepEqual(Canon.reportedSpans(t1), []);
+  assert.deepEqual(Canon.reportedSpans('Wren was proud of that in a way she would never have said out loud.'), []);
+  assert.deepEqual(Canon.reportedSpans('Nobody said what happened in the valley.'), []);
+  // what is reported still is
+  assert.equal(Canon.reportedSpans('Tom said Pip was a gelding.').length, 1);
+});
+
+test('a profile opens with whom it is about, and the rest of the page agrees: QA\'s reader on QA\'s chapter', async () => {
+  const reader = Canon.fakeReader(JSON.parse(fs.readFileSync(path.join(QA, 'reader-answers.json'), 'utf8')));
+  const { entries } = await readWith(path.join(QA, 'library'), reader);
+  const mara = entry(entries, 'Mara Venn');
+  assert.ok(mara.profile && /^Mara Venn /.test(mara.profile.text), mara.profile && mara.profile.text);
+});

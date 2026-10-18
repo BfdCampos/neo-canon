@@ -805,8 +805,12 @@ module.exports = function canonEditor(C) {
         const r = refs.get(s.id) || { keys: new Set(), weak: new Set() };
         const livingSubject = /^[\s“"‘']*(?:(?:then|and|but|so|now|later|still)\s+)?(?:he|she|i|we|you)\b/i.test(s.text) || [...p.refs.entries()].some(([at, x]) => at >= s.start && at < s.end && x.strong && living(x.key) && /^(?:he|she)$/i.test(p.text.slice(at, at + 3).trim())) || (() => { const f = here.filter((h) => !talk(h.start, h.end))[0]; return !!f && living(f.key) && !isObj(f) && !/['’]s$/.test(p.text.slice(f.end, f.end + 2)); })();
         if (!living(c.key)) {
+          // (a place becomes the topic as a subject; only after a preposition when there is none yet;
+          // someone living as the subject ends it — "She was thirty-four…", then "A white scar ran through her…")
           const places = here.filter((h) => !talk(h.start, h.end) && byKey.has(h.key) && !living(h.key));
-          if (places.length) topic = livingSubject ? null : (places.find((h) => !isObj(h)) || places[places.length - 1]).key;
+          const personal = [...p.refs.entries()].some(([at, x]) => at >= s.start && at < s.end && x.strong && living(x.key));
+          if (livingSubject || (personal && !places.some((h) => !isObj(h)))) topic = null;
+          else if (places.length) { const sub = places.find((h) => !isObj(h)); if (sub) topic = sub.key; else if (topic == null) topic = places[places.length - 1].key; }
         }
         if (here.some((h) => h.key === c.key)) {
           add(s, 'name');

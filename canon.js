@@ -3313,7 +3313,9 @@
                 if (!refs.includes(c.n)) refs.push(c.n);
               }
               if (!refs.length) continue;
-              lines.push(`${t} ${refs.map((n) => `[${n}]`).join('')}.`);
+              // (round 3: a profile opens with whom it is about, never "She was born…")
+              const lead = !lines.length && /^(?:He|She|It|They)\s/.test(t) && e.name ? (/^the\s/i.test(e.name) ? e.name[0].toUpperCase() + e.name.slice(1) : e.name) + t.replace(/^\S+/, '') : t;
+              lines.push(`${lead} ${refs.map((n) => `[${n}]`).join('')}.`);
             }
             e.profile = lines.length ? { text: lines.join(' '), cites, state: 'note' } : (e.profile && e.profile.state === 'note' ? null : e.profile);
           }
