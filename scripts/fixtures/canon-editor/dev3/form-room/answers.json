@@ -1,0 +1,528 @@
+{
+  "about": "dev3 · The Form Room (round 4, written for the third held-out brief’s types): the writer’s notebook (Aldhelm Notes: People) says chemistry and Year Ten, the prose biology and Year Eleven: both Which is right?; a letter read out with no quotation marks (Dear … Yours in faith) claims the school never closed, the narration says it closed twice; Ch 2 gives the Great Hall’s assembly another time, the science block another neighbour (both may hold: worth a look at most) and Mr Wilde’s cedar to Hester; a moment of fury.",
+  "set": "dev3/form-room",
+  "shelf": "Saint Aldhelm’s",
+  "book": "book-the-form-room-fr1",
+  "chapters": {
+    "n1": "People",
+    "c1": "Ch 1",
+    "c2": "Ch 2"
+  },
+  "notEntities": [
+    "September",
+    "Dear",
+    "Yours",
+    "That"
+  ],
+  "entities": [
+    {
+      "id": "hester",
+      "name": "Hester Pell",
+      "kind": "person",
+      "aliases": [
+        "Hester",
+        "Miss Pell"
+      ],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "occupation",
+          "value": "teaches biology at Saint Aldhelm’s",
+          "quote": "Hester Pell taught biology at Saint Aldhelm’s",
+          "ch": "c1",
+          "weight": "must",
+          "also": [
+            "Miss Pell taught biology to Year Eleven, as she had for six years."
+          ],
+          "alt": [
+            "biology",
+            "teaches biology",
+            "taught biology"
+          ]
+        },
+        {
+          "attr": "age",
+          "value": "thirty-one",
+          "quote": "She was thirty-one",
+          "ch": "c1",
+          "weight": "must",
+          "also": [
+            "Thirty-one."
+          ],
+          "alt": [
+            "31"
+          ]
+        },
+        {
+          "attr": "role",
+          "value": "form tutor to Year Eleven since September",
+          "quote": "she had been form tutor to Year Eleven since September",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "form tutor to Year Eleven",
+            "form tutor",
+            "Year Eleven"
+          ]
+        },
+        {
+          "attr": "location",
+          "value": "the old laboratory at the top of the science block",
+          "quote": "in the old laboratory at the top of the science block",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "old laboratory",
+            "the science block"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "female",
+          "quote": "Miss Pell taught biology to Year Eleven",
+          "ch": "c2",
+          "weight": "should",
+          "hard": true,
+          "alt": [
+            "she",
+            "Miss"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "personality",
+          "value": "furious",
+          "alt": [
+            "furious, with her arms folded",
+            "arms folded"
+          ],
+          "why": "one moment"
+        },
+        {
+          "attr": "history",
+          "value": "planted the cedar on the front lawn",
+          "alt": [
+            "planted the cedar"
+          ],
+          "why": "Mr Wilde did: Ch 2’s slip"
+        }
+      ]
+    },
+    {
+      "id": "wilde",
+      "name": "Jonah Wilde",
+      "kind": "person",
+      "aliases": [
+        "Mr Wilde"
+      ],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "role",
+          "value": "deputy head",
+          "quote": "Jonah Wilde: deputy head, sixty, bald, walks with a cane.",
+          "ch": "n1",
+          "weight": "must",
+          "alt": [
+            "the deputy head"
+          ]
+        },
+        {
+          "attr": "age",
+          "value": "sixty",
+          "quote": "Jonah Wilde was sixty, bald, and walked with a cane.",
+          "ch": "c1",
+          "weight": "must",
+          "also": [
+            "Jonah Wilde: deputy head, sixty, bald, walks with a cane."
+          ],
+          "alt": [
+            "60"
+          ]
+        },
+        {
+          "attr": "appearance.hair",
+          "value": "bald",
+          "quote": "Jonah Wilde was sixty, bald, and walked with a cane.",
+          "ch": "c1",
+          "weight": "must",
+          "also": [
+            "Jonah Wilde: deputy head, sixty, bald, walks with a cane."
+          ],
+          "alt": []
+        },
+        {
+          "attr": "appearance.other",
+          "value": "walks with a cane",
+          "quote": "Jonah Wilde was sixty, bald, and walked with a cane.",
+          "ch": "c1",
+          "weight": "must",
+          "also": [
+            "Jonah Wilde: deputy head, sixty, bald, walks with a cane."
+          ],
+          "alt": [
+            "a cane",
+            "cane",
+            "walked with a cane"
+          ]
+        },
+        {
+          "attr": "history",
+          "value": "planted the cedar on the front lawn the year the school reopened after the war",
+          "quote": "Mr Wilde had planted the cedar on the front lawn the year the school reopened after the war.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "planted the cedar on the front lawn",
+            "planted the cedar"
+          ]
+        },
+        {
+          "attr": "habit",
+          "value": "never raises his voice",
+          "quote": "Mr Wilde, who never raised his voice",
+          "ch": "c2",
+          "weight": "should",
+          "alt": [
+            "never raised his voice"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "male",
+          "quote": "Mr Wilde had planted the cedar",
+          "ch": "c1",
+          "weight": "should",
+          "hard": true,
+          "alt": [
+            "Mr",
+            "he"
+          ]
+        }
+      ],
+      "traps": []
+    },
+    {
+      "id": "aldhelm",
+      "name": "Saint Aldhelm’s",
+      "kind": "place",
+      "aliases": [],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "description",
+          "value": "a girls’ school on the edge of Wexcombe",
+          "quote": "Saint Aldhelm’s: a girls’ school on the edge of Wexcombe.",
+          "ch": "n1",
+          "weight": "must",
+          "alt": [
+            "a girls’ school",
+            "girls’ school",
+            "on the edge of Wexcombe"
+          ]
+        },
+        {
+          "attr": "history",
+          "value": "founded in 1846 by the Fane sisters",
+          "quote": "Saint Aldhelm’s had been founded in 1846 by the Fane sisters",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "founded in 1846",
+            "founded by the Fane sisters"
+          ]
+        },
+        {
+          "attr": "history",
+          "value": "closed twice, once for the cholera and once for the war",
+          "quote": "it had closed twice: once for the cholera and once for the war",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "closed twice"
+          ]
+        },
+        {
+          "attr": "history",
+          "value": "has stood for two hundred years and never once closed its doors",
+          "quote": "Saint Aldhelm’s has stood for two hundred years and has never once closed its doors",
+          "ch": "c1",
+          "weight": "nice",
+          "said": true,
+          "alt": [
+            "never once closed its doors",
+            "stood for two hundred years"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "history",
+          "value": "never once closed its doors",
+          "alt": [
+            "has never closed",
+            "stood for two hundred years"
+          ],
+          "why": "only the bishop’s letter says so, and the narration says otherwise"
+        }
+      ]
+    },
+    {
+      "id": "science-block",
+      "name": "the science block",
+      "kind": "place",
+      "aliases": [],
+      "weight": "must",
+      "profile": false,
+      "facts": [
+        {
+          "attr": "location",
+          "value": "next to the chapel",
+          "quote": "The science block stood next to the chapel",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "beside the chapel"
+          ]
+        },
+        {
+          "attr": "description",
+          "value": "a red-brick building with green doors",
+          "quote": "a red-brick building with green doors",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "red-brick",
+            "red-brick building",
+            "green doors"
+          ]
+        },
+        {
+          "attr": "state",
+          "value": "locked since the fire",
+          "quote": "had been locked since the fire",
+          "ch": "c2",
+          "weight": "should",
+          "alt": [
+            "locked"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "location",
+          "value": "next to the sports hall",
+          "alt": [
+            "the sports hall"
+          ],
+          "why": "Ch 2 says otherwise (it may be both)"
+        }
+      ]
+    },
+    {
+      "id": "great-hall",
+      "name": "the Great Hall",
+      "kind": "place",
+      "aliases": [],
+      "weight": "must",
+      "profile": false,
+      "facts": [
+        {
+          "attr": "routine",
+          "value": "assembly at ten to nine every morning",
+          "quote": "Assembly in the Great Hall was at ten to nine every morning",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "ten to nine every morning",
+            "assembly every morning at ten to nine"
+          ]
+        },
+        {
+          "attr": "location",
+          "value": "under the clock tower",
+          "quote": "under the clock tower",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "clock tower"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "routine",
+          "value": "assembly at half past eight every morning",
+          "alt": [
+            "half past eight"
+          ],
+          "why": "Ch 2’s slip"
+        }
+      ]
+    },
+    {
+      "id": "crane",
+      "name": "Bishop Crane",
+      "kind": "person",
+      "aliases": [],
+      "weight": "should",
+      "profile": false,
+      "facts": [
+        {
+          "attr": "role",
+          "value": "Bishop of Wexcombe",
+          "quote": "Bishop Crane of Wexcombe",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "bishop"
+          ]
+        }
+      ],
+      "traps": []
+    },
+    {
+      "id": "cedar",
+      "name": "the cedar",
+      "kind": "thing",
+      "aliases": [],
+      "weight": "nice",
+      "profile": false,
+      "facts": [
+        {
+          "attr": "location",
+          "value": "on the front lawn",
+          "quote": "Mr Wilde had planted the cedar on the front lawn the year the school reopened after the war.",
+          "ch": "c1",
+          "weight": "nice",
+          "alt": [
+            "front lawn"
+          ]
+        }
+      ],
+      "traps": []
+    },
+    {
+      "id": "fane",
+      "name": "the Fane sisters",
+      "kind": "group",
+      "aliases": [],
+      "weight": "nice",
+      "profile": false,
+      "facts": []
+    },
+    {
+      "id": "wexcombe",
+      "name": "Wexcombe",
+      "kind": "place",
+      "aliases": [],
+      "weight": "nice",
+      "profile": false,
+      "facts": []
+    }
+  ],
+  "keyPoints": [
+    {
+      "ch": "c1",
+      "who": [
+        "wilde"
+      ],
+      "did": "Mr Wilde read out a letter from the bishop",
+      "quote": "That morning Mr Wilde read out a letter from the bishop.",
+      "weight": "should"
+    },
+    {
+      "ch": "c1",
+      "who": [
+        "wilde"
+      ],
+      "did": "Mr Wilde planted the cedar on the front lawn",
+      "quote": "Mr Wilde had planted the cedar on the front lawn the year the school reopened after the war.",
+      "weight": "must"
+    }
+  ],
+  "slips": [
+    {
+      "ch": "c2",
+      "kind": "open",
+      "entity": "great-hall",
+      "attr": "routine",
+      "sentence": "Assembly in the Great Hall was at half past eight, as it was every morning, and Hester was late for it.",
+      "span": "half past eight",
+      "against": {
+        "ch": "c1",
+        "quote": "Assembly in the Great Hall was at ten to nine every morning"
+      },
+      "weight": "must"
+    },
+    {
+      "ch": "c2",
+      "kind": "deed",
+      "entity": "wilde",
+      "attr": "event",
+      "sentence": "Nobody had touched the cedar that Hester Pell had planted on the front lawn.",
+      "span": "Hester Pell",
+      "to": "Mr Wilde",
+      "against": {
+        "ch": "c1",
+        "quote": "Mr Wilde had planted the cedar on the front lawn the year the school reopened after the war."
+      },
+      "weight": "must"
+    },
+    {
+      "ch": "c2",
+      "kind": "open",
+      "entity": "science-block",
+      "attr": "location",
+      "sentence": "The science block, next to the sports hall, had been locked since the fire.",
+      "span": "next to the sports hall",
+      "against": {
+        "ch": "c1",
+        "quote": "The science block stood next to the chapel"
+      },
+      "weight": "nice",
+      "why": "a block may stand between the two: worth a look, never more"
+    }
+  ],
+  "decoys": [
+    {
+      "ch": "c1",
+      "sentence": "Saint Aldhelm’s had been founded in 1846 by the Fane sisters, and it had closed twice: once for the cholera and once for the war.",
+      "why": "against the letter, which is what was said"
+    },
+    {
+      "ch": "c2",
+      "sentence": "Miss Pell taught biology to Year Eleven, as she had for six years.",
+      "why": "the prose agrees with itself; the notes’ chemistry is Which is right?"
+    },
+    {
+      "ch": "c2",
+      "sentence": "The girls were frightened of Mr Wilde, who never raised his voice.",
+      "why": "nothing against"
+    }
+  ],
+  "needs": [
+    {
+      "entity": "hester",
+      "attr": "occupation",
+      "values": [
+        "chemistry",
+        "biology"
+      ],
+      "why": "Aldhelm Notes: teaches chemistry. Ch 1: Hester Pell taught biology"
+    },
+    {
+      "entity": "hester",
+      "attr": "role",
+      "values": [
+        "Ten",
+        "Eleven"
+      ],
+      "why": "Aldhelm Notes: Form tutor to Year Ten. Ch 1: form tutor to Year Eleven"
+    }
+  ]
+}

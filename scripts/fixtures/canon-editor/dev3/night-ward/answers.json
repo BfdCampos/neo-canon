@@ -1,0 +1,620 @@
+{
+  "about": "dev3 · Night Ward (round 4, written for the third held-out brief’s types): Nurse Maud Rafferty, called Raff without the text saying so; a group chat typed as Name: message lines with no quotation marks (a lie about the son’s work and the patient’s age); a moment of cold and fear; Ch 2 gives the shift another start, the ward another floor and wing, and the patient’s room the transposed number 41 (no Room 41 exists).",
+  "set": "dev3/night-ward",
+  "shelf": "Night Ward",
+  "book": "book-night-ward-nw1",
+  "chapters": {
+    "c1": "Ch 1",
+    "c2": "Ch 2"
+  },
+  "notEntities": [
+    "Room 41",
+    "Swindon",
+    "Easter",
+    "June",
+    "Abbott"
+  ],
+  "entities": [
+    {
+      "id": "rafferty",
+      "name": "Maud Rafferty",
+      "kind": "person",
+      "aliases": [
+        "Nurse Maud Rafferty",
+        "Raff",
+        "Rafferty",
+        "Nurse Rafferty"
+      ],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "occupation",
+          "value": "night nurse on Larch Ward for nine years",
+          "quote": "Nurse Maud Rafferty had worked nights on Larch Ward at St Brannoc’s for nine years.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "nurse",
+            "works nights on Larch Ward",
+            "night nurse",
+            "worked nights on Larch Ward for nine years"
+          ]
+        },
+        {
+          "attr": "routine",
+          "value": "her shift starts at ten every night and ends at six",
+          "quote": "Her shift started at ten every night and ended at six",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "shift starts at ten",
+            "starts at ten every night",
+            "ten every night"
+          ]
+        },
+        {
+          "attr": "habit",
+          "value": "always early",
+          "quote": "she was always early",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "is always early"
+          ]
+        },
+        {
+          "attr": "skill",
+          "value": "knows every patient by the sound of their breathing",
+          "quote": "Raff knew every patient by the sound of their breathing.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "knows every patient by their breathing"
+          ]
+        },
+        {
+          "attr": "appearance.build",
+          "value": "tall, rawboned",
+          "quote": "She was a tall, rawboned woman of fifty with cropped grey hair and reading glasses on a cord.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "tall",
+            "rawboned",
+            "tall and rawboned"
+          ]
+        },
+        {
+          "attr": "age",
+          "value": "fifty",
+          "quote": "She was a tall, rawboned woman of fifty with cropped grey hair and reading glasses on a cord.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "50"
+          ]
+        },
+        {
+          "attr": "appearance.hair",
+          "value": "cropped grey",
+          "quote": "She was a tall, rawboned woman of fifty with cropped grey hair and reading glasses on a cord.",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "grey",
+            "cropped grey hair"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "female",
+          "quote": "She was a tall, rawboned woman of fifty with cropped grey hair and reading glasses on a cord.",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "woman"
+          ]
+        },
+        {
+          "attr": "appearance.other",
+          "value": "reading glasses on a cord",
+          "quote": "She was a tall, rawboned woman of fifty with cropped grey hair and reading glasses on a cord.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "reading glasses"
+          ]
+        },
+        {
+          "attr": "name",
+          "value": "Raff",
+          "quote": "Raff knew every patient by the sound of their breathing.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": []
+        },
+        {
+          "attr": "habit",
+          "value": "hangs her coat in the sluice every night",
+          "quote": "Raff came on at eight, as she did every night, and hung her coat in the sluice.",
+          "ch": "c2",
+          "weight": "nice",
+          "alt": [
+            "hangs her coat in the sluice"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "routine",
+          "value": "comes on at eight every night",
+          "alt": [
+            "came on at eight",
+            "eight"
+          ],
+          "why": "Ch 2’s slip"
+        }
+      ]
+    },
+    {
+      "id": "larch-ward",
+      "name": "Larch Ward",
+      "kind": "place",
+      "aliases": [],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "location",
+          "value": "on the second floor of the east wing",
+          "quote": "Larch Ward was on the second floor of the east wing",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "second floor of the east wing",
+            "second floor",
+            "east wing"
+          ]
+        },
+        {
+          "attr": "description",
+          "value": "a long room of twelve beds",
+          "quote": "a long room of twelve beds with tall windows that would not open",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "twelve beds",
+            "long room"
+          ]
+        },
+        {
+          "attr": "description",
+          "value": "tall windows that would not open",
+          "quote": "a long room of twelve beds with tall windows that would not open",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "tall windows",
+            "windows that would not open"
+          ]
+        },
+        {
+          "attr": "location.part",
+          "value": "part of St Brannoc’s",
+          "quote": "Nurse Maud Rafferty had worked nights on Larch Ward at St Brannoc’s for nine years.",
+          "ch": "c1",
+          "weight": "nice",
+          "alt": [
+            "St Brannoc’s",
+            "at St Brannoc’s"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "location",
+          "value": "on the third floor of the west wing",
+          "alt": [
+            "third floor of the west wing",
+            "third floor",
+            "west wing"
+          ],
+          "why": "Ch 2’s slip"
+        }
+      ]
+    },
+    {
+      "id": "room-14",
+      "name": "Room 14",
+      "kind": "place",
+      "aliases": [],
+      "weight": "must",
+      "profile": false,
+      "facts": [
+        {
+          "attr": "description",
+          "value": "the single room at the end of Larch Ward",
+          "quote": "Room 14 was the single room at the end of Larch Ward, next to the sluice.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "single room",
+            "the single room",
+            "at the end of Larch Ward"
+          ]
+        },
+        {
+          "attr": "location",
+          "value": "next to the sluice",
+          "quote": "Room 14 was the single room at the end of Larch Ward, next to the sluice.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "next to the sluice",
+            "end of Larch Ward"
+          ]
+        },
+        {
+          "attr": "residents",
+          "value": "Mrs Ida Abbott, for eleven weeks",
+          "quote": "Mrs Ida Abbott had been in Room 14 for eleven weeks.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "Mrs Abbott",
+            "Mrs Ida Abbott"
+          ]
+        }
+      ],
+      "traps": []
+    },
+    {
+      "id": "ida-abbott",
+      "name": "Ida Abbott",
+      "kind": "person",
+      "aliases": [
+        "Mrs Ida Abbott",
+        "Mrs Abbott"
+      ],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "location.home",
+          "value": "in Room 14 for eleven weeks",
+          "quote": "Mrs Ida Abbott had been in Room 14 for eleven weeks.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "Room 14"
+          ]
+        },
+        {
+          "attr": "age",
+          "value": "eighty-seven",
+          "quote": "Mrs Abbott was eighty-seven, small and sharp, with white hair she wore in a plait.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "87"
+          ]
+        },
+        {
+          "attr": "appearance.build",
+          "value": "small",
+          "quote": "Mrs Abbott was eighty-seven, small and sharp, with white hair she wore in a plait.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "small and sharp"
+          ]
+        },
+        {
+          "attr": "personality",
+          "value": "sharp",
+          "quote": "Mrs Abbott was eighty-seven, small and sharp, with white hair she wore in a plait.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "small and sharp"
+          ]
+        },
+        {
+          "attr": "appearance.hair",
+          "value": "white, in a plait",
+          "quote": "Mrs Abbott was eighty-seven, small and sharp, with white hair she wore in a plait.",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "white",
+            "white hair",
+            "white hair in a plait"
+          ]
+        },
+        {
+          "attr": "relationship.kin",
+          "value": "mother of Gerald",
+          "quote": "Her son, Gerald, sold insurance in Swindon",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "Gerald",
+            "son Gerald",
+            "her son Gerald"
+          ]
+        },
+        {
+          "attr": "habit",
+          "value": "always sleeps with the lamp on",
+          "quote": "Mrs Abbott always slept with the lamp on.",
+          "ch": "c2",
+          "weight": "should",
+          "alt": [
+            "sleeps with the lamp on"
+          ]
+        },
+        {
+          "attr": "age",
+          "value": "ninety-one",
+          "quote": "She’s ninety-one, she won’t remember",
+          "ch": "c1",
+          "weight": "nice",
+          "said": true,
+          "alt": [
+            "91"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "state",
+          "value": "very cold and frightened",
+          "alt": [
+            "cold and frightened",
+            "frightened",
+            "cold"
+          ],
+          "why": "one moment"
+        },
+        {
+          "attr": "location.home",
+          "value": "Room 41",
+          "alt": [
+            "in Room 41"
+          ],
+          "why": "Ch 2’s slip"
+        }
+      ]
+    },
+    {
+      "id": "gerald",
+      "name": "Gerald Abbott",
+      "kind": "person",
+      "aliases": [
+        "Gerald"
+      ],
+      "weight": "must",
+      "profile": false,
+      "facts": [
+        {
+          "attr": "occupation",
+          "value": "sells insurance in Swindon",
+          "quote": "Her son, Gerald, sold insurance in Swindon",
+          "ch": "c1",
+          "weight": "must",
+          "also": [
+            "Gerald Abbott, who sold insurance in Swindon"
+          ],
+          "alt": [
+            "insurance",
+            "sold insurance in Swindon",
+            "sells insurance"
+          ]
+        },
+        {
+          "attr": "relationship.kin",
+          "value": "son of Ida Abbott",
+          "quote": "Her son, Gerald, sold insurance in Swindon",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "son",
+            "Mrs Abbott",
+            "Ida Abbott"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "male",
+          "quote": "Her son, Gerald, sold insurance in Swindon",
+          "ch": "c1",
+          "weight": "should",
+          "hard": true,
+          "alt": [
+            "son"
+          ]
+        },
+        {
+          "attr": "history",
+          "value": "had not visited since June",
+          "quote": "had not visited since June",
+          "ch": "c1",
+          "weight": "nice",
+          "alt": [
+            "not visited since June"
+          ]
+        },
+        {
+          "attr": "occupation",
+          "value": "a barrister",
+          "quote": "The barrister.",
+          "ch": "c1",
+          "weight": "nice",
+          "said": true,
+          "alt": [
+            "barrister"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "occupation",
+          "value": "barrister",
+          "why": "only said in the chat, and wrong"
+        }
+      ]
+    },
+    {
+      "id": "okoro",
+      "name": "Dr Okoro",
+      "kind": "person",
+      "aliases": [
+        "Okoro"
+      ],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "role",
+          "value": "the night registrar",
+          "quote": "Dr Okoro was the night registrar, a soft-spoken man who drank his tea black.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "night registrar",
+            "registrar"
+          ]
+        },
+        {
+          "attr": "manner.speech",
+          "value": "soft-spoken",
+          "quote": "Dr Okoro was the night registrar, a soft-spoken man who drank his tea black.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": []
+        },
+        {
+          "attr": "habit",
+          "value": "drinks his tea black",
+          "quote": "Dr Okoro was the night registrar, a soft-spoken man who drank his tea black.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "tea black"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "male",
+          "quote": "Dr Okoro was the night registrar, a soft-spoken man who drank his tea black.",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "man"
+          ]
+        }
+      ],
+      "traps": []
+    },
+    {
+      "id": "brannocs",
+      "name": "St Brannoc’s",
+      "kind": "place",
+      "aliases": [],
+      "weight": "should",
+      "profile": false,
+      "facts": []
+    }
+  ],
+  "keyPoints": [
+    {
+      "ch": "c1",
+      "who": [
+        "rafferty",
+        "ida-abbott"
+      ],
+      "did": "Raff fetched a second blanket for Mrs Abbott",
+      "quote": "Raff fetched a second blanket from the linen cupboard",
+      "weight": "should"
+    },
+    {
+      "ch": "c2",
+      "who": [
+        "gerald"
+      ],
+      "did": "Gerald Abbott came at nine with chrysanthemums",
+      "quote": "Gerald Abbott, who sold insurance in Swindon, came at nine with chrysanthemums.",
+      "weight": "should"
+    }
+  ],
+  "slips": [
+    {
+      "ch": "c2",
+      "kind": "open",
+      "entity": "rafferty",
+      "attr": "routine",
+      "sentence": "Raff came on at eight, as she did every night, and hung her coat in the sluice.",
+      "span": "eight",
+      "against": {
+        "ch": "c1",
+        "quote": "Her shift started at ten every night and ended at six"
+      },
+      "weight": "must"
+    },
+    {
+      "ch": "c2",
+      "kind": "open",
+      "entity": "larch-ward",
+      "attr": "location",
+      "sentence": "Larch Ward was on the third floor of the west wing.",
+      "span": "third floor of the west wing",
+      "against": {
+        "ch": "c1",
+        "quote": "Larch Ward was on the second floor of the east wing"
+      },
+      "weight": "must"
+    },
+    {
+      "ch": "c2",
+      "kind": "name",
+      "entity": "room-14",
+      "attr": "name",
+      "sentence": "She took Mrs Abbott’s tea along to Room 41 at midnight, and found her asleep with the lamp on.",
+      "span": "Room 41",
+      "to": "Room 14",
+      "against": {
+        "ch": "c1",
+        "quote": "Mrs Ida Abbott had been in Room 14 for eleven weeks."
+      },
+      "weight": "must"
+    }
+  ],
+  "decoys": [
+    {
+      "ch": "c1",
+      "sentence": "Raff: She’s ninety-one, she won’t remember",
+      "why": "the chat says so; the narration has eighty-seven"
+    },
+    {
+      "ch": "c2",
+      "sentence": "Okoro: told you. Barrister",
+      "why": "the chat"
+    },
+    {
+      "ch": "c2",
+      "sentence": "Gerald Abbott, who sold insurance in Swindon, came at nine with chrysanthemums.",
+      "why": "agrees"
+    },
+    {
+      "ch": "c2",
+      "sentence": "Mrs Abbott always slept with the lamp on.",
+      "why": "agrees"
+    }
+  ],
+  "needs": []
+}

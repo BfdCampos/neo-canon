@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-km",
+      "name": "Kerr",
+      "bookIds": [
+        "book-kerrs-mill-km1"
+      ],
+      "canonId": "canon-kerr-shelf-km"
+    }
+  ]
+}

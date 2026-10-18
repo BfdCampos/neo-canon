@@ -1,0 +1,16 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-nw",
+      "name": "Night Ward",
+      "bookIds": [
+        "book-night-ward-nw1"
+      ],
+      "canonId": "canon-night-ward-shelf-nw"
+    }
+  ]
+}

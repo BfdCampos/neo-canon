@@ -1,0 +1,17 @@
+{
+  "authorName": "A. N. Writer",
+  "penNames": [],
+  "firstRunDone": true,
+  "pageTheme": "night",
+  "shelves": [
+    {
+      "id": "shelf-fr",
+      "name": "Saint Aldhelm’s",
+      "bookIds": [
+        "book-aldhelm-notes-fr0",
+        "book-the-form-room-fr1"
+      ],
+      "canonId": "canon-aldhelm-shelf-fr"
+    }
+  ]
+}

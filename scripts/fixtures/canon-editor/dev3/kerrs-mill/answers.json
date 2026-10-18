@@ -1,0 +1,672 @@
+{
+  "about": "dev3 · Kerr’s Mill (round 4, written for the third held-out brief’s types): three generations named Absalom Kerr told apart by the Elder, the Younger and the Third; a terrier whose sex is her own she, a cat with none (a man’s his and he beside it: a trap); one-off moments (cold and tired; asleep on a chest); Ch 2 gives the Elder’s deed to the Younger, the Elder’s eyes another colour, and the mill the other bank. Decoys: the Younger’s blue eyes, Sal keeping the ledgers, Sal’s own routine, a grey cat with no name.",
+  "set": "dev3/kerrs-mill",
+  "shelf": "Kerr",
+  "book": "book-kerrs-mill-km1",
+  "chapters": {
+    "c1": "Ch 1",
+    "c2": "Ch 2"
+  },
+  "notEntities": [
+    "Absalom",
+    "Absalom Kerr",
+    "Visitors",
+    "Everyone"
+  ],
+  "entities": [
+    {
+      "id": "elder",
+      "name": "Absalom Kerr the Elder",
+      "kind": "person",
+      "aliases": [
+        "the Elder"
+      ],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "history",
+          "value": "built the mill race at Hobb’s Ford in 1871",
+          "quote": "Absalom Kerr the Elder built the mill race at Hobb’s Ford in the spring of 1871",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "built the mill race",
+            "built the mill race at Hobb’s Ford in the spring of 1871"
+          ]
+        },
+        {
+          "attr": "appearance.build",
+          "value": "broad, slow",
+          "quote": "The Elder was a broad, slow man with grey eyes and a white beard to his belt.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "broad",
+            "broad and slow"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "male",
+          "quote": "The Elder was a broad, slow man with grey eyes and a white beard to his belt.",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "man"
+          ]
+        },
+        {
+          "attr": "appearance.eyes",
+          "value": "grey",
+          "quote": "The Elder was a broad, slow man with grey eyes and a white beard to his belt.",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "grey eyes"
+          ]
+        },
+        {
+          "attr": "appearance.face",
+          "value": "a white beard to his belt",
+          "quote": "The Elder was a broad, slow man with grey eyes and a white beard to his belt.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "white beard"
+          ]
+        },
+        {
+          "attr": "routine",
+          "value": "rises every morning at five and walks the race before breakfast",
+          "quote": "He rose every morning at five and walked the race before breakfast.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "rises at five every morning",
+            "walks the race before breakfast",
+            "rose every morning at five"
+          ]
+        },
+        {
+          "attr": "relationship.kin",
+          "value": "father of the Younger",
+          "quote": "His son, Absalom Kerr the Younger",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "the Younger",
+            "son Absalom Kerr the Younger",
+            "Absalom Kerr the Younger"
+          ]
+        },
+        {
+          "attr": "state",
+          "value": "dead by 1903",
+          "quote": "By 1903 the Elder was dead",
+          "ch": "c2",
+          "weight": "should",
+          "alt": [
+            "dead"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "appearance.eyes",
+          "value": "blue",
+          "why": "Ch 2’s slip"
+        },
+        {
+          "attr": "history",
+          "value": "the Younger built the mill race",
+          "why": "Ch 2’s deed slip"
+        }
+      ]
+    },
+    {
+      "id": "younger",
+      "name": "Absalom Kerr the Younger",
+      "kind": "person",
+      "aliases": [
+        "the Younger"
+      ],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "appearance.eyes",
+          "value": "blue, his mother’s",
+          "quote": "had his mother’s blue eyes",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "blue",
+            "blue eyes"
+          ]
+        },
+        {
+          "attr": "personality",
+          "value": "none of his father’s patience",
+          "quote": "had his mother’s blue eyes and none of his father’s patience",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "impatient",
+            "no patience"
+          ]
+        },
+        {
+          "attr": "role",
+          "value": "keeps the ledgers",
+          "quote": "The Younger kept the ledgers and the dog.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "kept the ledgers",
+            "ledgers"
+          ]
+        },
+        {
+          "attr": "possession",
+          "value": "the dog, Biscuit",
+          "quote": "The Younger kept the ledgers and the dog.",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "the dog",
+            "Biscuit",
+            "kept the dog"
+          ]
+        },
+        {
+          "attr": "relationship.kin",
+          "value": "son of the Elder",
+          "quote": "His son, Absalom Kerr the Younger",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "the Elder",
+            "son",
+            "his son"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "male",
+          "quote": "His son, Absalom Kerr the Younger",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "son"
+          ]
+        },
+        {
+          "attr": "role",
+          "value": "the miller by 1903",
+          "quote": "the Younger was the miller",
+          "ch": "c2",
+          "weight": "should",
+          "alt": [
+            "the miller",
+            "miller"
+          ]
+        },
+        {
+          "attr": "state",
+          "value": "his eyes failing",
+          "quote": "The Younger’s own blue eyes were failing now",
+          "ch": "c2",
+          "weight": "nice",
+          "alt": [
+            "eyes failing",
+            "failing eyes"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "state",
+          "value": "cold and tired",
+          "why": "one moment of one night"
+        },
+        {
+          "attr": "history",
+          "value": "built the mill race",
+          "why": "the Elder did: Ch 2’s slip"
+        }
+      ]
+    },
+    {
+      "id": "third",
+      "name": "Absalom the Third",
+      "kind": "person",
+      "aliases": [
+        "Sal"
+      ],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "age",
+          "value": "seven that year",
+          "quote": "Absalom the Third, was seven that year",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "seven",
+            "7"
+          ]
+        },
+        {
+          "attr": "name",
+          "value": "Sal",
+          "quote": "Everyone called him Sal.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "called Sal"
+          ]
+        },
+        {
+          "attr": "relationship.kin",
+          "value": "the Younger’s boy",
+          "quote": "The Younger’s boy, Absalom the Third",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "son of the Younger",
+            "the Younger",
+            "boy"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "male",
+          "quote": "The Younger’s boy, Absalom the Third",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "boy"
+          ]
+        },
+        {
+          "attr": "role",
+          "value": "keeps the ledgers as his father had",
+          "quote": "Sal kept the ledgers as his father had",
+          "ch": "c2",
+          "weight": "should",
+          "alt": [
+            "keeps the ledgers",
+            "kept the ledgers"
+          ]
+        },
+        {
+          "attr": "routine",
+          "value": "rises every morning at five",
+          "quote": "he rose every morning at five",
+          "ch": "c2",
+          "weight": "should",
+          "alt": [
+            "rises at five",
+            "rose every morning at five"
+          ]
+        },
+        {
+          "attr": "habit",
+          "value": "reads the ledgers to his father",
+          "quote": "Sal read the ledgers to him",
+          "ch": "c2",
+          "weight": "nice",
+          "alt": [
+            "reads the ledgers"
+          ]
+        }
+      ],
+      "traps": []
+    },
+    {
+      "id": "biscuit",
+      "name": "Biscuit",
+      "kind": "creature",
+      "aliases": [],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "species",
+          "value": "dog, a wire-haired terrier",
+          "quote": "The dog was Biscuit, a wire-haired terrier with one torn ear.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "dog",
+            "terrier",
+            "wire-haired terrier"
+          ]
+        },
+        {
+          "attr": "appearance.mark",
+          "value": "one torn ear",
+          "quote": "The dog was Biscuit, a wire-haired terrier with one torn ear.",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "torn ear"
+          ]
+        },
+        {
+          "attr": "sex",
+          "value": "female",
+          "quote": "she would let no one but the Younger lift her",
+          "ch": "c1",
+          "weight": "must",
+          "hard": true,
+          "alt": [
+            "she"
+          ]
+        },
+        {
+          "attr": "habit",
+          "value": "sleeps under the counting-house stove in winter and on the mill steps in summer",
+          "quote": "Biscuit slept under the counting-house stove in winter and on the mill steps in summer",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "sleeps under the counting-house stove in winter",
+            "sleeps on the mill steps in summer"
+          ]
+        },
+        {
+          "attr": "habit",
+          "value": "lets no one but the Younger lift her",
+          "quote": "she would let no one but the Younger lift her",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "only the Younger may lift her"
+          ]
+        },
+        {
+          "attr": "history",
+          "value": "has bitten the Elder twice",
+          "quote": "She had bitten the Elder twice.",
+          "ch": "c1",
+          "weight": "nice",
+          "alt": [
+            "bitten the Elder twice",
+            "bit the Elder"
+          ]
+        },
+        {
+          "attr": "possession",
+          "value": "the Younger’s dog",
+          "quote": "The Younger kept the ledgers and the dog.",
+          "ch": "c1",
+          "weight": "nice",
+          "alt": [
+            "the Younger"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "sex",
+          "value": "male",
+          "why": "the Younger’s he"
+        }
+      ]
+    },
+    {
+      "id": "smut",
+      "name": "Smut",
+      "kind": "creature",
+      "aliases": [],
+      "weight": "should",
+      "profile": false,
+      "facts": [
+        {
+          "attr": "species",
+          "value": "cat, the mill cat",
+          "quote": "Smut, the mill cat",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "cat",
+            "the mill cat",
+            "mill cat"
+          ]
+        },
+        {
+          "attr": "state",
+          "value": "long gone by 1903",
+          "quote": "Smut was long gone.",
+          "ch": "c2",
+          "weight": "nice",
+          "alt": [
+            "long gone",
+            "gone"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "sex",
+          "value": "male",
+          "why": "his chest and he are the Younger’s"
+        },
+        {
+          "attr": "state",
+          "value": "asleep on the Younger’s chest",
+          "alt": [
+            "asleep on his chest",
+            "fell asleep on his chest"
+          ],
+          "why": "one moment"
+        }
+      ]
+    },
+    {
+      "id": "mill",
+      "name": "Kerr’s Mill",
+      "kind": "place",
+      "aliases": [],
+      "weight": "must",
+      "profile": true,
+      "facts": [
+        {
+          "attr": "location",
+          "value": "on the east bank of the Hobb",
+          "quote": "Kerr’s Mill stood on the east bank of the Hobb",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "east bank of the Hobb",
+            "east bank"
+          ]
+        },
+        {
+          "attr": "description",
+          "value": "a tall stone building",
+          "quote": "a tall stone building with a slate roof and eleven windows facing the water",
+          "ch": "c1",
+          "weight": "must",
+          "alt": [
+            "tall stone building",
+            "stone"
+          ]
+        },
+        {
+          "attr": "description",
+          "value": "a slate roof",
+          "quote": "a tall stone building with a slate roof and eleven windows facing the water",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "slate roof"
+          ]
+        },
+        {
+          "attr": "description",
+          "value": "eleven windows facing the water",
+          "quote": "a tall stone building with a slate roof and eleven windows facing the water",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "eleven windows"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "location",
+          "value": "on the west bank of the Hobb",
+          "alt": [
+            "west bank"
+          ],
+          "why": "Ch 2’s slip"
+        }
+      ]
+    },
+    {
+      "id": "race",
+      "name": "the mill race",
+      "kind": "thing",
+      "aliases": [],
+      "weight": "nice",
+      "profile": false,
+      "facts": [
+        {
+          "attr": "history",
+          "value": "built by the Elder in 1871",
+          "quote": "Absalom Kerr the Elder built the mill race at Hobb’s Ford in the spring of 1871",
+          "ch": "c1",
+          "weight": "should",
+          "alt": [
+            "built in 1871",
+            "built by Absalom Kerr the Elder"
+          ]
+        }
+      ],
+      "traps": [
+        {
+          "attr": "history",
+          "value": "built by the Younger",
+          "why": "Ch 2’s slip"
+        }
+      ]
+    },
+    {
+      "id": "hobbs-ford",
+      "name": "Hobb’s Ford",
+      "kind": "place",
+      "aliases": [],
+      "weight": "nice",
+      "profile": false,
+      "facts": []
+    },
+    {
+      "id": "hobb",
+      "name": "the Hobb",
+      "kind": "place",
+      "aliases": [
+        "Hobb"
+      ],
+      "weight": "nice",
+      "profile": false,
+      "facts": []
+    }
+  ],
+  "keyPoints": [
+    {
+      "ch": "c1",
+      "who": [
+        "elder"
+      ],
+      "did": "The Elder built the mill race at Hobb’s Ford",
+      "quote": "Absalom Kerr the Elder built the mill race at Hobb’s Ford in the spring of 1871",
+      "weight": "must"
+    },
+    {
+      "ch": "c1",
+      "who": [
+        "smut",
+        "younger"
+      ],
+      "did": "Smut fell asleep on the Younger’s chest",
+      "quote": "Smut, the mill cat, fell asleep on his chest",
+      "weight": "should"
+    }
+  ],
+  "slips": [
+    {
+      "ch": "c2",
+      "kind": "deed",
+      "entity": "elder",
+      "attr": "event",
+      "sentence": "Visitors still came to see the mill race, which Absalom Kerr the Younger had built in the spring of 1871.",
+      "span": "Absalom Kerr the Younger",
+      "to": "Absalom Kerr the Elder",
+      "against": {
+        "ch": "c1",
+        "quote": "Absalom Kerr the Elder built the mill race at Hobb’s Ford in the spring of 1871"
+      },
+      "weight": "must"
+    },
+    {
+      "ch": "c2",
+      "kind": "trait",
+      "entity": "elder",
+      "attr": "appearance.eyes",
+      "sentence": "The Elder’s blue eyes looked down from the portrait over the stairs.",
+      "span": "blue",
+      "to": "grey",
+      "against": {
+        "ch": "c1",
+        "quote": "The Elder was a broad, slow man with grey eyes and a white beard to his belt."
+      },
+      "weight": "must"
+    },
+    {
+      "ch": "c2",
+      "kind": "open",
+      "entity": "mill",
+      "attr": "location",
+      "sentence": "Kerr’s Mill stood on the west bank of the Hobb, as it always had, and its eleven windows still faced the water.",
+      "span": "west bank",
+      "against": {
+        "ch": "c1",
+        "quote": "Kerr’s Mill stood on the east bank of the Hobb"
+      },
+      "weight": "must"
+    }
+  ],
+  "decoys": [
+    {
+      "ch": "c2",
+      "sentence": "The Younger’s own blue eyes were failing now, and Sal read the ledgers to him.",
+      "why": "the Younger’s eyes are blue"
+    },
+    {
+      "ch": "c2",
+      "sentence": "Sal kept the ledgers as his father had, and he rose every morning at five.",
+      "why": "a habit kept by the next generation is no deed given away; Sal’s own routine"
+    },
+    {
+      "ch": "c2",
+      "sentence": "A grey cat with no name slept on the warm boards above the wheel.",
+      "why": "another cat"
+    },
+    {
+      "ch": "c2",
+      "sentence": "By 1903 the Elder was dead and the Younger was the miller.",
+      "why": "time has passed"
+    }
+  ],
+  "needs": []
+}

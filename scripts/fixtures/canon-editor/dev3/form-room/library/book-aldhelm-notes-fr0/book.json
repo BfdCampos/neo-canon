@@ -1,0 +1,21 @@
+{
+  "id": "book-aldhelm-notes-fr0",
+  "title": "Aldhelm Notes",
+  "subtitle": "",
+  "series": "Saint Aldhelm’s",
+  "author": "A. N. Writer",
+  "wordGoal": 0,
+  "created": "2026-10-18T09:00:00.000Z",
+  "modified": "2026-10-18T09:00:00.000Z",
+  "chapterOrder": [
+    "n1"
+  ],
+  "tabNames": {
+    "notes": "Notes",
+    "outline": "Outline"
+  },
+  "format": "notebook",
+  "chapterTitles": {
+    "n1": "People"
+  }
+}

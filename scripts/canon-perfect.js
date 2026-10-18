@@ -30,6 +30,8 @@ const { folderIO } = require('./canon-eval.js');
 const N = (s) => Canon.norm(String(s || ''));
 const FIX = path.join(__dirname, 'fixtures', 'canon-editor');
 const FIXTURES = ['dev', ...fs.readdirSync(path.join(FIX, 'dev2')).map((d) => 'dev2/' + d), 'qa'].map((d) => path.join(FIX, d));
+// round 4: stories written for the third held-out brief's failure types
+const DEV3 = fs.readdirSync(path.join(FIX, 'dev3')).map((d) => path.join(FIX, 'dev3', d));
 
 // a sheet's canonical attribute as a reader would give it: group and label
 function groupOf(attr) {
@@ -106,6 +108,8 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
   const wrong = new Set(); // norm(name|value) the adversary made up
   const written = (text, n) => { const b = String(n).replace(/^the\s+/i, ''); return new RegExp(`(?<![\\p{L}])${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(text); };
   return {
+    ix,
+    wrongSet: wrong,
     id: 'sheet-' + mode,
     tier: 'careful',
     editor: true,
@@ -182,6 +186,146 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
   };
 }
 
+// Round 4: a reader that fails the way the real Careful reader failed on the
+// third held-out batch (/tmp eval3 BRIEF: failure types, never the stories).
+// It knows the sheet, like the perfect reader, and on top of it:
+//
+//   labels     gives every fact a drifting label ("situated", "address",
+//              "shift start", "eye colour", "teaches"), never the sheet's
+//   slips      proposes each later value a slip stands on as a fact of its
+//              own, under another label, and believes it
+//   moments    proposes a feeling, a posture or one action in one scene as a
+//              lasting state ("very cold and frightened", "asleep on his chest")
+//   subjects   gives an animal the sex of the nearest he or she, whoever's it is
+//   speech     never marks what is said as said (a chat line, a letter)
+//   identity   proposes a nickname as its own one, a name shared by
+//              generations as one person (the epithets its aliases), an
+//              animal as a person, a transposed room number as a place
+//   profiles   writes sentences that cite real facts and say more than they do
+//   slips      answers no when asked whether a later sentence says otherwise
+//
+// and believes all of it: yes to every question about what it made up, its own
+// name to "whose", no to "is it wrong", "lasting" to "only this moment".
+const DRIFT = {
+  location: ['situated', 'address', 'where', 'position'], 'location.home': ['address', 'lodging', 'room'], 'location.part': ['part of', 'within'],
+  routine: ['shift start', 'schedule', 'timetable', 'daily'], habit: ['pattern', 'usual', 'tendency'], custom: ['tradition'],
+  occupation: ['job', 'teaches', 'works as'], role: ['position', 'title', 'post'], skill: ['ability'],
+  'appearance.eyes': ['eye colour', 'eyes'], 'appearance.hair': ['hair colour', 'hair'], 'appearance.build': ['body', 'frame'], 'appearance.face': ['beard', 'features'],
+  'appearance.mark': ['ear', 'scar'], 'appearance.other': ['glasses', 'walk'], age: ['years', 'age'], sex: ['gender', 'sex'], species: ['animal', 'breed'],
+  description: ['features', 'look', 'building'], history: ['past', 'deed', 'founding'], state: ['condition', 'status'], name: ['nickname', 'name'],
+  'relationship.kin': ['family', 'son', 'parent'], possession: ['owns', 'pet'], personality: ['temper', 'nature'], 'manner.speech': ['voice'], residents: ['patient', 'occupant'], event: ['deed', 'built']
+};
+const MOMENT_RE = /(?<![\p{L}])(?:was|were|lay|sat|stood|fell|felt|looked)\s+((?:(?:very|so|too|quite|half|fast)\s+)?(?:awake|asleep|cold|tired|frightened|afraid|scared|furious|angry|sad|happy|hungry|wet|exhausted|nervous|late|alone|still|quiet|silent|crying|shaking|pale|ill|sick|drunk)(?:\s*(?:,|and)\s*(?:(?:very|so)\s+)?[\p{Ll}]+){0,2}(?:\s+(?:on|at|by|with|in|across)\s+(?:his|her|the|their|its)\s+\p{Ll}+)?)/u;
+const POSTURE_RE = /(?<![\p{L}])(?:fell asleep|stood at|lay across|sat on|sat at|stood by)\s+((?:the|his|her|its|their)\s+[\p{Ll}-]+(?:,\s*[\p{Ll}]+)?)/u;
+function driftReader(sheet, base, { log, wrongSet, hash, N, Canon }) {
+  const pick = (xs, k) => xs[Math.abs(hash(k)) % xs.length];
+  const drift = (attr, k) => pick(DRIFT[attr] || DRIFT[String(attr).split('.')[0]] || [String(attr).split('.').pop()], k);
+  const EPITHET = /\s+(?:the\s+(?:Elder|Younger|Third|Second|First)|Junior|Senior|Jr|Sr)$/;
+  const lines = (text) => [...text.matchAll(/\[(\d+)\] ([^[]*)/g)].map((m) => [+m[1], m[2].trim()]);
+  const ix = base.ix;
+  const drifted = new Set();
+  return {
+    ...base,
+    drifted,
+    id: 'sheet-drift',
+    async cast(args) {
+      const r = await base.cast(args);
+      const plain = args.text.replace(/¶\d+\s/g, '');
+      const out = [];
+      const seen = new Set();
+      for (const c of r.cast) {
+        const e = ix.byName(c.name);
+        let name = c.name;
+        let aliases = [...c.aliases];
+        // (one person for a name generations share: the epithets are aliases)
+        if (e && EPITHET.test(e.name)) {
+          name = e.name.replace(EPITHET, '');
+          if (!new RegExp(name).test(plain)) name = e.name.split(/\s+/)[0];
+          aliases = sheet.entities.filter((x) => EPITHET.test(x.name) && x.name.startsWith(name)).flatMap((x) => [x.name, ...(x.aliases || [])]).filter((a) => plain.includes(a));
+        }
+        if (seen.has(N(name))) continue;
+        seen.add(N(name));
+        // (an animal is a person; a nickname is its own one)
+        const kind = c.kind === 'creature' ? 'person' : c.kind;
+        const split = aliases.filter((a) => /^\p{Lu}\p{Ll}{2,6}$/u.test(a) && !EPITHET.test(name));
+        out.push({ name, kind, aliases: aliases.filter((a) => !split.includes(a)) });
+        for (const a of split) if (!seen.has(N(a))) { seen.add(N(a)); out.push({ name: a, kind, aliases: [] }); }
+      }
+      // what the sheet says is no one, when the chapter writes it (a transposed room number)
+      for (const n of sheet.notEntities || []) if (/\d/.test(n) && plain.includes(n) && !seen.has(N(n))) out.push({ name: n, kind: 'place', aliases: [] });
+      return { cast: out, setting: r.setting };
+    },
+    async dossier(args) {
+      const facts = await base.dossier(args);
+      const { name, text } = args;
+      const e = ix.byName(name) || sheet.entities.find((x) => EPITHET.test(x.name) && x.name.startsWith(name));
+      const ls = lines(text);
+      const out = facts.map((f, i) => ({ ...f, a: drift(f.a, name + f.v + i), x: 0 }));
+      const add = (g, a, v, s, why) => {
+        out.push({ g, a, v, s, x: 0 });
+        log.push({ entity: name, attr: a, value: v, v, quote: (ls.find(([n]) => n === s[0]) || [])[1] || '', wrong: true, of: why, supported: false });
+        wrongSet.add(N(name + '|' + v));
+      };
+      // the later value a slip stands on, as a fact of its own
+      for (const sl of sheet.slips || []) {
+        const at = ls.find(([, t]) => N(sl.sentence).includes(N(t).replace(/[.!?]+$/, '')) || N(t).includes(N(sl.sentence).replace(/[.!?]+$/, '')));
+        if (!at) continue;
+        if (sl.kind === 'deed') {
+          const doer = ix.byName(sl.span) || sheet.entities.find((x) => N(x.name) === N(sl.span));
+          if (doer && ix.byName(name) === doer) add('history', 'deed', N(sl.against.quote).split(/\s+/).slice(-8).join(' '), [at[0]], 'slip');
+          continue;
+        }
+        if (!e || e.id !== sl.entity) continue;
+        add(Canon.Editor.GROUPS.includes(String(sl.attr).split('.')[0]) ? String(sl.attr).split('.')[0] : 'description', drift(sl.attr, sl.sentence), sl.span, [at[0]], 'slip');
+      }
+      // the sheet's traps, where a sentence of the pack holds their words
+      for (const t of (e && e.traps) || []) {
+        const vs = Canon.Editor.content(t.value);
+        const at = ls.find(([, s]) => { const bag = new Set(Canon.Editor.content(s)); return vs.length && vs.filter((w) => Canon.Editor.inBag(w, bag)).length / vs.length >= 0.5; });
+        if (at) add(String(t.attr).split('.')[0] === 'appearance' ? 'appearance' : (Canon.Editor.GROUPS.includes(String(t.attr).split('.')[0]) ? String(t.attr).split('.')[0] : 'other'), drift(t.attr, t.value), t.value, [at[0]], 'trap');
+      }
+      // one moment, as a lasting state
+      for (const [n, s] of ls) {
+        const m = MOMENT_RE.exec(s) || POSTURE_RE.exec(s);
+        if (m && N(s).includes(N(name).replace(/^the\s+/, '').split(' ')[0]) || (m && /^(?:He|She|It)\b/.test(s))) add('state', pick(['mood', 'state', 'condition', 'habit'], s), m[1].replace(/[,.]$/, ''), [n], 'moment');
+      }
+      // an animal's sex from the nearest he or she
+      if (e && e.kind === 'creature') {
+        const at = ls.find(([, s]) => /(?<![\p{L}])(?:he|his|him|she|her)(?![\p{L}])/iu.test(s));
+        if (at) { const male = /(?<![\p{L}])(?:he|his|him)(?![\p{L}])/iu.test(at[1]); const v = male ? 'male' : 'female'; if (!(e.facts || []).some((f) => f.attr === 'sex' && f.value === v)) add('sex', 'sex', v, [at[0]], 'pronoun'); }
+      }
+      return out;
+    },
+    async verify(q) {
+      if (wrongSet.has(N(q.name + '|' + q.value))) return q.negated || q.other || q.moment ? 'no' : 'yes';
+      return base.verify(q);
+    },
+    async whose(q) { return wrongSet.has(N(q.name + '|' + q.value)) ? q.name : base.whose(q); },
+    async refers(q) { return 'yes'; },
+    // sentences that cite real facts and say more than they do
+    async profile({ name, kind, facts }) {
+      if (!facts.length) return [];
+      const [a, b] = [facts[0], facts[1] || facts[0]];
+      const out = [
+        { t: `${name} is ${a.value}.`, f: [a.n] },
+        { t: `${name} is a kind and gentle ${kind === 'person' ? 'soul' : 'place'} known for ${b.value}.`, f: [b.n] },
+        { t: `${name} is always frightened and never ${b.value}.`, f: [a.n, b.n] },
+        { t: `${name}, whose ${String(b.label).toLowerCase()} is ${b.value}, is loved by everyone.`, f: [b.n] },
+        // (every word in the facts, the meaning not: a "never" dropped, one word of a value picked out)
+        ...facts.filter((f) => /(?<![\p{L}])(?:never|not|no|none|nobody)(?![\p{L}])/iu.test(f.value)).slice(0, 1).map((f) => ({ t: `${name} ${f.value.replace(/(?<![\p{L}])(?:never|not|no|none|nobody)\s+/iu, '')}.`, f: [f.n] })),
+        ...facts.filter((f) => f.value.split(/\s+/).length >= 3).slice(0, 1).map((f) => ({ t: `${name} is ${f.value.split(/\s+/).pop()}.`, f: [f.n] }))
+      ];
+      // (every one of them but a plain "X's label is value" says something the facts don't)
+      for (const x of out) drifted.add(N(x.t).replace(/[.\s]+$/, ''));
+      out.push({ t: `The ${String(a.label).toLowerCase()} of ${name} is ${a.value}.`, f: [a.n] });
+      return out;
+    },
+    async entails() { return 'yes'; },
+    async contradicts() { return 'no'; },
+    async clash() { return 'no'; }
+  };
+}
+
 // Pack coverage: of the sheet's facts (`weights`), the fraction whose every
 // quote sentence reached that entity's dossier (the passage packs the
 // engine sent the reader, in a run with the perfect reader). → { of, in, missing: [] }
@@ -218,15 +362,17 @@ async function runSheet(fixture, { mode = 'perfect', setting = '' } = {}) {
     const io = { ...folderIO(lib, dir), cache: () => cache && structuredClone(cache), saveCache: (c) => { cache = structuredClone(c); } };
     const log = [];
     const packs = new Map();
-    const reader = sheetReader(sheet, { mode, setting, log, packs });
+    const reader = mode === 'drift'
+      ? (() => { const base = sheetReader(sheet, { mode: 'perfect', setting, log, packs }); return driftReader(sheet, base, { log, wrongSet: base.wrongSet, hash: (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7), N, Canon }); })()
+      : sheetReader(sheet, { mode, setting, log, packs });
     const engine = Canon.createEngine({ io, reader });
     await engine.readShelf({});
     const { slips, asks = [] } = await engine.check({ scope: 'shelf' });
-    const entries = io.entries().map((x) => Canon.parseEntry(x.text));
+    const entries = io.entries().map((x) => ({ ...Canon.parseEntry(x.text), raw: x.text }));
     const texts = Score.textIndex(lib);
     const pick = (s) => ({ chId: s.chId, sentence: s.sentence, span: s.span, name: s.name });
     const score = Score.score({ answers, run: { entries, profiles: new Map() }, texts, slips: { slips: slips.map(pick), worthALook: asks.map(pick) } });
-    return { score, entries, cache, log, slips, asks, sheet, answers, packs };
+    return { score, entries, cache, log, slips, asks, sheet, answers, packs, drifted: reader.drifted || null };
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -284,16 +430,38 @@ function survivors(run) {
       const m = Score.matchFact(pf, [{ attr: x.attr, value: x.value, quote: x.quote, alt: [] }]);
       return m && !ix.truth(e.name, Canon.labelOf(g), g.value);
     });
-    for (const g of kept) out.push(`${e.name} · ${Canon.labelOf(g)}: ${g.value}  (really ${x.of}'s)  ← "${(g.sources[0] || {}).quote}"`);
+    for (const g of kept) out.push(`${e.name} · ${Canon.labelOf(g)}: ${g.value}  (${['slip', 'trap', 'moment', 'pronoun'].includes(x.of) ? x.of : `really ${x.of}'s`})  ← "${(g.sources[0] || {}).quote}"`);
   }
   return [...new Set(out)];
 }
 
 const SETTINGS = { dev: 'the Weighhouse' };
 
+// One line per reader for a run: must recall (dotted, and everything shown),
+// precision of what is shown (the sheet, its traps, what the reader made up),
+// slips, Which is right?, identity and profiles
+function summary(run, { made = [] } = {}) {
+  const sc = run.score;
+  const said = run.entries.flatMap((e) => (Score.readProfile(e.raw) || { sentences: [] }).sentences.map((t) => N(t.replace(/\s*\[\d+\]/g, '')).replace(/[.\s]+$/, '')));
+  const drifted = run.drifted ? said.filter((t) => run.drifted.has(t)).length : 0;
+  const shown = (f) => ['verified', 'yours', 'reading'].includes(f.state);
+  const dotted = run.entries.reduce((n, e) => n + e.facts.filter((f) => ['verified', 'yours'].includes(f.state)).length, 0);
+  const reading = run.entries.reduce((n, e) => n + e.facts.filter((f) => f.state === 'reading').length, 0);
+  const wrong = sc.precision.wrong.length + made.length;
+  const judged = sc.precision.supported + wrong;
+  const s = sc.slips || { found: 0, of: 0, false: [], worthALook: [] };
+  return { must: `${sc.facts.must.found}/${sc.facts.must.of}`, prec: judged ? `${sc.precision.supported}/${judged}` : '-', dotted, reading, unjudged: sc.precision.review.length,
+    slips: `${s.found}/${s.of}`, falseSlips: s.false.length, worth: (s.worthALook || []).length, needs: `${sc.needs.found}/${sc.needs.want}`,
+    junk: (sc.entities.junk || []).length, split: (sc.entities.split || []).length, profBad: (sc.profiles.unsupported || []).length + drifted, profOf: sc.profiles.sentences || 0, shown: run.entries.reduce((n, e) => n + e.facts.filter(shown).length, 0) };
+}
+const line = (m, x) => `${m.padEnd(11)} must ${x.must.padEnd(7)} precision ${x.prec.padEnd(8)} (dotted ${x.dotted}, reading ${x.reading}, unjudged ${x.unjudged})  slips ${x.slips} false ${x.falseSlips} worth ${x.worth}  needs ${x.needs}  junk ${x.junk} split ${x.split}  profile bad ${x.profBad}/${x.profOf}`;
+
 async function main() {
+  const tot = {};
+  const sum = (m, x) => { const t = (tot[m] = tot[m] || {}); for (const [k, v] of Object.entries(x)) { if (typeof v === 'number') t[k] = (t[k] || 0) + v; else if (/^\d+\/\d+$/.test(v)) { const [a, b] = v.split('/').map(Number); const [c, d] = (t[k] || '0/0').split('/').map(Number); t[k] = `${a + c}/${b + d}`; } else t[k] = t[k] || v; } };
   const dirs = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-  const fixtures = dirs.length ? dirs.map((d) => path.resolve(d)) : FIXTURES;
+  const fixtures = dirs.length ? dirs.map((d) => path.resolve(d)) : [...FIXTURES, ...DEV3];
+  const v = process.argv.includes('--v');
   for (const fx of fixtures) {
     const name = path.relative(FIX, fx);
     const setting = SETTINGS[name] || '';
@@ -303,19 +471,36 @@ async function main() {
     const sv = survival(run);
     const adv = await runSheet(fx, { mode: 'adversarial', setting });
     const bad = survivors(adv);
-    console.log(`\n== ${name}: pack coverage must ${covMust.in}/${covMust.of}, all ${cov.in}/${cov.of}; perfect reader keeps ${sv.kept}/${sv.of} (of what it proposed ${sv.proposed.kept}/${sv.proposed.of}); wrong kept ${run.score.precision.wrong.length}; adversary's kept ${bad.length}/${adv.log.filter((x) => x.wrong).length}; slips ${run.score.slips ? `${run.score.slips.found}/${run.score.slips.of}, false ${run.score.slips.false.length}` : '-'}`);
-    if (process.argv.includes('--v')) {
+    const dr = await runSheet(fx, { mode: 'drift', setting });
+    const drBad = survivors(dr);
+    console.log(`\n== ${name}: pack coverage must ${covMust.in}/${covMust.of}, all ${cov.in}/${cov.of}; perfect reader keeps ${sv.kept}/${sv.of} (of what it proposed ${sv.proposed.kept}/${sv.proposed.of}); adversary's kept ${bad.length}/${adv.log.filter((x) => x.wrong).length}; drift's kept ${drBad.length}/${dr.log.filter((x) => x.wrong).length}`);
+    const sums = { perfect: summary(run), adversary: summary(adv, { made: bad }), drift: summary(dr, { made: drBad }) };
+    for (const [m, x] of Object.entries(sums)) { console.log('  ' + line(m, x)); sum(m, x); if (name.startsWith('dev3/')) sum(m + '·dev3', x); }
+    const show = (tag, r, made) => {
+      for (const w of r.score.precision.wrong) console.log(`  ${tag} wrong: ${w}`);
+      for (const w of made) console.log(`  ${tag} kept made-up: ${w}`);
+      if (r.score.slips) for (const w of r.score.slips.missed || []) console.log(`  ${tag} slip missed: ${w}`);
+      if (r.score.slips) for (const w of r.score.slips.false || []) console.log(`  ${tag} false slip: ${w}`);
+      if (r.score.slips) for (const w of r.score.slips.worthALook || []) console.log(`  ${tag} worth a look: ${w}`);
+      for (const w of r.score.needs.missed || []) console.log(`  ${tag} needs missed: ${w}`);
+      for (const w of r.score.entities.junk || []) console.log(`  ${tag} junk: ${w}`);
+      for (const w of r.score.entities.split || []) console.log(`  ${tag} split: ${w}`);
+      for (const w of r.score.profiles.unsupported || []) console.log(`  ${tag} profile: ${w}`);
+    };
+    if (v || process.argv.includes('--drift')) show('drift', dr, drBad);
+    if (v) {
       for (const m of cov.missing) console.log('  not in pack: ' + m);
       for (const m of sv.lost) console.log('  lost: ' + m);
-      for (const w of run.score.precision.wrong) console.log('  wrong: ' + w);
+      show('perfect', run, []);
       for (const w of bad) console.log('  adversary kept: ' + w);
-      if (run.score.slips) for (const w of run.score.slips.missed || []) console.log('  slip missed: ' + w);
-      if (run.score.slips) for (const w of run.score.slips.false || []) console.log('  false slip: ' + w);
+      if (adv.score.slips) for (const w of adv.score.slips.false || []) console.log('  adversary false slip: ' + w);
       for (const [ch, xs] of Object.entries(((run.cache || {}).ed || {}).dropped || {})) for (const x of xs) if (run.log.some((y) => !y.wrong && N(y.entity) === N(x.entity) && N(y.v) === N(x.value))) console.log(`  gate (${ch.split('/').pop()}): ${x.entity} · ${x.label}: ${x.value} — ${x.why}`);
       for (const x of Object.values((run.cache || {}).dropped || {})) console.log(`  engine: ${x.entry} · ${x.attr}: ${x.value} — ${x.why}  ← "${x.quote}"`);
     }
   }
+  console.log('\n== totals');
+  for (const [m, x] of Object.entries(tot)) console.log('  ' + line(m, x));
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { sheetReader, packCoverage, runSheet, survival, survivors, FIXTURES, SETTINGS, groupOf, citeIds };
+module.exports = { sheetReader, driftReader, packCoverage, runSheet, survival, survivors, summary, FIXTURES, DEV3, SETTINGS, groupOf, citeIds };
