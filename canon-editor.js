@@ -617,8 +617,8 @@ module.exports = function canonEditor(C) {
   const OPENERS = new Set(['then', 'and', 'but', 'so', 'now', 'still', 'later', 'once', 'yet', 'there', 'here', 'soon', 'afterwards', 'meanwhile', 'inside', 'outside', 'today', 'tonight']);
   const EXPLETIVE = /^\s*(?:was|is|had been|has been|would be|seemed|felt|took|came)\s+(?:a\s+|an\s+|the\s+)?(?:\p{Ll}+\s+){0,2}?(?:that|to|when|as if|odd|strange|clear|true|late|early|time|night|morning|evening|raining|snowing|no use|no good|said|thing)\b/iu;
   const refMemo = new WeakMap();
-  const GROOM = /^(?:rubbed|rubs|rub|shook|shakes|scratched|wiped|bit|licked|closed|opened|narrowed|lifted|raised|lowered|bowed|tilted|cocked|touched|folded|crossed|clenched|shut|blinked|covered|pressed|tossed|nodded|shaded|squeezed|screwed)$/i;
-  const BODY = /^(?:eyes?|head|hands?|face|hair|lips?|nose|brow|forehead|shoulders?|neck|arms?|knees?|teeth|mouth|chin|cheeks?|fists?|fingers?|ears?|temples?|eyebrows?)$/i;
+  const GROOM = /^(?:rubbed|rubs|rub|shook|shakes|scratched|wiped|bit|licked|closed|opened|narrowed|lifted|raised|lowered|bowed|tilted|cocked|touched|folded|crossed|clenched|shut|blinked|covered|pressed|tossed|nodded|shaded|squeezed|screwed|flattened|pricked|pinned|arched|swished|stamped)$/i;
+  const BODY = /^(?:eyes?|head|hands?|face|hair|lips?|nose|brow|forehead|shoulders?|neck|arms?|knees?|teeth|mouth|chin|cheeks?|fists?|fingers?|ears?|temples?|eyebrows?|mane|tail|hooves?|hoof|feet|foot)$/i;
   function resolveRefs(ch, hits, cast, sexOf) {
     if (refMemo.has(hits)) return refMemo.get(hits);
     const byKey = new Map(cast.map((x) => [x.key, x]));

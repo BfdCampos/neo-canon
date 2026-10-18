@@ -1128,9 +1128,9 @@
             // may be the one acted on; after "on", "in", "with"… the subject)
             const prevW = i > 0 && words[i - 1].start >= m.end ? words[i - 1] : null;
             if (OWNING.has(kind) && ['her', 'his'].includes(w.lw) && prevW && HANDLING.test(prevW.lw)) break;
-            // (round 3: not when the chapter's reading is sure it is someone else's — "and Moss at his heels", Tobiah's)
-            const read = opts.refs && opts.refs.get(w.start);
-            if (read && read.strong && read.id !== m.id) break;
+            // (round 3) "and Moss at his heels", "the dog at her side": who is
+            // followed or flanked is someone else, never the one at the heels
+            if (prevW && /^(?:at|by|beside|behind|under)$/.test(prevW.lw) && words[i + 1] && /^(?:heels?|side|feet|elbow|shoulder|back|knee)$/.test(words[i + 1].lw)) break;
             if (OWNING.has(kind) && PRONOUNS[w.lw] !== k.sex.value) add({ kind: 'pronoun', strength: 'strong', id: m.id, attr: 'sex', fact: k.sex, start: w.start, end: w.end, to: swapPronoun(w.w, kind) });
             break;
           }
@@ -1262,7 +1262,8 @@
             ? { id: opts.narrator, start: (det || c).start, end: (det || c).end } : null;
           // or the one the chapter's reading is sure "her" or "his" means ("Mara woke before Tobias…, and her brown eyes")
           const read = det && ['her', 'his'].includes(det.lw) && opts.refs && opts.refs.get(det.start);
-          const byReading = read && read.strong && world.get(read.id) ? { id: read.id, start: det.start, end: det.end } : null;
+          // (only among the ones the sentence names, whose sex is known and agrees: the old rules' care with "John met Pell. His…" stands)
+          const byReading = read && read.strong && ids.length >= 2 && ids.includes(read.id) && world.get(read.id) && world.get(read.id).sex && PRONOUNS[det.lw] === world.get(read.id).sex.value ? { id: read.id, start: det.start, end: det.end } : null;
           const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver || noteHead || mine || byReading;
           const k = owner && world.get(owner.id);
           if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, colourWord(k[attr])) });
