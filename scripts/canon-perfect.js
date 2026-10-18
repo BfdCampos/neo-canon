@@ -350,6 +350,78 @@ function driftReader(sheet, base, { log, wrongSet, hash, N, Canon, yesToSlips = 
   };
 }
 
+// Round 5: a reader that fails the way the real Careful reader failed on the
+// fourth held-out batch (/tmp eval4 BRIEF: types only). The drift reader, and:
+//
+//   ties       casts each one by the name the chapter writes, never by an
+//              epithet ("the commander", "the old man", "the boy") or a short
+//              name ("Tom"), which it casts as someone of its own when it is a
+//              name; the narrator is no one, the name a radio call or a line
+//              of speech gives the narrator its own empty one
+//   renamed    a pet called by another name is another pet
+//   numbers    a numbered room or hut is no one (Hut 12 is never cast), and the
+//              number turned round is a place with the slip's sentence as a fact
+//   recall     never proposes a rank, a species or a breed
+//   times      gives a watch or a shift as the bare range ("2200 to 0600")
+//
+// and it believes all of it, as the drift reader does.
+function drift5Reader(sheet, base, { log, wrongSet, N }) {
+  const ix = base.ix;
+  const lines = (text) => [...text.matchAll(/\[(\d+)\] ([^[]*)/g)].map((m) => [+m[1], m[2].trim()]);
+  const own = (e, a) => { const ws = N(e.name).split(/\s+/); return N(a).split(/\s+/).every((w) => ws.includes(w)); };
+  const RANKISH = /^(?:able seaman|leading seaman|(?:chief )?petty officer|midshipman|sub-lieutenant|lieutenant(?: commander| colonel)?|commander|captain|commodore|admiral|private|lance corporal|corporal|sergeant|staff sergeant|major|colonel|brigadier|general|constable|police constable|inspector|detective(?: \w+)?|superintendent|vicar|rector|canon|bishop|archdeacon)$/i;
+  const renamed = (sheet.slips || []).filter((sl) => sl.kind === 'name' && !/\d/.test(sl.span));
+  return {
+    ...base,
+    id: 'sheet-drift5',
+    async cast(args) {
+      const r = await base.cast(args);
+      const plain = args.text.replace(/¶\d+\s/g, '');
+      const out = [];
+      const seen = new Set();
+      for (const c of r.cast) {
+        const e = ix.byName(c.name) || ix.byName((c.aliases || [])[0] || '');
+        if (e && /\s\d+$/.test(e.name)) continue; // (a numbered room is no one)
+        if (e && (e.aliases || []).some((a) => /^the narrator$/i.test(a))) {
+          // (the narrator is no one; the name the radio or a line of speech gives is its own empty one)
+          const said = [e.name, ...e.aliases].filter((a) => !/^the narrator$/i.test(a)).find((a) => plain.includes(a));
+          if (said && !seen.has(N(said))) { seen.add(N(said)); out.push({ name: said, kind: 'person', aliases: [] }); }
+          continue;
+        }
+        const keep = (c.aliases || []).filter((a) => e ? own(e, a) : true);
+        // (a nickname the drift reader already cast as its own one stays so)
+        const name = e && !own(e, c.name) && keep.length ? keep[0] : c.name;
+        if (seen.has(N(name))) continue;
+        seen.add(N(name));
+        out.push({ ...c, name, aliases: keep.filter((a) => N(a) !== N(name)) });
+        // a short name or nickname written here is someone of its own
+        for (const a of (c.aliases || []).filter((x) => e && !own(e, x) && /^\p{Lu}/u.test(x) && plain.includes(x))) if (!seen.has(N(a))) { seen.add(N(a)); out.push({ name: a, kind: c.kind, aliases: [] }); }
+      }
+      // a pet called by another name is another pet
+      for (const sl of renamed) if (plain.includes(sl.span) && !seen.has(N(sl.span))) { seen.add(N(sl.span)); out.push({ name: sl.span, kind: 'creature', aliases: [] }); }
+      return { cast: out, setting: r.setting };
+    },
+    async dossier(args) {
+      const facts = await base.dossier(args);
+      const ls = lines(args.text);
+      let out = facts.filter((f) => !(f.g === 'species' || (f.g === 'role' && RANKISH.test(String(f.v).trim()))));
+      // (a watch or a shift as the bare range)
+      out = out.map((f) => { const m = /(\d{4})\s+(?:to|until|till|-|–)\s+(\d{4})/.exec(f.v); return m ? { ...f, v: `${m[1]} to ${m[2]}` } : f; });
+      for (const f of out) if (/^\d{4} to \d{4}$/.test(f.v)) { log.push({ entity: args.name, attr: 'routine', value: f.v, v: f.v, quote: '', wrong: false, of: args.name, supported: true }); }
+      // the number turned round: a place, the slip's sentence its fact
+      for (const sl of (sheet.slips || []).filter((x) => x.kind === 'name' && /\d/.test(x.span) && N(x.span) === N(args.name))) {
+        const at = ls.find(([, t]) => N(sl.sentence).includes(N(t).replace(/[.!?]+$/, '')) || N(t).includes(N(sl.sentence).replace(/[.!?]+$/, '')));
+        if (!at) continue;
+        const v = at[1].replace(/[.!?]+$/, '').split(/,\s*/).pop();
+        out.push({ g: 'description', a: 'room', v, s: [at[0]], x: 0 });
+        log.push({ entity: args.name, attr: 'description', value: v, v, quote: at[1], wrong: true, of: 'slip', supported: false });
+        wrongSet.add(N(args.name + '|' + v));
+      }
+      return out;
+    }
+  };
+}
+
 // Pack coverage: of the sheet's facts (`weights`), the fraction whose every
 // quote sentence reached that entity's dossier (the passage packs the
 // engine sent the reader, in a run with the perfect reader). → { of, in, missing: [] }
@@ -388,7 +460,11 @@ async function runSheet(fixture, { mode = 'perfect', setting = '' } = {}) {
     const packs = new Map();
     // ('credulous': the drift reader, but yes to every slip question — what a false slip needs)
     const reader = mode === 'drift' || mode === 'credulous' || mode === 'drift5'
-      ? (() => { const base = sheetReader(sheet, { mode: 'perfect', setting, log, packs }); return driftReader(sheet, base, { log, wrongSet: base.wrongSet, hash: (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7), N, Canon, yesToSlips: mode === 'credulous' }); })()
+      ? (() => {
+        const base = sheetReader(sheet, { mode: 'perfect', setting, log, packs });
+        const d = driftReader(sheet, base, { log, wrongSet: base.wrongSet, hash: (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7), N, Canon, yesToSlips: mode === 'credulous' });
+        return mode === 'drift5' ? drift5Reader(sheet, d, { log, wrongSet: base.wrongSet, N }) : d;
+      })()
       : sheetReader(sheet, { mode, setting, log, packs });
     const engine = Canon.createEngine({ io, reader });
     await engine.readShelf({});
@@ -499,8 +575,9 @@ async function main() {
     const dr = await runSheet(fx, { mode: 'drift', setting });
     const drBad = survivors(dr);
     const cr = await runSheet(fx, { mode: 'credulous', setting });
+    const d5 = await runSheet(fx, { mode: 'drift5', setting });
     console.log(`\n== ${name}: pack coverage must ${covMust.in}/${covMust.of}, all ${cov.in}/${cov.of}; perfect reader keeps ${sv.kept}/${sv.of} (of what it proposed ${sv.proposed.kept}/${sv.proposed.of}); adversary's kept ${bad.length}/${adv.log.filter((x) => x.wrong).length}; drift's kept ${drBad.length}/${dr.log.filter((x) => x.wrong).length}`);
-    const sums = { perfect: summary(run), adversary: summary(adv, { made: bad }), drift: summary(dr, { made: drBad }), credulous: summary(cr, { made: survivors(cr) }) };
+    const sums = { perfect: summary(run), adversary: summary(adv, { made: bad }), drift: summary(dr, { made: drBad }), credulous: summary(cr, { made: survivors(cr) }), drift5: summary(d5, { made: survivors(d5) }) };
     for (const [m, x] of Object.entries(sums)) { console.log('  ' + line(m, x)); sum(m, x); for (const set of ['dev2', 'dev3', 'dev4']) if (name.startsWith(set + '/')) sum(m + '·' + set, x); }
     const show = (tag, r, made) => {
       for (const w of r.score.precision.wrong) console.log(`  ${tag} wrong: ${w}`);
@@ -514,6 +591,7 @@ async function main() {
       for (const w of r.score.profiles.unsupported || []) console.log(`  ${tag} profile: ${w}`);
     };
     if (v || process.argv.includes('--drift')) { show('drift', dr, drBad); show('credulous', cr, survivors(cr)); }
+    if (v || process.argv.includes('--drift5')) show('drift5', d5, survivors(d5));
     if (v) {
       for (const m of cov.missing) console.log('  not in pack: ' + m);
       for (const m of sv.lost) console.log('  lost: ' + m);
@@ -529,4 +607,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { sheetReader, driftReader, packCoverage, runSheet, survival, survivors, summary, FIXTURES, DEV3, DEV4, SETTINGS, groupOf, citeIds };
+module.exports = { sheetReader, driftReader, drift5Reader, packCoverage, runSheet, survival, survivors, summary, FIXTURES, DEV3, DEV4, SETTINGS, groupOf, citeIds };

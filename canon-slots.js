@@ -29,8 +29,11 @@ module.exports = function canonSlots(C) {
   const CHANGE = /(?<![\p{L}])(?:moved|move|moving|relocated|rebuilt|now|newly|had become|became|used to|once|formerly|no longer|since the move|after the move|temporar\w*)(?![\p{L}])/iu;
 
   // the hour a thing is done: "at ten", "at half past eight", "at ten to nine", "at 6.30"
-  const HOUR = '(?:\\d{1,2}(?:[.:]\\d{2})?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)';
+  // (round 5: the twenty-four hour clock too, "2200", "0600 hours", "22.00")
+  const HOUR = '(?:(?:[01]\\d|2[0-3])[0-5]\\d(?:\\s*(?:hours|hrs))?|\\d{1,2}(?:[.:]\\d{2})?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)';
   const TIME_RE = new RegExp(`(?<![\\p{L}])(?:at|from|until|till)\\s+((?:(?:half|quarter|five|ten|twenty|twenty-five)\\s+(?:past|to)\\s+${HOUR})|${HOUR}(?:\\s*(?:o['’]clock|am|pm|a\\.m\\.|p\\.m\\.))?|noon|midday|midnight)(?![\\p{L}\\d])`, 'giu');
+  // a range's far end: "from 2200 to 0600", "ten till six", "2200–0600"
+  const RANGE_END = new RegExp(`^\\s*(?:to|until|till|-|–|—)\\s*(${HOUR})(?![\\p{L}\\d])`, 'iu');
   function minutes(t) {
     const s = norm(t).replace(/\s*o['’]clock$/, '');
     if (s === 'noon' || s === 'midday') return 12 * 60;
@@ -44,14 +47,16 @@ module.exports = function canonSlots(C) {
     }
     m = /^(\d{1,2})[.:](\d{2})/.exec(s);
     if (m) return ((+m[1] % 12) * 60 + +m[2]) % 720;
+    m = /^([01]\d|2[0-3])([0-5]\d)(?:\s*(?:hours|hrs))?$/.exec(s);
+    if (m) return ((+m[1] % 12) * 60 + +m[2]) % 720;
     const h = num(s.replace(/\s*(?:am|pm|a\.m\.|p\.m\.)$/, ''));
     return h == null || h > 24 ? null : (h % 12) * 60;
   }
   // what is done at that hour, by the words before it in its clause
   const ACTS = [
-    ['start', /(?<![\p{L}])(?:start(?:s|ed)?|began|begins?|came on|comes? on|clock(?:s|ed)? on|went on duty|goes on duty|on duty|open(?:s|ed)?|shift)(?![\p{L}])/iu],
+    ['start', /(?<![\p{L}])(?:start(?:s|ed)?|began|begins?|came on|comes? on|clock(?:s|ed)? on|went on duty|goes on duty|on duty|open(?:s|ed)?|shift|watch|ran|runs)(?![\p{L}])/iu],
     ['end', /(?<![\p{L}])(?:end(?:s|ed)?|finish(?:es|ed)?|came off|comes? off|clock(?:s|ed)? off|knock(?:s|ed)? off|close[sd]?|shut)(?![\p{L}])/iu],
-    ['wake', /(?<![\p{L}])(?:rose|rises?|woke|wakes?|got up|gets up|up)(?![\p{L}])/iu],
+    ['wake', /(?<![\p{L}])(?:rose|rises?|woke|wakes?|got up|gets up|(?:was|were|is|are|be) up)(?![\p{L}])/iu],
     ['bed', /(?<![\p{L}])(?:went to bed|goes to bed|to bed|lights out|turned in)(?![\p{L}])/iu]
   ];
   const EVENTS = /(?<![\p{L}])(assembly|mass|service|prayers|chapel|evensong|matins|roll call|roll-call|curfew|breakfast|lunch|luncheon|dinner|supper|tea|the post|the train|the bus|the ferry|the tide|the bell|the bells|visiting|visiting hours|surgery|school|class|lessons|parade|drill)(?![\p{L}])/iu;
@@ -103,6 +108,9 @@ module.exports = function canonSlots(C) {
       const act = actOf(before, label);
       if (!act) continue;
       push('time:' + act, mins, m[1], m.index + m[0].indexOf(m[1]), true, { habit: HABIT.test(t) });
+      // (round 5) "from 2200 to 0600": the far end is when it ends
+      const far = RANGE_END.exec(t.slice(m.index + m[0].length));
+      if (far && act === 'start' && minutes(far[1]) != null) push('time:end', minutes(far[1]), far[1], m.index + m[0].length + far[0].indexOf(far[1]), true, { habit: HABIT.test(t) });
     }
     // a bare value, its slot by the label: "Shift start: eight", "Situated: west bank"
     if (bare && !out.length) {
@@ -110,6 +118,12 @@ module.exports = function canonSlots(C) {
       const mins = /^(?:at\s+)?[\p{L}\d.:'’ -]+$/u.test(v) ? minutes(v.replace(/^at\s+/i, '')) : null;
       const act = mins != null && /\b(?:shift|start|starts|came on|on duty|time|hours?|schedule|timetable|routine|daily|rises?|wakes?|bed|ends?|finish)\b/i.test(label) ? actOf('', label) || 'start' : null;
       if (act) push('time:' + act, mins, v, 0, true, { habit: true });
+      // (round 5) a bare range, "2200 to 0600" for a watch or a shift: its start and its end
+      const r = new RegExp(`^(?:from\\s+)?(${HOUR})\\s*(?:to|until|till|-|–|—)\\s*(${HOUR})$`, 'iu').exec(v);
+      if (!act && r && minutes(r[1]) != null && minutes(r[2]) != null && /\b(?:shift|watch|duty|start|hours?|schedule|timetable|routine|daily|works?|habit|pattern|usual)\b/i.test(label)) {
+        push('time:start', minutes(r[1]), r[1], 0, true, { habit: true });
+        push('time:end', minutes(r[2]), r[2], v.indexOf(r[2], r[1].length), true, { habit: true });
+      }
     }
     // a school year, a form ("Year Ten", "Year 10", "the fifth form")
     for (const m of t.matchAll(/(?<![\p{L}])Year\s+(\d{1,2}|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen)(?![\p{L}\d])/gu)) push('year', num(m[1]), m[0], m.index, false);

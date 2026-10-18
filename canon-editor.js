@@ -278,6 +278,7 @@ module.exports = function canonEditor(C) {
     epithetSplits(cast, text, lower, entries);
     nicknames(cast, ch, names);
     numberedSlips(cast, text, entries);
+    round5Cast(cast, ch, entries);
     // (round 3) a group's, place's or thing's short name that one full name
     // opens with: "the Guild" for "the Guild of Wick-Trimmers" (never two:
     // "the Hall" beside "the Hall of Records" and "the Hall of Mirrors" is no one's)
@@ -509,6 +510,98 @@ module.exports = function canonEditor(C) {
       mergeCast(cast, b, a);
     }
   }
+  // (round 5) Who the cast is, past the names the reader gave:
+  //   generations  the old one and the young one of a name a father and son
+  //                share ("Josiah Tolland Senior" … "the old man"; "Junior" …
+  //                "the boy", "young Josiah"), and the name the text gives the
+  //                young one ("Everyone in the yard called the boy Young Joss")
+  //   short names  "Tom" for the one Thomas the shelf holds, no one else's short form
+  //   renamed      a proper name written with an animal's owner and kind
+  //                ("The commander's Labrador, Bess") is that animal, renamed:
+  //                no entry of its own; the pass flags the name
+  //   numbered     "Hut 12", "Room 14", "Bay 9", written in the narration: a
+  //                place the first time it is written (first said, first kept),
+  //                unless it is a kept one's number turned round
+  const NUMBERED = /(?<![\p{L}])((?:Room|Hut|Bay|Lab|Laboratory|Platform|Ward|Cell|Bed|Berth|Pier|Dock|Shed|Block|Hangar|Unit|Flat|Cabin|Locker|Gate|Stall|Box|Cottage|Pitch|Pen|Kennel|Classroom|Studio|Suite|Office|Floor|Wing|Level|Deck|Barrack|Barracks|Ward|Bunker|Battery|Post|Station|Track|Siding|Lane|Lock|Bridge|Mine|Shaft|Pit|Well|Tower|Turret|Bastion|Hold)\s+(\d{1,4}[A-Z]?))(?![\p{L}\d])/gu;
+  function round5Cast(cast, ch, entries) {
+    const R = C.Refs && C.Refs();
+    if (!R) return;
+    const text = ch.text;
+    const live = entries.filter((e) => !e.locked);
+    const people = () => cast.filter((c) => !c.gone && c.kind === 'person');
+    const GEN_OLD = /\s+(?:the\s+(?:Elder|Eldest|First)|Senior|Sr\.?)$/u;
+    const GEN_YOUNG = /\s+(?:the\s+(?:Younger|Youngest|Second)|Junior|Jr\.?)$/u;
+    // the one called so, of the cast or the shelf's entries (an entry the chapter names joins the cast)
+    const holder = (re) => {
+      const c = cast.find((x) => !x.gone && x.kind === 'person' && [x.name, ...x.aliases].some((n) => re.test(n)));
+      if (c) return c;
+      const e = live.find((x) => x.kind === 'person' && [x.name, ...x.aliases].some((n) => re.test(n)));
+      if (!e) return null;
+      const o = cast.find((x) => !x.gone && x.entry === e) || { key: cast.length, name: e.name, kind: 'person', aliases: [...e.aliases], in: '', proper: true, wanted: [], entry: e };
+      if (!cast.includes(o)) cast.push(o);
+      return o;
+    };
+    const named = [...cast.filter((x) => !x.gone && x.kind === 'person'), ...live.filter((x) => x.kind === 'person')];
+    const olds = [...new Set(named.flatMap((x) => [x.name, ...(x.aliases || [])]).filter((n) => GEN_OLD.test(n)).map((n) => n.replace(GEN_OLD, '')))];
+    const pairs = olds.filter((b) => named.some((x) => [x.name, ...(x.aliases || [])].some((n) => GEN_YOUNG.test(n) && n.replace(GEN_YOUNG, '') === b)));
+    if (pairs.length === 1) {
+      const base = pairs[0];
+      const given = base.split(/\s+/)[0];
+      const old = holder(new RegExp(`^${escRe(base)}${GEN_OLD.source}`, 'u'));
+      const young = holder(new RegExp(`^${escRe(base)}${GEN_YOUNG.source}`, 'u'));
+      const add = (c, form) => { if (c && written(text, form) && !c.aliases.some((a) => norm(a) === norm(form)) && !cast.some((o) => o !== c && !o.gone && [o.name, ...o.aliases].some((n) => norm(n) === norm(form)))) c.aliases.push(form); };
+      if (old && young && old !== young) {
+        for (const f of ['the old man', 'The old man', 'old ' + given, 'Old ' + given]) add(old, f);
+        for (const f of ['the boy', 'The boy', 'the lad', 'young ' + given, 'Young ' + given]) add(young, f);
+        // "Everyone in the yard called the boy Young Joss": the name is the young one's
+        for (const [c, words] of [[old, 'old man|old woman'], [young, 'boy|lad|girl|son']]) {
+          for (const m of text.matchAll(new RegExp(`(?<![\\p{L}])(?:called|named|nicknamed|calls|call)\\s+the\\s+(?:${words})\\s+((?:\\p{Lu}[\\p{L}'’-]+)(?:\\s+\\p{Lu}[\\p{L}'’-]+)?)`, 'gu'))) {
+            const nm = m[1];
+            const o = cast.find((x) => x !== c && !x.gone && [x.name, ...x.aliases].some((n) => norm(n) === norm(nm)));
+            if (o && o.kind === 'person') mergeCast(cast, c, o);
+            else if (!o && !c.aliases.some((a) => norm(a) === norm(nm))) c.aliases.push(nm);
+          }
+        }
+      }
+    }
+    // a short name for the one given name the shelf holds ("Tom" for Thomas Carew)
+    for (const c of people()) {
+      if (c.gone || c.entry || /\s/.test(c.name) || !/^\p{Lu}\p{Ll}+$/u.test(c.name)) continue;
+      if (live.some((e) => [e.name, ...e.aliases].some((n) => norm(n) === norm(c.name)))) continue;
+      // (the table's short forms of a given name; or, four letters or more, the start of a surname or a given name — "Raff" for Rafferty)
+      const sur = (x) => { const w = norm(stripTitles(String(x.name).replace(/^the\s+/i, ''))).split(/\s+/); return w.length > 1 ? w[w.length - 1] : null; };
+      const fits = (x) => { const g = R.givenOf(x); if (g && (R.SHORT[norm(g)] || []).includes(norm(c.name))) return true; const n = norm(c.name); return n.length >= 4 && [g && norm(g), sur(x)].some((w) => w && w.length > n.length + 1 && w.startsWith(n)); };
+      const by = [...new Set([...live.filter((e) => e.kind === 'person'), ...people().filter((x) => x !== c && !x.gone)].filter(fits))];
+      if (by.length !== 1) continue;
+      const t = by[0];
+      if (t.facts) { c.entry = t; c.short = true; if (!c.aliases.some((a) => norm(a) === norm(t.name))) c.aliases.push(t.name); }
+      else mergeCast(cast, t, c);
+    }
+    // an animal renamed: the name an owner's animal of one kind is given in apposition
+    const forms = R.refForms(live, { loose: true });
+    const aug = R.withForms(live, forms);
+    const idx = mentionIndex(aug);
+    for (const p of ch.paras) {
+      for (const x of R.animalSlots(p.text, aug, forms, idx, { loose: true })) {
+        if (x.slot !== 'name' || x.strength !== 'strong') continue;
+        for (const c of cast) if (!c.gone && !c.entry && norm(c.name) === norm(x.span)) { c.gone = true; c.name = '\u0000'; c.aliases = []; }
+      }
+    }
+    // numbered places, the first time they are written
+    for (const p of ch.paras) {
+      for (const m of p.text.matchAll(NUMBERED)) {
+        if (p.talk.some(([a, b]) => m.index < b && m.index + m[0].length > a)) continue;
+        const name = m[1].replace(/\s+/g, ' ');
+        if (cast.some((c) => !c.gone && [c.name, ...c.aliases].some((n) => norm(n) === norm(name)))) continue;
+        const kept = live.find((e) => norm(e.name) === norm(name));
+        // (a kept one's number turned round is no new place: the pass flags it)
+        const [, word, num] = /^(.*\S)\s+(\d+)/.exec(name);
+        const turned = live.some((e) => { const y = /^(.*\S)\s+(\d{2,4})$/.exec(e.name); return y && norm(y[1]) === norm(word) && y[2] !== num && [...y[2]].sort().join('') === [...num].sort().join(''); });
+        if (turned && !kept) continue;
+        cast.push({ key: cast.length, name, kind: 'place', aliases: [], in: '', proper: true, wanted: [], entry: kept || null, numbered: true });
+      }
+    }
+  }
   // (round 4) A numbered place or thing whose number is another's turned
   // round ("Room 41" in a chapter that never writes "Room 14", where Room 14
   // is kept): no new entry; the pass asks about the number.
@@ -611,7 +704,10 @@ module.exports = function canonEditor(C) {
     return out;
   }
   function firstPerson(ch) {
-    return ch.paras.reduce((n, p) => n + selfHits(p).length, 0) >= 5;
+    // (round 5: or four, two of them opening a sentence — "I came to…", "My watch ran…")
+    const hits = ch.paras.flatMap((p) => selfHits(p).map((h) => ({ ...h, p })));
+    const opening = hits.filter((h) => !/[\p{L}\p{N},;]\s*$/u.test(h.p.text.slice(Math.max(0, h.start - 3), h.start)) || h.start === 0).length;
+    return hits.length >= 5 || (hits.length >= 4 && opening >= 2);
   }
   function narratorNames(ch, cast, lower) {
     const ok = (w) => w && /^\p{Lu}\p{Ll}/u.test(w) && !nonEntity(w, 'person') && !TITLES.has(w.toLowerCase()) && !(lower && lower.has(w.toLowerCase())) && !PRONOUNS[w.toLowerCase()];
@@ -639,12 +735,37 @@ module.exports = function canonEditor(C) {
       }
       for (const m of p.text.matchAll(/(?<![\p{L}])(\p{Lu}\p{Ll}+)\s+(?:said|asked|told|was|had|did|went|came|looked|turned|smiled|nodded|laughed)\b/gu)) if (narr(m.index, m.index + m[0].length)) asOther.add(m[1]);
     }
+    // (round 5) a name said to someone in speech, in a story told in the first person, that the
+    // narration never uses for anyone ("“Lieutenant Hale, this is the battery. Do you read, over?”",
+    // "“You, Imogen, should have been in bed”"): the narrator's, the way a radio call or a line
+    // of speech is how a first-person narrator's name is usually given. Its title is an alias.
+    const loose = [];
+    const titled = new Map();
+    const inNarration = (w) => ch.paras.some((p) => [...p.text.matchAll(new RegExp(`(?<![\\p{L}])${w}(?![\\p{L}])`, 'gu'))].some((m) => !p.talk.some(([a, b]) => m.index < b && m.index + w.length > a)));
+    for (const p of ch.paras) {
+      for (const [a, b] of speechSpans(p.text)) {
+        const said = p.text.slice(a, b);
+        // (not the narrator's own words: "…,” I said")
+        if (/^\s*,?\s*(?:I|me)\s+(?:said|asked|called|shouted|whispered|told|replied|answered)\b/u.test(p.text.slice(b, b + 20)) || /\bI\s+(?:said|asked|called|shouted|whispered|told|replied|answered)[,:]?\s*$/u.test(p.text.slice(Math.max(0, a - 25), a))) continue;
+        for (const m of said.matchAll(/(?:^[“"‘']\s*(?!(?:You|Yes|No|Oh|Well|Now|Look|Listen|Please|Come|Here|There|Sorry|Thanks|Right|Okay|Sir|Madam)\b)(?:(\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+)?)\s+)?(\p{Lu}\p{Ll}+)\s*,|(?:^[“"‘']\s*|,\s*)(?:you|You),\s*(\p{Lu}\p{Ll}+)\s*,|,\s*(\p{Lu}\p{Ll}+)\s*[.!?]\s*[”"’']?\s*$)/gu)) {
+          const w = m[2] || m[3] || m[4];
+          const title = m[1] && TITLES.has(norm(m[1]).split(/\s+/).pop()) ? m[1] : null;
+          if (!w || TITLES.has(norm(w)) || inNarration(w)) continue;
+          if (m[1] && !title) continue;
+          loose.push(w);
+          if (title) titled.set(w, `${title} ${w}`);
+        }
+      }
+    }
     const good = (w) => ok(w) && !asOther.has(w);
     // the narration's own word first, then a name said to the narrator's face
-    const name = strong.find(good) || voc.find(good) || null;
+    const castOther = (w) => cast.some((c) => !c.gone && !c.narrator && c.kind === 'person' && [c.name, ...c.aliases].some((n) => norm(n) === norm(w)) && inNarration(w));
+    const looseOk = (w) => good(w) && !castOther(w);
+    const name = strong.find(good) || voc.find(good) || loose.find(looseOk) || null;
     if (!name) return { name: null, aliases: [] };
     // ("At home I was Eleanor": a second name, beside the first)
-    return { name, aliases: [...new Set([...strong, ...voc, ...weak])].filter((w) => w !== name && good(w)) };
+    const also = [...new Set([...strong, ...voc, ...weak, ...loose.filter(looseOk)])].filter((w) => w !== name && good(w));
+    return { name, aliases: [...also, ...[name, ...also].map((w) => titled.get(w)).filter(Boolean)] };
   }
 
   /* ---------- 2 · passage packs ---------- */
@@ -1477,6 +1598,22 @@ module.exports = function canonEditor(C) {
     const ratio = valueWords.length ? grounded.length / valueWords.length : 0;
     if (!valueWords.length) return { why: 'empty' };
     if (ratio < 0.5 && !(interpretive && ratio > 0)) return { why: 'ungrounded' };
+    // (round 5) a number with no noun is no description ("eleven" from "had eleven lodgers"): a count says what of
+    if (!['age', 'routine', 'habit', 'history', 'role', 'name'].includes(labelFamily(key)) && key !== 'age' && content(value).length && content(value).every((w) => NUMBER.test(w))) return { why: 'shape' };
+    // (round 5) an object's colour is the object's, not the room it stands in ("A red enamel mug stood on the chart table in Hut 12")
+    if (['place', 'thing'].includes(c.kind) && tokens(value).some((w) => COLOURS[w]) && content(value).length <= 3) {
+      const cw = tokens(value).find((w) => COLOURS[w]);
+      const heads = new Set([c.name, ...c.aliases].flatMap((n) => content(n)));
+      const theirs = cited.every((l) => {
+        const m = new RegExp(`(?<![\\p{L}])${escRe(cw)}(?:[\\s,-]+[\\p{L}-]+){0,2}?\\s+([\\p{Ll}-]+)`, 'iu').exec(l.s.text);
+        if (!m || heads.has(stem(norm(m[1])))) return false;
+        const at = l.s.text.slice(m.index + m[0].length);
+        return [c.name, ...c.aliases].some((n) => new RegExp(`(?<![\\p{L}])(?:in|on|at|inside|by|near|behind|under|of)\\s+(?:the\\s+)?${escRe(n.replace(/^the\s+/i, ''))}(?![\\p{L}])`, 'iu').test(at));
+      });
+      if (theirs) return { why: 'someone else' };
+    }
+    // (round 5) a deed's own verb is the sentence's: "cast the bell" is no deed of "when the bell was hung"
+    if ((labelFamily(key) === 'history' || /^(?:deed|event|founding|built)$/i.test(label)) && /^\p{Ll}+ed$|^(?:cast|built|made|dug|drew|wrote|sold|bought|sank|shot|stole|founded|planted|carved|painted|killed|rescued|saved)$/u.test(norm(value).split(/\s+/)[0]) && !inBag(stem(norm(value).split(/\s+/)[0]), bag)) return { why: 'ungrounded' };
     // polarity: "not one of the Spared" isn't "one of the Spared"
     const clauses = cited.map((l) => clauseOf(l.s, grounded));
     if (localNeg(clauses.join(' '), grounded) !== negated(value) && !(negated(value) && /less|out\b|\bun/i.test(value))) return { why: 'polarity' };
@@ -1495,7 +1632,9 @@ module.exports = function canonEditor(C) {
     // tells the scene, not how the thing is
     const MOMENT = /(?<![\p{L}])(?:by noon|by nightfall|by evening|by morning|that (?:morning|evening|night|afternoon|day|week|year)|this (?:morning|evening)|tonight|today|yesterday|at (?:supper|dinner|breakfast|dawn|dusk|noon|midnight)|at \S+ o['’]clock|for a moment|for once|just then|suddenly|by then)(?![\p{L}])/iu;
     const citedText = cited.map((l) => l.s.text).join(' ');
-    if (['other', 'state', 'location', 'description', 'appearance', 'atmosphere', 'habit', 'possession', 'relationship', 'personality', 'function'].includes(labelFamily(key)) && key !== 'relationship.kin' && MOMENT.test(citedText) && !HABITUAL.test(citedText.replace(MOMENT, ''))) return { why: 'once' };
+    // (round 5: not a look in a description of the kind they are — "The old man was sixty that year, a lean, stooping man with dark eyes")
+    const described = labelFamily(key) === 'appearance' && cited.every((l) => new RegExp(KIND_NOUN.source + '\\s+(?:with|of)\\b', 'iu').test(l.s.text) && content(value).some((w) => content(l.s.text.slice(l.s.text.search(KIND_NOUN))).includes(w)));
+    if (!described && ['other', 'state', 'location', 'description', 'appearance', 'atmosphere', 'habit', 'possession', 'relationship', 'personality', 'function'].includes(labelFamily(key)) && key !== 'relationship.kin' && MOMENT.test(citedText) && !HABITUAL.test(citedText.replace(MOMENT, ''))) return { why: 'once' };
     // the predicate of one action ("Ada was waiting at the top of the Spine
     // with two mugs", "They slept in the Long Gallery", "he rode her down the
     // rows") is the scene; an apposition before the verb ("Clem, his grey
@@ -2054,6 +2193,19 @@ module.exports = function canonEditor(C) {
         else if (!other && !me.aliases.some((x) => norm(x) === norm(a)) && norm(a) !== norm(me.name)) me.aliases.push(a);
       }
     }
+    // (round 5) a narrator already named: the names this chapter's speech gives them too ("“You, Imogen, …”")
+    if (me && narrator && me.entry === narrator) {
+      const nn = narratorNames(ch, cast.filter((c) => c !== me), names && names.lower);
+      for (const a of [nn.name, ...(nn.aliases || [])].filter(Boolean)) {
+        if (norm(a) === norm(narrator.name) || narrator.aliases.some((x) => norm(x) === norm(a)) || entries.some((e) => e !== narrator && !e.locked && [e.name, ...e.aliases].some((n) => norm(n) === norm(a)))) continue;
+        const other = cast.find((c) => c !== me && !c.gone && c.kind === 'person' && [c.name, ...c.aliases].some((n) => norm(n) === norm(a)));
+        if (other && !other.entry) mergeCast(cast, me, other);
+        if (!me.aliases.some((x) => norm(x) === norm(a))) me.aliases.push(a);
+        narrator.aliases.push(a);
+      }
+    }
+    // (round 5) a short name the text ties by rule ("Tom" for Thomas Carew) is the entry's alias
+    for (const c of cast) if (c.short && c.entry && !c.entry.locked && /^\p{Lu}/u.test(c.name) && ![c.entry.name, ...c.entry.aliases].some((n) => norm(n) === norm(c.name))) c.entry.aliases.push(c.name);
     if (me) me.narrator = true;
     for (let i = cast.length - 1; i >= 0; i--) if (cast[i].gone) cast.splice(i, 1);
     cast.forEach((c, i) => { c.key = i; });
@@ -2216,6 +2368,35 @@ module.exports = function canonEditor(C) {
       if (!quote) continue;
       const e = entryOf(c);
       kept.push({ e, f: { attr: 'other', label: 'Role', value: role.slice(4), as: '', state: 'unverified', sources: [{ label: book, quote, book: src.bookId, ch: src.chId }] } });
+    }
+    // (round 5) a rank the narration writes before one's name ("Commander Ruth Okafor ran the
+    // station", "Sergeant Ellis Pryce kept the police station") is theirs: the text's own word,
+    // from the first sentence that calls them so; not one told as a change, nor a later one
+    // that differs (the pass flags it)
+    const R = C.Refs && C.Refs();
+    if (R) {
+      for (const c of cast) {
+        if (c.kind !== 'person' || c.narrator) continue;
+        const had = c.entry && R.rankOf(c.entry, { loose: true });
+        let got = null;
+        for (const p of ch.paras) {
+          for (const h of (hits[p.pi] || []).filter((x) => x.key === c.key)) {
+            if (p.talk.some(([a, b]) => h.start < b && h.end > a)) continue;
+            const r = R.rankAt(p.text, h.start) || R.rankOfName(p.text.slice(h.start, h.end));
+            if (!r) continue;
+            const s = p.sents.find((x) => h.start >= x.start && h.start < x.end);
+            if (!s || s.said || R.RANK_CHANGE.test(s.text) || (ctx.suspect && ctx.suspect.has(s.id))) continue;
+            got = { r, s };
+            break;
+          }
+          if (got) break;
+        }
+        const fact = c.entry && c.entry.facts.some((f) => f.attr === 'other' && /^rank$/i.test(f.label || ''));
+        if (!got || (had && R.rankClash(had.text, got.r.text)) || (fact && R.rankKey(had.text) === got.r.key)) continue;
+        const quote = gateQuote(fit(got.s.text, content(got.r.text)), ch.text) || gateQuote(got.s.text, ch.text);
+        if (!quote) continue;
+        kept.push({ e: entryOf(c), f: { attr: 'other', label: 'Rank', value: got.r.text, as: '', state: 'unverified', sources: [{ label: book, quote, book: src.bookId, ch: src.chId }] }, tied: true });
+      }
     }
     // every cast member is an entry once something about it is kept, or the chapter names it often
     for (const c of cast) {

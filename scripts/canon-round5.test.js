@@ -75,3 +75,99 @@ test('the writer\'s notes against the prose: Which is right?, and the notes are 
   assert.ok(lines(carew).includes('Eyes: green · disagree') && lines(carew).includes('Eyes: brown · disagree'), lines(carew).join('\n'));
   assert.ok(![...r.slips, ...r.asks].some((s) => /eyes/.test(s.sentence)), [...r.slips, ...r.asks].map((s) => s.sentence).join('\n'));
 });
+
+/* ---------- 3 · ranks, short names, times ---------- */
+
+test('ranks: a ladder each; one step down is a slip, the later one shortened is not, a promotion told is not', () => {
+  const R = Canon.Refs;
+  assert.ok(R.rankClash('Commander', 'Lieutenant Commander'));
+  assert.ok(!R.rankClash('Lieutenant Commander', 'Commander'), 'how a lieutenant commander is spoken to');
+  assert.ok(R.rankClash('Sergeant', 'Constable'));
+  assert.ok(!R.rankClash('Detective Inspector', 'Inspector'));
+  assert.ok(R.rankClash('Petty Officer', 'Chief Petty Officer'));
+  assert.ok(!R.rankClash('Vicar', 'Sergeant'), 'two ladders never meet');
+  assert.deepEqual(R.rankAt('That autumn Constable Pryce came', 'That autumn Constable '.length), { text: 'Constable', key: 'constable', start: 12, end: 21 });
+  assert.equal(R.rankOfName('Commander Ruth Okafor').key, 'commander');
+  assert.ok(R.RANK_CHANGE.test('Dunn had been made Chief Petty Officer in March'));
+});
+
+test('short names: the table\'s forms and a prefix of four letters or more', () => {
+  const R = Canon.Refs;
+  assert.ok(R.shortOf('Tom', 'Thomas'));
+  assert.ok(R.shortOf('Bess', 'Elizabeth'));
+  assert.ok(R.shortOf('Raff', 'Rafferty'));
+  assert.ok(!R.shortOf('Tho', 'Thomas'));
+  assert.ok(!R.shortOf('Jo', 'Thomas'));
+});
+
+test('times: the twenty-four hour clock and a range, its start and its end', () => {
+  const S = Canon.Slots;
+  const got = (t, o) => S.claims(t, o).map((x) => `${x.slot}=${x.val}`);
+  assert.deepEqual(got('My watch ran from 2200 to 0600 every night'), ['time:start=600', 'time:end=360']);
+  assert.deepEqual(got('I came on watch at 2300, as I did every night'), ['time:start=660']);
+  assert.deepEqual(got('2200 to 0600', { label: 'shift', bare: true }), ['time:start=600', 'time:end=360']);
+  const c = S.clashOf(S.claims('My watch ran from 2200 to 0600 every night'), S.claims('I came on watch at 2300, as I did every night'));
+  assert.ok(c && c.sure && c.b.span === '2300');
+  assert.deepEqual(got('He brought the weather report up to Hut 12 at four every morning.'), [], 'up is no waking');
+});
+
+test('the forms that refer: a rank one holds, the old one and the young one of a name, a short given name, the one dog', () => {
+  const e = (id, name, kind, aliases, facts = []) => ({ id, name, kind, aliases, facts: facts.map(([attr, value, label]) => ({ attr, value, label, as: '', state: 'verified', sources: [{ quote: value, book: 'b', ch: 'c' }] })), setAside: [], story: [] });
+  const entries = [
+    e('okafor', 'Commander Ruth Okafor', 'person', ['Okafor']),
+    e('senior', 'Josiah Tolland Senior', 'person', []), e('junior', 'Josiah Tolland Junior', 'person', []),
+    e('carew', 'Thomas Carew', 'person', ['Carew']),
+    e('pickle', 'Pickle', 'creature', [], [['species', 'dog'], ['other', 'Mrs Hollis’s dog', 'Possession']])
+  ];
+  const f = Canon.Refs.refForms(entries);
+  const has = (id, p) => (f.get(id) || []).some((x) => x.phrase === p);
+  assert.ok(has('okafor', 'the commander'));
+  assert.ok(has('senior', 'the old man') && has('junior', 'the boy') && has('junior', 'young Josiah'));
+  assert.ok(has('carew', 'Tom'));
+  assert.ok((f.get('pickle') || []).some((x) => x.phrase === 'the dog' && x.strength === 'weak'));
+});
+
+/* ---------- 4 · the pass, with the drift5 reader (dev4) ---------- */
+
+test('Carrick Head: the watch\'s hour, eyes by an epithet, a rank one step down, a renamed dog, a hut turned round', async () => {
+  const r = await run('dev4/carrick-head');
+  const want = [['I came on watch at 2300', '2300', null], ['The commander’s brown eyes', 'brown', 'grey'], ['Lieutenant Commander Okafor', 'Lieutenant Commander', 'Commander'], ['The commander’s Labrador, Bess', 'Bess', 'Ness'], ['Hut 21 with the signal', 'Hut 21', 'Hut 12']];
+  for (const [at, span, to] of want) {
+    const s = slipOn(r, at);
+    assert.ok(s && s.span === span && s.strength === 'strong', at + ': ' + JSON.stringify(s));
+    if (to) assert.equal(s.to, to);
+  }
+  // no false slip on the decoys: a promotion told as one, other people's ages, a route, a breakfast
+  for (const d of ['made Chief Petty Officer', 'forty-four that winter', 'the long way round', 'at breakfast in the wardroom']) assert.ok(!slipOn(r, d) && !lookOn(r, d), d);
+  assert.equal(r.slips.length, 5, r.slips.map((s) => s.span).join(', '));
+  // the narrator, named by the radio and by a line of speech; the hut a place from its first mention; no Bess, no Hut 21
+  const hale = entry(r.entries, 'Hale');
+  assert.ok(hale && hale.aliases.some((a) => /Imogen/.test(a)) && hale.aliases.includes('Lieutenant Hale'), JSON.stringify(hale && [hale.name, hale.aliases]));
+  assert.ok(entry(r.entries, 'Hut 12') && !entry(r.entries, 'Hut 21') && !entry(r.entries, 'Bess'));
+  assert.ok(lines(entry(r.entries, 'Dunn')).includes('Rank: Petty Officer · verified'), lines(entry(r.entries, 'Dunn')).join('\n'));
+  assert.ok(!lines(entry(r.entries, 'Hut 12')).some((l) => /red/.test(l)), 'the mug is red, not the hut');
+});
+
+test('The Lugger: hair under a short name, a breed by its owner\'s possessive; the notes against the prose asked', async () => {
+  const r = await run('dev4/lugger');
+  const hair = slipOn(r, 'Tom came down late');
+  assert.ok(hair && hair.span === 'dark' && hair.strength === 'strong', JSON.stringify(hair));
+  const breed = slipOn(r, 'little Jack Russell');
+  assert.ok(breed && breed.span === 'Jack Russell' && /fox terrier/.test(breed.to), JSON.stringify(breed));
+  assert.equal(r.slips.length, 2);
+  assert.ok(entry(r.entries, 'Tom') === entry(r.entries, 'Thomas Carew'), 'Tom is Thomas Carew');
+  assert.ok(!lines(entry(r.entries, 'Nora Hollis')).some((l) => /: eleven ·/.test(l)), 'a number with no noun');
+});
+
+test('Tolland\'s: the father\'s bell given to the son by his nickname, the old man\'s eyes, a constable for the sergeant; a round moved is no slip', async () => {
+  const r = await run('dev4/tollands');
+  const deed = slipOn(r, 'the bell that Young Joss had cast');
+  assert.ok(deed && deed.span === 'Young Joss' && deed.to === 'Josiah Tolland Senior', JSON.stringify(deed));
+  const eyes = slipOn(r, 'The old man’s blue eyes');
+  assert.ok(eyes && eyes.span === 'blue' && eyes.entry === entry(r.entries, 'Josiah Tolland Senior').id, JSON.stringify(eyes));
+  const rank = slipOn(r, 'Constable Pryce');
+  assert.ok(rank && rank.span === 'Constable' && rank.to === 'Sergeant', JSON.stringify(rank));
+  for (const d of ['every morning at nine now', 'Young Joss had blue eyes', 'The boy’s red hair']) assert.ok(!slipOn(r, d) && !lookOn(r, d), d);
+  assert.equal(r.slips.length, 3, r.slips.map((s) => s.span).join(', '));
+  assert.ok(entry(r.entries, 'Young Joss') === entry(r.entries, 'Josiah Tolland Junior'), 'Young Joss is the boy');
+});

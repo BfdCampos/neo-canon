@@ -1428,8 +1428,11 @@
   // `story` (storyIndex), `rank` (book/ch → place in reading order) and
   // `rare` (rarity) let the reader check a sentence against the story's
   // key points (STORY.md §5); without them, or a reader, it isn't.
-  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null, story = null, rank = null, rare = null, open = null, kin = null, narrators = {}, deeds = null }) {
-    const idx = mentionIndex(entries);
+  async function checkSources({ sources, entries, notSlips = [], reader = null, knownWords = null, out = {}, onSource = null, stop = null, paraOk = null, story = null, rank = null, rare = null, open = null, kin = null, narrators = {}, deeds = null, forms = null }) {
+    // (round 5) who a sentence names: the names and aliases, and the strong forms that refer
+    // (an epithet only one holds, a short name, the old one and the young one of a name)
+    const aug = forms && Refs ? Refs.withForms(entries, forms) : entries;
+    const idx = mentionIndex(aug);
     const world = worldOf(entries, out);
     const names = nameTokens(entries);
     const byId = new Map(entries.map((e) => [e.id, e]));
@@ -1503,6 +1506,44 @@
           ...(ask ? { ask: true, ref } : {})
         });
       }
+      // (round 5) a rank, an animal's name or its breed said otherwise, by the
+      // forms that refer: "Constable Pryce" for the sergeant; "The commander's
+      // Labrador, Bess" for Ness; "Mrs Hollis's little Jack Russell" for her
+      // fox terrier. Strong by a name or an owner (two cues); a kind alone is
+      // the reader's to confirm, else worth a look
+      if (Refs && !isNote(src)) {
+        for (const p of srcParas) {
+          if (paraOk && !paraOk(src, p)) continue;
+          const sents = sentences(p.text);
+          const at = (pos) => sents.find((x) => pos >= x.start && pos < x.end);
+          const hits = [
+            ...Refs.rankSlips(p.text, aug, idx).map((x) => ({ ...x, attr: 'rank', kind: 'open', strength: 'strong' })),
+            ...(forms ? Refs.animalSlots(p.text, aug, forms, idx) : []).map((x) => ({ ...x, attr: x.slot === 'name' ? 'name' : 'species', kind: x.slot === 'name' ? 'name' : 'species' }))
+          ];
+          for (const x of hits) {
+            const s = at(x.start);
+            const e = byId.get(x.id);
+            if (!s || !e || PLAN.test(s.text) || EXCEPTION_RE.test(s.text)) continue;
+            const key = x.attr === 'rank' ? `${e.id}/rank` : x.attr === 'name' ? `${e.id}/name` : `${e.id}/species`;
+            const sentenceHash = textHash(norm(s.text));
+            if (dismissed.has(key + '|' + sentenceHash) || slips.some((y) => y.para === p.hash && y.at === x.start)) continue;
+            let ask = false;
+            if (x.strength === 'weak') {
+              const said = reader ? await reader.refers({ sentence: s.text, span: x.span, entity: e.name, paragraph: p.text, others: [] }) : 'unasked';
+              if (said === 'no') continue;
+              if (said !== 'yes') ask = true;
+            }
+            const f = x.attr === 'rank' ? e.facts.find((g) => g.attr === 'other' && /^rank$/i.test(g.label || '') && ['verified', 'yours'].includes(g.state)) : x.attr === 'species' ? e.facts.find((g) => g.attr === 'species' && ['verified', 'yours'].includes(g.state)) : null;
+            const srcs = f ? f.sources.filter((y) => !y.written) : [];
+            slips.push({
+              seq: all.length + slips.length, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: p.hash, sentence: s.text, sat: s.start, sentenceHash, at: x.start, span: x.span, to: x.to,
+              kind: x.kind, strength: x.strength, entry: e.id, name: e.name, attr: x.attr === 'rank' ? 'other' : x.attr, value: x.attr === 'name' ? e.name : x.to, as: x.attr === 'rank' ? 'Rank' : '', fact: key,
+              sources: srcs.slice(0, 2).map((y) => ({ label: y.label, quote: y.quote })), more: Math.max(0, srcs.length - 2), written: !!(f && f.state === 'yours'),
+              ...(ask ? { ask: true, ref: x.span } : {})
+            });
+          }
+        }
+      }
       // kin said otherwise: a later reading of a pair against its first
       // (each by rule, both ends named or plainly meant); the writer's notes
       // against the prose wait in Needs You instead
@@ -1543,7 +1584,7 @@
       // this chapter never writes it. Tied to it (the sentence names someone
       // or something Room 14's facts hold, or whose facts hold Room 14): a
       // slip on the name, fixed back; else worth a look
-      for (const x of turnedNumbers(src, entries)) {
+      for (const x of turnedNumbers(src, aug)) {
         if (paraOk && !paraOk(src, x.para)) continue;
         const fact = `${x.e.id}/name`;
         const sentenceHash = textHash(norm(x.sentence));
@@ -1586,7 +1627,7 @@
         for (const [j, p] of paras.entries()) {
           if (stop && stop()) break;
           if (paraOk && !paraOk(src, p)) continue;
-          for (const x of await openSlips({ src, p, pos: rank.get(src.bookId + '/' + src.chId) * 1e4 + j, idx, byId, open, reader, dismissed })) slips.push({ ...x, seq: all.length + slips.length });
+          for (const x of await openSlips({ src, p, pos: rank.get(src.bookId + '/' + src.chId) * 1e4 + j, idx, byId, open, reader, dismissed, me: narrators[src.bookId] || null })) slips.push({ ...x, seq: all.length + slips.length });
         }
       }
       all.push(...slips);
@@ -1623,6 +1664,13 @@
             const f = o.facts.find((g) => ['verified', 'yours'].includes(g.state) && holds(g, e.name)) || e.facts.find((g) => ['verified', 'yours'].includes(g.state) && [o.name, ...o.aliases].some((n) => holds(g, n)));
             if (f) { tied = (f.sources || []).find((y) => !y.written) || { label: '', quote: '' }; break; }
           }
+          // (round 5) or a thing the kept one's facts hold, written here: "the stove in there was smoking again" for the hut "with a stove that smoked"
+          if (!tied && Editor) {
+            const COMMON = new Set(['room', 'door', 'back', 'down', 'time', 'night', 'morning', 'again', 'there', 'here', 'way', 'side', 'front', 'first', 'last', 'one', 'other']);
+            const mine = new Set(Editor.content(s.text.slice(0, m.index) + ' ' + s.text.slice(m.index + m[0].length)).filter((w) => w.length >= 4 && !COMMON.has(w)));
+            const f = e.facts.find((g) => ['verified', 'yours'].includes(g.state) && Editor.content(`${g.value} ${(g.sources || []).map((y) => y.quote || '').join(' ')}`).some((w) => mine.has(w)));
+            if (f) tied = (f.sources || []).find((y) => !y.written) || { label: '', quote: '' };
+          }
           out.push({ e, para: p, sentence: s.text, sat: s.start, at, span: m[0], tied });
         }
       }
@@ -1643,7 +1691,9 @@
   // thing that comes many to a shelf ("a fence", "another well").
   const ONCE = { built: 'build', founded: 'found', planted: 'plant', dug: 'dig', carved: 'carve', painted: 'paint', wrote: 'write', written: 'write', invented: 'invent',
     designed: 'design', forged: 'forge', laid: 'lay', killed: 'kill', shot: 'shoot', stole: 'steal', stolen: 'steal', burned: 'burn', burnt: 'burn', drowned: 'drown', sank: 'sink', sunk: 'sink',
-    felled: 'fell', buried: 'bury', sewed: 'sew', sewn: 'sew', knitted: 'knit', bought: 'buy', sold: 'sell', named: 'name', christened: 'christen', poisoned: 'poison', murdered: 'murder', rescued: 'rescue', saved: 'save', drew: 'draw', drawn: 'draw', composed: 'compose', made: 'make', cut: 'cut', broke: 'break', broken: 'break', set: 'set' };
+    felled: 'fell', buried: 'bury', sewed: 'sew', sewn: 'sew', knitted: 'knit', bought: 'buy', sold: 'sell', named: 'name', christened: 'christen', poisoned: 'poison', murdered: 'murder', rescued: 'rescue', saved: 'save', drew: 'draw', drawn: 'draw', composed: 'compose', made: 'make', cut: 'cut', broke: 'break', broken: 'break', set: 'set',
+    // (round 5) a bell, a cannon, a statue cast; a ship launched; a bridge raised
+    cast: 'cast', launched: 'launch', raised: 'raise', erected: 'erect', engraved: 'engrave', hung: 'hang', thatched: 'thatch', wove: 'weave', woven: 'weave' };
   const ONCE_VERB = new RegExp(`(?<![\\p{L}])(${Object.keys(ONCE).join('|')})(?![\\p{L}])`, 'giu');
   const DEED_NOT = /(?<![\p{L}])(?:not|never|nobody|no one|n['’]t|again|also|too|another|helped|help|with|re-?built|rebuilt|remember\w*|imagin\w*|dream\w*|pretend\w*|wish\w*|thought|believed?|if|would|could|should|might|may|perhaps|maybe|supposed|said|says|claimed|swore)(?![\p{L}])/iu;
   const OBJ_STOP = /^(?:at|in|on|by|for|from|of|with|to|into|onto|over|under|near|beside|behind|before|after|during|when|while|the|that|which|who|and|but|or|nor|as|so|than|then|last|that|this|every|each|year|spring|summer|autumn|winter|himself|herself|themselves|itself|once|alone|together)$/i;
@@ -1796,11 +1846,20 @@
     }
     return out;
   }
+  const EXCEPTION_RE = /(?<![\p{L}])(?:for the first time|for once|for a change|this time|only once|the one time|just this once|unusually|for the only time|except)(?![\p{L}])/iu;
   const EXCEPTION = /(?<![\p{L}])(?:for the first time|for once|for a change|this time|only once|the one time|just this once|unusually|for the only time|on feast days|except)(?![\p{L}])/iu;
-  async function openSlips({ src, p, pos, idx, byId, open, reader, dismissed }) {
+  async function openSlips({ src, p, pos, idx, byId, open, reader, dismissed, me = null }) {
     const out = [];
     const talk = talkSpans(p.text);
     const every = mentions(p.text, idx).filter((m) => !talk.some(([a, b]) => m.start < b && m.end > a));
+    // (round 5) the narrator of a book told in the first person: the narration's own I, me and my
+    if (me && byId.get(me) && !isNote(src)) {
+      for (const m of p.text.matchAll(/(?<![\p{L}'’])(?:I|me|my|My|Me)(?![\p{L}'’])/gu)) {
+        if (talk.some(([a, b]) => m.index < b && m.index + m[0].length > a) || every.some((x) => m.index < x.end && m.index + m[0].length > x.start)) continue;
+        every.push({ id: me, start: m.index, end: m.index + m[0].length, via: 'self' });
+      }
+      every.sort((a, b) => a.start - b.start);
+    }
     const sents = sentences(p.text);
     for (const [si, s] of sents.entries()) {
       // (round 3: talk elsewhere in the sentence is no reason — "The Lantern
@@ -1840,6 +1899,8 @@
             });
             break;
           }
+          // (round 5: the narrator's own I and me hold the narrator to the slots only — an hour, a floor — never to words said otherwise)
+          if (here.length && here.filter((m) => m.id === id).every((m) => m.via === 'self')) continue;
           const detail = Editor.clashDetail(o.f, o.quote, s.text, [e.name, ...e.aliases]);
           if (!detail) continue;
           { const at0 = s.start + s.text.indexOf(detail.span); if (talk.some(([a, b]) => at0 < b && at0 + detail.span.length > a)) continue; }
@@ -1891,11 +1952,12 @@
     if (!at.length) return null;
     return Slots.clashOf(fc, Slots.claimsAbout(s.text, at, here.filter((m) => m.id !== e.id).map(rel), e.kind));
   }
-  function editorSuspects({ paras, entries, kept = [], told = [], rare = null, notes = new Set(), inNotes = false, deedSents = null }) {
+  function editorSuspects({ paras, entries, kept = [], told = [], rare = null, notes = new Set(), inNotes = false, deedSents = null, me = null, forms = null }) {
     const prose = (f) => inNotes || (f.sources || []).some((x) => x.written || !notes.has(x.book + '/' + x.ch));
     const ids = new Set();
     const live = entries.filter((e) => !e.locked);
-    const idx = mentionIndex(live);
+    // (round 5) by the forms that refer, too: "The commander's brown eyes", "Constable Pryce"
+    const idx = mentionIndex(forms && Refs ? Refs.withForms(live, forms) : live);
     // traits: the first value each entry has, kept or read
     const world = new Map(live.map((e) => [e.id, { e, rel: [] }]));
     const firm = (f) => ['verified', 'yours'].includes(f.state);
@@ -1910,6 +1972,11 @@
     const model = paras.map((p) => { const ss = sentences(p.text).map((x) => ({ ...x, id: ++n })); return { p, ss }; });
     for (const { p, ss } of model) {
       for (const c of paraCandidates(p.text, idx, world, names)) if (c.kind !== 'name' && ss[c.si]) ids.add(ss[c.si].id);
+      // (round 5) a rank, an animal's name or breed said otherwise: the sentence gives no facts
+      if (Refs && !inNotes) {
+        const marks = [...Refs.rankSlips(p.text, live, idx, { loose: true }), ...(forms ? Refs.animalSlots(p.text, Refs.withForms(live, forms), forms, idx, { loose: true }) : [])];
+        for (const x of marks) { const s = ss.find((y) => x.start >= y.start && x.start < y.end); if (s) ids.add(s.id); }
+      }
       // (round 4) a deed done once that an earlier sentence gives someone else
       if (deedSents) for (const x of ss) if (deedSents.has(norm(x.text))) ids.add(x.id);
     }
@@ -1926,6 +1993,11 @@
     for (const { p, ss } of model) {
       const talk = talkSpans(p.text);
       const every = mentions(p.text, idx).filter((m) => !talk.some(([a, b]) => m.start < b && m.end > a));
+      // (round 5) the narrator's own I, me and my
+      if (me && !inNotes) {
+        for (const m of p.text.matchAll(/(?<![\p{L}'’])(?:I|me|my|My|Me)(?![\p{L}'’])/gu)) if (!talk.some(([a, b]) => m.index < b && m.index + m[0].length > a)) every.push({ id: me, start: m.index, end: m.index + m[0].length, via: 'self' });
+        every.sort((a, b) => a.start - b.start);
+      }
       for (const s of ss) {
         const here = every.filter((m) => m.start >= s.start && m.end <= s.end);
         // (a sentence opening with he or she: the one person the paragraph named last, before it)
@@ -2923,7 +2995,8 @@
         const entries = await loadEntries();
         // the story's key points, for the reader to check against (STORY.md §5)
         let told = {};
-        const opens = reader && typeof reader.clash === 'function' && entries.some((e) => e.facts.some((f) => f.attr === 'other' && ['verified', 'yours'].includes(f.state)));
+        // (round 5: a slot said otherwise needs no reader, so the open facts are held to it whatever reads)
+        const opens = entries.some((e) => e.facts.some((f) => f.attr === 'other' && ['verified', 'yours'].includes(f.state)));
         if ((reader && typeof reader.contradicts === 'function' && entries.some((e) => e.story.length)) || opens) {
           const shelf = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId))
             .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
@@ -2935,8 +3008,10 @@
           .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
         markProseTalk(shelfAll);
         const kin = kinMentions(shelfAll, entries, meta.narrators || {});
-        const deeds = deedIndex(shelfAll, entries);
-        return checkSources({ sources, entries, notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk, kin, narrators: meta.narrators || {}, deeds, ...told });
+        // (round 5) the forms that refer past the plain name: an epithet, a short name, an owner's animal
+        const forms = Refs ? Refs.refForms(entries) : null;
+        const deeds = deedIndex(shelfAll, forms ? Refs.withForms(entries, forms) : entries);
+        return checkSources({ sources, entries, notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk, kin, narrators: meta.narrators || {}, deeds, forms, ...told });
       },
 
       // Changing a fact across the series (PRODUCT §4.7), once the writer
@@ -3096,10 +3171,12 @@
             }
             const earlier = [...told.values()].flat();
             const upTo = sources.slice(0, sources.findIndex((x) => x.bookId === src.bookId && x.chId === src.chId) + 1);
-            const deedSents = new Set(deedIndex(upTo, entries).filter((d) => d.against && d.src.bookId === src.bookId && d.src.chId === src.chId).map((d) => norm(d.sentence)));
-            const suspect = editorSuspects({ paras, entries, kept: keptRead, told: earlier, rare: rarity(sources.filter((x) => !isNote(x))), notes: new Set(sources.filter(isNote).map((x) => x.bookId + '/' + x.chId)), inNotes: isNote(src), deedSents });
-            const sexOf = (e) => { const f = e.facts.find((x) => x.attr === 'sex' && ['verified', 'yours'].includes(x.state)); return f ? f.value : null; };
+            // (round 5: and by the forms that refer past the plain name — "the bell that Young Joss had cast")
+            const readForms = Refs ? Refs.refForms(entries, { loose: true }) : null;
+            const deedSents = new Set(deedIndex(upTo, readForms ? Refs.withForms(entries, readForms) : entries).filter((d) => d.against && d.src.bookId === src.bookId && d.src.chId === src.chId).map((d) => norm(d.sentence)));
             const narrator = narrators.get(src.bookId) || entries.find((e) => !e.locked && e.id === (meta.narrators || {})[src.bookId]) || null;
+            const suspect = editorSuspects({ paras, entries, kept: keptRead, told: earlier, rare: rarity(sources.filter((x) => !isNote(x))), notes: new Set(sources.filter(isNote).map((x) => x.bookId + '/' + x.chId)), inNotes: isNote(src), deedSents, me: narrator ? narrator.id : null, forms: readForms });
+            const sexOf = (e) => { const f = e.facts.find((x) => x.attr === 'sex' && ['verified', 'yours'].includes(x.state)); return f ? f.value : null; };
             let r;
             try {
               r = await Editor.readChapter({ src, paras, entries, reader, cache: cache.ed, names, stop, suspect, sexOf, narrator,
@@ -4105,7 +4182,7 @@
   const Editor = typeof require === 'function' && typeof module === 'object' && module.exports ? (() => {
     try {
       return require('./canon-editor.js')({ norm, normMap, textHash, sentences, speechSpans, reportedSpans, mentions, mentionIndex, nameParts, wordsOf, slug, newEntry,
-        findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, ATTRS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, nonEntity, stripTitles, talkSpans, referent, paraCtx, KIN, KIN_NOUNS: () => KIN_NOUNS, colourClash, breedIn, breedsIn, breedClash, breedOf });
+        findEntry, misspelt, gateQuote, PRONOUNS, SEX_WORDS, COLOURS, SPECIES, TITLES, LEADERS, ATTRS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, nonEntity, stripTitles, talkSpans, referent, paraCtx, KIN, KIN_NOUNS: () => KIN_NOUNS, colourClash, breedIn, breedsIn, breedClash, breedOf, Refs: () => Refs });
     } catch { return null; }
   })() : null;
 
@@ -4114,8 +4191,13 @@
     try { return require('./canon-slots.js')({ norm }); } catch { return null; }
   })() : null;
 
+  // Who a sentence is about past the plain name, and a rank's, a name's and a breed's slots (canon-refs.js, round 5)
+  const Refs = typeof require === 'function' && typeof module === 'object' && module.exports ? (() => {
+    try { return require('./canon-refs.js')({ norm, mentions, mentionIndex, sentences, talkSpans, SPECIES, SEX_WORDS, breedsIn, breedClash, breedOf, TITLES }); } catch { return null; }
+  })() : null;
+
   return {
-    Editor, Slots, LABELS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, factKind, factSection, SECTIONS, openIndex, editorSuspects,
+    Editor, Slots, Refs, LABELS, canonLabel, labelFamily, KNOWN_KEYS, openLabel, factKind, factSection, SECTIONS, openIndex, editorSuspects,
     CAST_SCHEMA, DOSSIER_SCHEMA, PROFILE_SCHEMA,
     localReader, PROPOSE_SCHEMA, ANSWER_SCHEMA, JUDGE_SCHEMA,
     textHash, norm, normMap, decode, sourceParas, speechSpans, reportedSpans, sentences, mentionIndex, mentions, gateQuote,
