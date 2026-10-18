@@ -571,7 +571,7 @@
   const LABEL_ATTR = { gender: 'sex', pronouns: 'sex', eye: 'eyes', 'eye colour': 'eyes', 'eye color': 'eyes', 'hair colour': 'hair', 'hair color': 'hair', born: 'birthplace', birthplace: 'birthplace', 'born at': 'birthplace' };
   for (const [attr, a] of Object.entries(ATTRS)) { LABEL_ATTR[attr] = attr; LABEL_ATTR[a.label.toLowerCase()] = attr; }
   const KINDS = ['person', 'creature', 'place', 'thing', 'group', 'rule', 'other'];
-  const STATES = ['verified', 'unverified', 'yours', 'disagree', 'set aside', 'not right'];
+  const STATES = ['verified', 'reading', 'unverified', 'yours', 'disagree', 'set aside', 'not right'];
 
   // word → [sex, the word for the other sex, the species it implies]
   const SEX_WORDS = {
@@ -763,7 +763,7 @@
   // Canon doesn't know (a note under a fact) is kept where it was, never
   // dropped; only broken front matter makes the file unreadable, and then
   // the answer says which line.
-  const FACT_LINE = /^[-*] (.+?): (.*?)(?: \(([^()]*)\))? · (verified|unverified|yours|disagree|set aside|not right)$/i;
+  const FACT_LINE = /^[-*] (.+?): (.*?)(?: \(([^()]*)\))? · (verified|reading|unverified|yours|disagree|set aside|not right)$/i;
   const SOURCE_LINE = /^(?: {2,}|\t+)[-*] (.*?): "(.*)" \{([^{}]*)\}$/;
   const WRITTEN_LINE = /^(?: {2,}|\t+)[-*] Written in Canon$/i;
   // Story so far (docs/semantics/STORY.md): a key point, Canon's or the writer's
@@ -933,7 +933,7 @@
   function dedupFacts(facts) {
     const out = [];
     const copies = new Map();
-    const RANK = { yours: 4, verified: 3, disagree: 2, unverified: 1 };
+    const RANK = { yours: 4, verified: 3, reading: 2.5, disagree: 2, unverified: 1 };
     for (const f of facts) {
       const had = out.find((x) => sameFact(x, f) && talkOnly(x) === talkOnly(f) && (!x.as || !f.as || norm(x.as) === norm(f.as)));
       if (!had) { out.push(f); continue; }
@@ -3020,6 +3020,9 @@
         // the facts the editor's reading kept this time (open ones the reader
         // said yes to: `fresh`), and the trait proposals it read
         const fresh = new WeakSet();
+        // (round 4) open facts the text ties to their entry, and those only the reader's word does
+        const untied = new WeakSet();
+        const tiedOnce = new WeakSet();
         // the narrator of each book told in the first person (canon.json `narrators`)
         const narrators = new Map();
         const keptRead = [];
@@ -3089,6 +3092,8 @@
               const g = had || f;
               if (!had) e.facts.push(f);
               if (k.trait) freshTraits.add(g); else fresh.add(g);
+              // (round 4) one tied reading of it is enough for the dot
+              if (!k.trait) { if (k.tied === false) untied.add(g); else tiedOnce.add(g); }
               keptRead.push({ e, f: g });
             }
             meta.edited[key] = edMark + '/' + textHash(src.html);
@@ -3462,6 +3467,8 @@
         // that differs (the pass's slip), leave the entry
         for (const e of entries) {
           const later = firstCome(e, gated);
+          // (round 4) what only the reader's word ties is Canon's reading: shown without the dot, never a slip's ground
+          for (const f of e.facts) if (f.state === 'verified' && untied.has(f) && !tiedOnce.has(f)) f.state = 'reading';
           for (const f of e.facts) if (kinDisagree.has(f) && f.state !== 'yours') f.state = 'disagree';
           e.facts = e.facts.filter((f) => {
             if (f.state === 'yours' || talkOnly(f) || (f.state !== 'unverified' && !later.has(f))) return true;
@@ -3543,6 +3550,20 @@
                 continue;
               }
               keep.push(f);
+            }
+            // (round 4) Canon's reading beside what is checked: the same thing
+            // said again is one fact (the checked one, with every passage); one
+            // that says otherwise of a checked fact is left out
+            for (const r of e.facts.filter((f) => f.state === 'reading')) {
+              const rq = (r.sources.find(live) || {}).quote || '';
+              const firm = e.facts.filter((g) => g !== r && (g.attr === 'other' || g.attr === 'state') && ['verified', 'yours'].includes(g.state));
+              const apart = (g) => Slots && Slots.clashOf(Slots.factClaims(g, (g.sources.find(live) || {}).quote || '', e.kind), Slots.factClaims(r, rq, e.kind));
+              const same = firm.find((g) => labelFamily(factKind(g)) === labelFamily(factKind(r)) && Editor.overlap(g.value, r.value) >= 0.6 && !apart(g));
+              const against = !same && firm.find((g) => apart(g) || (labelFamily(factKind(g)) === labelFamily(factKind(r)) && Editor.clashDetail(g, (g.sources.find(live) || {}).quote || '', rq, [e.name, ...e.aliases])));
+              if (!same && !against) continue;
+              if (same) for (const x of r.sources) if (!same.sources.some((y) => sameSrc(y, x))) same.sources.push(x);
+              else dropped[factKey(e, r) + '|' + textHash(norm(rq))] = { entry: e.name, attr: r.attr, value: r.value, quote: rq, why: 'later' };
+              e.facts.splice(e.facts.indexOf(r), 1);
             }
             const rank = (f) => SECTIONS.indexOf(factSection(f, e.kind));
             e.facts = e.facts.map((f, i) => ({ f, i })).sort((a, b) => rank(a.f) - rank(b.f) || (a.f.state === 'yours' || b.f.state === 'yours' ? a.i - b.i : posOf(a.f) - posOf(b.f) || a.i - b.i)).map((x) => x.f);

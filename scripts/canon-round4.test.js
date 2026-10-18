@@ -331,3 +331,25 @@ test('Which is right?: the notes against the prose in one slot whatever the labe
   const li = await run('dev2/lisle', 'perfect');
   assert.equal(li.score.needs.found, 2, li.score.needs.missed.join('; '));
 });
+
+/* ---------- 9 · what is checked, and what is Canon's reading ---------- */
+
+test('Canon\'s reading: a fact only the reader\'s word ties to its entry keeps its passage, shows no dot, round-trips, and never stands for a slip', async () => {
+  const text = ['---', 'id: hesper', 'name: Hesper', 'kind: person', 'aliases: []', '---', '# Hesper', '', '## Facts',
+    '- Membership: one of the Spared · reading', '  - The Weighhouse, Ch 1: "The “Spared” were the ones born inside." {book:b, ch:c1}',
+    '- Age: fifteen · verified', '  - The Weighhouse, Ch 1: "Hesper was fifteen" {book:b, ch:c1}', '', '## In my words', ''].join('\n');
+  const e = Canon.parseEntry(text);
+  assert.deepEqual(e.facts.map((f) => f.state), ['reading', 'verified']);
+  assert.equal(Canon.serialiseEntry(e), text);
+  // the pass holds later sentences only to checked facts
+  const src = { bookId: 'b', chId: 'c1', book: 'The Weighhouse', label: 'Ch 1', html: '<p>The “Spared” were the ones born inside.</p><p>Hesper was fifteen.</p>' };
+  const open = Canon.openIndex([e], [src], new Map([['b/c1', 0]]));
+  assert.deepEqual(open.map((x) => x.f.value), ['fifteen']);
+  // in a read: tied by code (named, its pronoun as the rules resolve it, the paragraph it opens) is checked; by the setting the reader chose, Canon's reading
+  const dev = await run('dev', 'perfect');
+  const hesper = entry(dev.entries, 'Hesper');
+  assert.ok(hesper.facts.some((f) => f.state === 'reading' && /Spared/.test(f.value)), lines(hesper).join('\n'));
+  assert.ok(hesper.facts.some((f) => f.state === 'verified' && /fifteen/.test(f.value)));
+  // the score counts what the page shows, and what it checks apart
+  assert.ok(dev.score.facts.mustDotted.found <= dev.score.facts.must.found);
+});

@@ -332,7 +332,11 @@ function score({ answers, run, texts, slips, reviewed }) {
     extra: unmatchedEntries.map((e) => `${e.name} (${e.kind})`) };
 
   // facts
-  const kept = (f) => f.state === 'verified' || f.state === 'yours';
+  // (round 4) what the page shows as the story's: checked (the dot), the
+  // writer's, and Canon's reading (no dot); the dotted are counted apart too
+  const kept = (f) => f.state === 'verified' || f.state === 'yours' || f.state === 'reading';
+  const dottedF = (f) => f.state === 'verified' || f.state === 'yours';
+  const foundDotted = new Set();
   const found = new Set();
   const offered = new Set();
   const precision = { supported: 0, wrong: [], review: [], reviewedTrue: 0 };
@@ -355,15 +359,17 @@ function score({ answers, run, texts, slips, reviewed }) {
     const trap = pf.a && matchFact(pf, (pf.a.traps || []).map((t) => ({ ...t, alt: t.alt || [t.value], quote: '' })));
     if (m && (!trap || m.score >= trap.score)) {
       if (pf.kept && !(m.fact.said && !pf.said)) found.add(factId(m.fact));
+      if (pf.kept && dottedF(pf.f) && !(m.fact.said && !pf.said)) foundDotted.add(factId(m.fact));
       offered.add(factId(m.fact));
     }
     if (!pf.kept) continue;
     const misquoted = texts.has && pf.srcs.some((s) => !texts.verbatim(s.quote, s.ch, s.book));
     if (pf.f.state === 'yours' && !pf.srcs.length) { precision.supported++; continue; } // the writer's own
+    if (pf.f.state === 'reading') precision.reading = (precision.reading || 0) + 1;
     if (misquoted) precision.wrong.push(line + '  [quote not in the text]');
     else if (trap && (!m || trap.score > m.score)) precision.wrong.push(line + `  [trap: ${trap.fact.why || trap.fact.value}]`);
     else if (m && m.fact.said && !pf.said) precision.wrong.push(line + '  [only said in speech, kept as true]');
-    else if (m) precision.supported++;
+    else if (m) { precision.supported++; if (pf.f.state === 'reading') precision.readingSupported = (precision.readingSupported || 0) + 1; }
     else {
       const key = N(`${pf.entry.name}|${pf.label}|${pf.value}`);
       if (reviewed && key in reviewed) { if (reviewed[key]) { precision.supported++; precision.reviewedTrue++; } else precision.wrong.push(line + '  [reviewed: wrong]'); } else precision.review.push({ key, line });
@@ -375,7 +381,7 @@ function score({ answers, run, texts, slips, reviewed }) {
   const facts = {
     must: recallOf('must'), should: recallOf('should'), nice: recallOf('nice'), all: recallOf(null),
     weighted: wsum(allW.filter((f) => found.has(factId(f)))) / (wsum(allW) || 1),
-    offeredMust: recallOf('must', offered),
+    offeredMust: recallOf('must', offered), mustDotted: recallOf('must', foundDotted),
     produced: producedFacts.length, kept: producedFacts.filter((x) => x.kept).length,
     missedMust: factsOf('must').filter((f) => !found.has(factId(f))).map((f) => `${f.entity.name} · ${f.attr}: ${f.value}`)
   };
@@ -461,11 +467,11 @@ const frac = (r) => `${r.found}/${r.of}`;
 function table(name, s) {
   const rows = [
     ['entities', frac(s.entities), pct(s.entities.weighted) + ' weighted'],
-    ['facts must', frac(s.facts.must), pct(s.facts.must.of ? s.facts.must.found / s.facts.must.of : null) + `  (offered incl. Needs You ${frac(s.facts.offeredMust)})`],
+    ['facts must', frac(s.facts.must), pct(s.facts.must.of ? s.facts.must.found / s.facts.must.of : null) + `  (checked, the dot: ${frac(s.facts.mustDotted)}; offered incl. Needs You ${frac(s.facts.offeredMust)})`],
     ['facts should', frac(s.facts.should), pct(s.facts.should.of ? s.facts.should.found / s.facts.should.of : null)],
     ['facts nice', frac(s.facts.nice), pct(s.facts.nice.of ? s.facts.nice.found / s.facts.nice.of : null)],
     ['facts weighted', '', pct(s.facts.weighted) + `  (${s.facts.kept} kept of ${s.facts.produced} produced)`],
-    ['precision', `${s.precision.supported}/${s.precision.supported + s.precision.wrong.length}`, pct(s.precision.value) + `  (${s.precision.wrong.length} wrong, ${s.precision.review.length} to review; lower bound ${pct(s.precision.lower).trim()})`],
+    ['precision', `${s.precision.supported}/${s.precision.supported + s.precision.wrong.length}`, pct(s.precision.value) + `  (${s.precision.wrong.length} wrong, ${s.precision.review.length} to review; lower bound ${pct(s.precision.lower).trim()}; Canon's reading, no dot: ${s.precision.reading || 0} shown, ${s.precision.readingSupported || 0} on the sheet)`],
     ['key points', frac(s.keyPoints), `must ${frac(s.keyPoints.must)}  (${s.keyPoints.produced} produced)`],
     ['slips', s.slips ? frac(s.slips) : '-', s.slips ? `${s.slips.false.length} false, ${s.slips.worthALook.length} worth a look` : 'no slips file'],
     ['profiles', `${s.profiles.present}/${s.profiles.want}`, `${s.profiles.cited} fully cited; ${(s.profiles.unsupported || []).length} of ${s.profiles.sentences || 0} sentences unsupported`],

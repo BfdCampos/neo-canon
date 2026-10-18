@@ -17679,7 +17679,8 @@ function canonHome() {
   return box;
 }
 
-const CANON_DOT = () => ({ verified: t('Checked against its source'), unverified: t('Not checked yet'), yours: t('You wrote this'), disagree: t('Your sources disagree') });
+// (round 4) Canon's reading: what only the reader's word ties to this entry — shown with its passage, no checked dot, never a slip's ground
+const CANON_DOT = () => ({ verified: t('Checked against its source'), reading: t('Canon’s reading: the passage doesn’t tie it to this entry by itself'), unverified: t('Not checked yet'), yours: t('You wrote this'), disagree: t('Your sources disagree') });
 
 function canonEntryPage(e) {
   const page = document.createElement('div');
@@ -17733,6 +17734,7 @@ function canonEntryPage(e) {
       if (!aside) { const dot = el('span', 'cn-dot'); dot.title = CANON_DOT()[f.state] || ''; row.appendChild(dot); }
       const to = !aside && (Canon.ATTRS[f.attr].ref || f.attr === 'other') && Canon.resolveName(f.value, canonWorld().index);
       row.append(el('span', 'cn-fl', canonLabel(f) + ': '), to && to !== e.id ? canonLinkEl(canonValue(f), to, f.value, 'cn-fv cn-link') : el('span', 'cn-fv', canonValue(f)));
+      if (!aside && f.state === 'reading') row.appendChild(el('span', 'cn-tag cn-reading', t('Canon’s reading')));
       const ctl = el('span', 'cn-ctl');
       if (aside) ctl.appendChild(button(t('Restore'), () => edit((d) => Canon.restoreFact(d, i))));
       else {

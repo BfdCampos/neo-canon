@@ -1543,6 +1543,8 @@ module.exports = function canonEditor(C) {
     // not from a sentence a slip stands on (a later value that differs)
     if (cited.some((l) => ctx.suspect && ctx.suspect.has(l.s.id))) return { why: 'suspect' };
     return { g, key, label, value, quotes, cited, said, interpretive: interpretive && ratio < 0.5, strong: cited.every((l) => l.why === 'name'), owned, ownedByName,
+      // (round 4) tied by code: named, its pronoun as the rules resolve it, the paragraph it opens; not the setting the reader chose, nor a pronoun the rules were unsure of
+      tied: owned || thingDone || cited.every((l) => ['name', 'chain', 'para'].includes(l.why)),
       setting: bySetting, lasting: LASTING.has(g) || ['habit', 'routine', 'custom', 'state', 'possession', 'personality'].includes(labelFamily(key)) || ['habit', 'routine', 'custom', 'state', 'possession'].includes(key) };
   }
   // (round 4) what one scene is: feelings, postures, states of the body
@@ -2170,7 +2172,12 @@ module.exports = function canonEditor(C) {
       }
       // a trait the rules can't read (hair "cropped close"): an open fact under its own label
       if (['sex', 'species'].includes(p.key)) { dropped.push({ entity: p.c.name, label: p.label, value: p.value, why: 'trait' }); continue; }
-      kept.push({ e, f: { attr: 'other', label: C.openLabel(p.key, p.label), value: p.value, as: '', state: 'unverified', sources }, p });
+      // (round 4) tied by the text — its name in the sentence, or the claim's
+      // grammar giving it to this one (a possessive, the subject, its pronoun
+      // as the reading resolves it) — or only by the reader's word (a
+      // paragraph it opens, the chapter's setting, a pronoun the rules were
+      // unsure of): then it is Canon's reading, shown without the checked dot
+      kept.push({ e, f: { attr: 'other', label: C.openLabel(p.key, p.label), value: p.value, as: '', state: 'unverified', sources }, p, tied: !!p.tied });
     }
     // a person the text calls by a role ("the weigher", "the warden") has
     // that role: the text's own word, from the first sentence of narration

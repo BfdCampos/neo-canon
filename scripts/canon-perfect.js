@@ -413,7 +413,7 @@ function survival(run) {
     for (const f of a.facts) {
       if (f.said || needs.has(a.id + '|' + f.attr)) continue;
       out.of++;
-      const produced = mine.flatMap((e) => e.facts.filter((g) => ['verified', 'yours'].includes(g.state)).map((g) => {
+      const produced = mine.flatMap((e) => e.facts.filter((g) => ['verified', 'yours', 'reading'].includes(g.state)).map((g) => {
         const label = Canon.labelOf(g);
         const LEG = { sex: 'sex', species: 'species', eyes: 'appearance.eyes', hair: 'appearance.hair', birthplace: 'origin', sibling: 'relationship.kin', parent: 'relationship.kin', child: 'relationship.kin', spouse: 'relationship.kin', owner: 'possession', home: 'location.home', title: 'role' };
         return { value: g.value, as: g.as, attr: g.attr !== 'other' ? (LEG[g.attr] || Score.canonLabel(label)) : Score.canonLabel(label), quotes: g.sources.filter((s) => !s.written).map((s) => s.quote) };
@@ -447,7 +447,7 @@ function survivors(run) {
   for (const x of log.filter((y) => y.wrong)) {
     const e = entries.find((y) => [y.name, ...y.aliases].some((n) => N(n) === N(x.entity)));
     if (!e) continue;
-    const kept = e.facts.filter((g) => ['verified'].includes(g.state)).filter((g) => {
+    const kept = e.facts.filter((g) => ['verified', 'reading'].includes(g.state)).filter((g) => {
       const pf = { value: g.value, as: g.as, attr: Score.canonLabel(Canon.labelOf(g)), quotes: g.sources.map((s) => s.quote) };
       const m = Score.matchFact(pf, [{ attr: x.attr, value: x.value, quote: x.quote, alt: [] }]);
       return m && !ix.truth(e.name, Canon.labelOf(g), g.value) && !ix.truth(e.name, 'other', g.value);
@@ -472,11 +472,11 @@ function summary(run, { made = [] } = {}) {
   const wrong = sc.precision.wrong.length + made.length;
   const judged = sc.precision.supported + wrong;
   const s = sc.slips || { found: 0, of: 0, false: [], worthALook: [] };
-  return { must: `${sc.facts.must.found}/${sc.facts.must.of}`, prec: judged ? `${sc.precision.supported}/${judged}` : '-', dotted, reading, unjudged: sc.precision.review.length,
+  return { must: `${sc.facts.must.found}/${sc.facts.must.of}`, mustDot: `${sc.facts.mustDotted.found}/${sc.facts.mustDotted.of}`, prec: judged ? `${sc.precision.supported}/${judged}` : '-', dotted, reading, unjudged: sc.precision.review.length,
     slips: `${s.found}/${s.of}`, falseSlips: s.false.length, worth: (s.worthALook || []).length, needs: `${sc.needs.found}/${sc.needs.want}`,
     junk: (sc.entities.junk || []).length, split: (sc.entities.split || []).length, profBad: (sc.profiles.unsupported || []).length + drifted, profOf: sc.profiles.sentences || 0, shown: run.entries.reduce((n, e) => n + e.facts.filter(shown).length, 0) };
 }
-const line = (m, x) => `${m.padEnd(11)} must ${x.must.padEnd(7)} precision ${x.prec.padEnd(8)} (dotted ${x.dotted}, reading ${x.reading}, unjudged ${x.unjudged})  slips ${x.slips} false ${x.falseSlips} worth ${x.worth}  needs ${x.needs}  junk ${x.junk} split ${x.split}  profile bad ${x.profBad}/${x.profOf}`;
+const line = (m, x) => `${m.padEnd(11)} must ${x.must.padEnd(7)} (dotted ${x.mustDot}) precision ${x.prec.padEnd(8)} (dotted ${x.dotted}, reading ${x.reading}, unjudged ${x.unjudged})  slips ${x.slips} false ${x.falseSlips} worth ${x.worth}  needs ${x.needs}  junk ${x.junk} split ${x.split}  profile bad ${x.profBad}/${x.profOf}`;
 
 async function main() {
   const tot = {};
