@@ -184,8 +184,55 @@
     });
     const dash = /^\s*[—–]\s*[^—–]*/.exec(text);
     if (dash) spans.push([0, dash[0].length]);
+    // (round 4) someone's words with no quotation marks: a chat line, a
+    // letter, a radio call, as the shelf's prose sets them out (proseTalk)
+    if (PROSE_TALK.has(text)) spans.push([0, text.length]);
     return spans.sort((x, y) => x[0] - y[0]);
   }
+  // Paragraphs of the story (never the writer's notes, where "Clem: Ivo's
+  // grey mare" is the writer's word) that are someone's words though no
+  // quotation mark says so (round 4: a lie typed in a group chat was kept as
+  // checked):
+  //   · a chat, text or log line, "Okoro: Abbott's son rang", among others
+  //     like it or after a line that says a phone or a chat lit up
+  //   · a letter, from "Dear girls," to its "Yours in faith," (or its
+  //     paragraph's end, or the next five)
+  //   · a radio call: "…, over." "Control, this is Bravo Two"
+  // The engine marks them for the shelf it reads (`markProseTalk`); every
+  // reading of speech then holds them as said.
+  let PROSE_TALK = new Set();
+  const CHAT_LINE = /^\s*(?:\[?\d{1,2}[:.]\d{2}(?:\s*[ap]m)?\]?\s*)?(\p{Lu}[\p{L}'’.-]*(?:\s+\p{Lu}[\p{L}'’.-]*){0,2}):\s+\S/u;
+  const CHAT_CUE = /(?<![\p{L}])(?:chat|group|message|messages|messaged|texts?|texted|phone|screen|typed|types|WhatsApp|Slack|thread|inbox|radio|log|logbook|transcript|buzzed|pinged|lit up|notification)(?![\p{L}])/iu;
+  const LETTER_OPEN = /^\s*(?:Dear|My dear|My dearest|Dearest|To whom it may concern|Darling)\b[^,.!?]{0,40}[,:]/u;
+  const LETTER_CLOSE = /(?<![\p{L}])(?:Yours(?:\s+[\p{L}]+){0,3}|(?:With\s+)?(?:all\s+my\s+)?love|Regards|Kind regards|Best wishes|Sincerely|Faithfully|Your (?:loving|affectionate|devoted|obedient) [\p{L}]+)\s*[,.]/u;
+  const RADIO = /(?:,\s*over[.!]?\s*$|\bover and out\b|^\s*(?:\p{Lu}[\p{L}-]*\s*){1,3},\s*this is\s+\p{Lu})/u;
+  function proseTalk(sources) {
+    const out = new Set();
+    for (const src of sources || []) {
+      if (!src || src.notes || src.notebook) continue;
+      const ps = sourceParas(src.html).map((p) => p.text);
+      const chat = ps.map((t) => CHAT_LINE.test(t) && !/^\s*(?:Chapter|Part|Book|Note|Notes|PS|P\.S\.|Day|Act|Scene)\b/i.test(t));
+      for (let i = 0; i < ps.length; i++) {
+        if (chat[i] && (chat[i - 1] || chat[i + 1] || CHAT_CUE.test(ps[i - 1] || '') || (i > 1 && chat[i - 2] && CHAT_CUE.test(ps[i - 2])))) out.add(ps[i]);
+        if (RADIO.test(ps[i])) out.add(ps[i]);
+        if (LETTER_OPEN.test(ps[i])) {
+          for (let j = i; j < Math.min(ps.length, i + 6); j++) {
+            out.add(ps[j]);
+            if (LETTER_CLOSE.test(ps[j]) && (j > i || LETTER_CLOSE.test(ps[i].slice(30)))) break;
+            if (j > i && !LETTER_CLOSE.test(ps.slice(i, i + 6).join('\n'))) { out.delete(ps[j]); break; }
+          }
+        }
+      }
+    }
+    return out;
+  }
+  // (each sentence of such a paragraph too: some readings look at one sentence alone)
+  const markProseTalk = (sources) => {
+    const paras = proseTalk(sources);
+    PROSE_TALK = new Set(paras);
+    for (const t of paras) for (const x of sentences(t)) PROSE_TALK.add(x.text);
+    return paras;
+  };
   const inSpans = (spans, a, b) => spans.some(([s, e]) => a >= s && b <= e);
 
   // Reported speech and hearsay, which are talk as much as a quotation is:
@@ -1313,8 +1360,10 @@
         // Corwyck for Corwick: a capitalised word a letter away from a name
         if (/^\p{Lu}/u.test(w.w) && !named(w)) {
           const bare = w.w.replace(/['’]s$/, '');
-          if (bare.length >= 5 && !names.some(([n]) => n === bare.toLowerCase())) {
-            const near = names.filter(([n]) => editDistance(bare.toLowerCase(), n) <= (n.length >= 8 ? 2 : 1));
+          // (a name's own possessive is that name: "Aldhelm" in "Saint Aldhelm’s")
+          const nb = (n) => n.replace(/['’]s$/, '');
+          if (bare.length >= 5 && !names.some(([n]) => n === bare.toLowerCase() || nb(n) === bare.toLowerCase())) {
+            const near = names.filter(([n]) => editDistance(bare.toLowerCase(), n) <= (n.length >= 8 ? 2 : 1) && editDistance(bare.toLowerCase(), nb(n)) > 0);
             const targets = [...new Set(near.map(([, id]) => id))];
             if (targets.length === 1) out.push({ kind: 'name', strength: 'strong', id: targets[0], attr: 'name', fact: null, start: w.start, end: w.start + bare.length, to: near[0][2], si, word: bare });
           }
@@ -2746,7 +2795,9 @@
     const loadEntries = async () => (await parsed()).filter((e) => !e.error);
     const shelf = async () => {
       const out = (await io.meta()).out || {};
-      return { sources: (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId)), entries: await loadEntries() };
+      const sources = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId));
+      markProseTalk(sources);
+      return { sources, entries: await loadEntries() };
     };
     return {
       // the Continuity Pass: one book's chapters (or the shelf's), with the
@@ -2756,6 +2807,7 @@
       async check({ bookId, scope = 'book', chId = null, skip = null, done = null, html = {}, onSource = null, stop = null }) {
         const meta = await io.meta();
         const out = meta.out || {};
+        markProseTalk((await io.sources()).map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s));
         const sources = (await io.sources())
           .filter((s) => !s.notes && (scope === 'shelf' || s.bookId === bookId) && (!chId || s.chId === chId) && !(out[s.bookId] || []).includes(s.chId))
           .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
@@ -2774,6 +2826,7 @@
         // kin read by rule over the whole shelf, for the pass to hold each later reading to the first
         const shelfAll = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId))
           .map((s) => s.bookId === bookId && typeof html[s.chId] === 'string' ? { ...s, html: html[s.chId] } : s);
+        markProseTalk(shelfAll);
         const kin = kinMentions(shelfAll, entries, meta.narrators || {});
         const deeds = deedIndex(shelfAll, entries);
         return checkSources({ sources, entries, notSlips: await io.notSlips(), reader, knownWords: io.knownWords, out, onSource, stop, paraOk, kin, narrators: meta.narrators || {}, deeds, ...told });
@@ -2862,6 +2915,7 @@
         }
         const taken = new Set(files.map((x) => x.id));
         const sources = (await io.sources()).filter((s) => !(out[s.bookId] || []).includes(s.chId));
+        markProseTalk(sources);
         const texts = new Map();
         // what there is to read: changed sources (or `only` the one), and in
         // them the paragraphs with cues the cache has no answer for
@@ -3910,6 +3964,6 @@
     newEntry, parseEntry, serialiseEntry, dedupFacts, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader,
     shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces,
-    gateEvent, storyIndex, rarity, STORY_SCHEMA, kinMentions, kinClash, nonEntity, deedIndex
+    gateEvent, storyIndex, rarity, STORY_SCHEMA, kinMentions, kinClash, nonEntity, deedIndex, proseTalk, markProseTalk
   };
 });

@@ -191,3 +191,35 @@ test('wrong subject: a man\'s he and his beside an animal never give it a sex; i
   const sh = await run('dev2/salt-house', 'adversarial');
   for (const name of ['Nell', 'Uncle Tobiah']) assert.ok(!shown(entry(sh.entries, name)).some((f) => /range|come to/.test(f.value)), lines(entry(sh.entries, name)).join('\n'));
 });
+
+/* ---------- 5 · speech with no quotation marks ---------- */
+
+test('speech: a chat line, a letter and a radio call are someone\'s words, though no quotation mark says so; the writer\'s notes are not', async () => {
+  const src = (chId, ps, extra = {}) => ({ bookId: 'b', chId, book: 'B', label: chId, html: ps.map((p) => `<p>${p}</p>`).join(''), ...extra });
+  const story = src('c1', [
+    'At half past ten the desk phone lit up with the night team’s chat.',
+    'Okoro: Abbott’s son rang. The barrister. Coming at nine tomorrow',
+    'Raff: She’s ninety-one, she won’t remember',
+    'Mrs Abbott was eighty-seven.',
+    'Dear girls, the school has never once closed its doors. Yours in faith, Bishop Crane.',
+    'Bravo Two, this is Control, the bridge is down, over.',
+    'Note: the lift was broken.'
+  ]);
+  const notes = src('n1', ['Ivo Marchetti: thirty-four, foreman of the Lisle orchard.', 'Clem: Ivo’s grey mare.'], { notebook: true });
+  const talk = Canon.proseTalk([story, notes]);
+  for (const t of ['Okoro: Abbott’s son rang. The barrister. Coming at nine tomorrow', 'Raff: She’s ninety-one, she won’t remember', 'Dear girls, the school has never once closed its doors. Yours in faith, Bishop Crane.', 'Bravo Two, this is Control, the bridge is down, over.']) assert.ok(talk.has(t), t);
+  for (const t of ['Mrs Abbott was eighty-seven.', 'Ivo Marchetti: thirty-four, foreman of the Lisle orchard.', 'Clem: Ivo’s grey mare.', 'Note: the lift was broken.', 'At half past ten the desk phone lit up with the night team’s chat.']) assert.ok(!talk.has(t), t);
+  // a single "Name: words" line in a story, with nothing about a phone or a chat, is no chat
+  assert.equal(Canon.proseTalk([src('c9', ['Rain all week.', 'Ivo: he would remember this.', 'The orchard was quiet.'])]).size, 0);
+  // in a read: the chat's barrister and ninety-one are what's said (never checked); the narration's are the facts
+  const nw = await run('dev3/night-ward');
+  const gerald = entry(nw.entries, 'Gerald Abbott');
+  assert.ok(!gerald.facts.some((f) => /barrister/i.test(f.value) && f.state === 'verified'), lines(gerald).join('\n'));
+  assert.ok(gerald.facts.some((f) => /insurance/.test(f.value) && f.state === 'verified'), lines(gerald).join('\n'));
+  const ida = entry(nw.entries, 'Mrs Abbott');
+  assert.ok(!ida.facts.some((f) => /ninety-one/.test(f.value) && f.state === 'verified'), lines(ida).join('\n'));
+  const fr = await run('dev3/form-room');
+  const school = entry(fr.entries, 'Saint Aldhelm’s');
+  assert.ok(!school.facts.some((f) => /never once closed/.test(f.value) && f.state === 'verified'), lines(school).join('\n'));
+  assert.ok(!slipOn(fr, 'Dear girls'), 'no slip in the letter');
+});

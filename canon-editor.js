@@ -254,7 +254,8 @@ module.exports = function canonEditor(C) {
         if (!nameKind(a, text, lower, c.kind)) continue;
         // (a name the reader gave only as another's alias, with nothing in
         // the text to tie the two, is its own one: "Old Man", aliases "Dr Haddon")
-        if (bare(a) !== bare(c.name) && !mine.has(bare(a))) continue;
+        // (round 4: or the name's own title and surname, "Mrs Abbott" for "Mrs Ida Abbott", when no one else of the cast has them)
+        if (bare(a) !== bare(c.name) && !mine.has(bare(a)) && !titleShort(a, c, cast)) continue;
         const other = find(a);
         if (other && other !== c && !other.gone) mergeCast(cast, c, other);
         else if (!other && !c.aliases.some((x) => norm(x) === norm(a))) c.aliases.push(a);
@@ -361,6 +362,15 @@ module.exports = function canonEditor(C) {
   // first names are never one person.
   const RANK = { doctor: ['dr', 'doctor'], commander: ['commander'], inspector: ['inspector'], captain: ['captain', 'capt'], sergeant: ['sergeant', 'sgt'], professor: ['professor', 'prof'],
     lieutenant: ['lieutenant', 'lt'], colonel: ['colonel', 'col'], major: ['major'], general: ['general'], admiral: ['admiral'], nurse: ['nurse'], constable: ['constable'], detective: ['detective'], reverend: ['reverend', 'rev'], judge: ['judge'], mayor: ['mayor'] };
+  // "Mrs Abbott" is "Mrs Ida Abbott": the same title and surname, and no one
+  // else of the cast holds both (round 4)
+  function titleShort(a, c, cast) {
+    if (c.kind !== 'person') return false;
+    const w = String(a).replace(/^the\s+/i, '').split(/\s+/);
+    if (w.length !== 2 || !TITLES.has(norm(w[0]).replace(/\.$/, ''))) return false;
+    const holds = (x) => [x.name, ...x.aliases].some((n) => { const v = String(n).split(/\s+/); return v.length >= 3 && norm(v[0]).replace(/\.$/, '') === norm(w[0]).replace(/\.$/, '') && norm(v[v.length - 1]) === norm(w[1]); });
+    return holds(c) && !cast.some((x) => x !== c && !x.gone && x.kind === 'person' && holds(x));
+  }
   function personMerges(cast, names = null) {
     const people = () => cast.filter((c) => !c.gone && c.kind === 'person' && c.proper);
     const core = (n) => norm(stripTitles(String(n).replace(/^the\s+/i, '')).replace(/['’]s$/, ''));
@@ -375,6 +385,12 @@ module.exports = function canonEditor(C) {
       const same = people().filter((b) => b !== a && !(title(a.name) && title(b.name) && title(a.name) !== title(b.name)) && [a.name, ...a.aliases].some((x) => [b.name, ...b.aliases].some((y) => fits(x, y))));
       if (same.length === 1) { const [into, from] = longer(a, same[0]); mergeCast(cast, into, from); }
       else if (same.length > 1 && !title(a.name)) { a.gone = true; a.name = '\u0000'; a.aliases = []; }
+    }
+    // (round 4) the title and surname of one full name
+    for (const a of people()) {
+      if (a.gone) continue;
+      const into = people().filter((b) => b !== a && titleShort(a.name, b, cast));
+      if (into.length === 1) mergeCast(cast, into[0], a);
     }
     // a short form only one full name holds
     for (const a of people()) {
