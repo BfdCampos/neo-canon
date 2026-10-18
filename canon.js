@@ -3561,8 +3561,9 @@
               const same = firm.find((g) => labelFamily(factKind(g)) === labelFamily(factKind(r)) && Editor.overlap(g.value, r.value) >= 0.6 && !apart(g));
               const against = !same && firm.find((g) => apart(g) || (labelFamily(factKind(g)) === labelFamily(factKind(r)) && Editor.clashDetail(g, (g.sources.find(live) || {}).quote || '', rq, [e.name, ...e.aliases])));
               if (!same && !against) continue;
-              if (same) for (const x of r.sources) if (!same.sources.some((y) => sameSrc(y, x))) same.sources.push(x);
-              else dropped[factKey(e, r) + '|' + textHash(norm(rq))] = { entry: e.name, attr: r.attr, value: r.value, quote: rq, why: 'later' };
+              if (same) {
+                for (const x of r.sources) if (!same.sources.some((y) => sameSrc(y, x))) same.sources.push(x);
+              } else dropped[factKey(e, r) + '|' + textHash(norm(rq))] = { entry: e.name, attr: r.attr, value: r.value, quote: rq, why: 'later' };
               e.facts.splice(e.facts.indexOf(r), 1);
             }
             const rank = (f) => SECTIONS.indexOf(factSection(f, e.kind));
