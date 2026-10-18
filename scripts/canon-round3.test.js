@@ -213,3 +213,53 @@ test('the pass on QA\'s chapter: brown eyes against grey, "He rubbed her eyes" f
   // and every fixture: no false slip
   for (const x of await allRuns()) assert.deepEqual(x.perfect.score.slips ? x.perfect.score.slips.false : [], [], x.name);
 });
+
+// QA's chapter with QA's notebook page beside it ("Mara Venn: forty, brown eyes, born in Saltmarsh.")
+async function withNotebook(page) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-r3-nb-'));
+  const lib = path.join(root, 'library');
+  fs.cpSync(path.join(QA, 'library'), lib, { recursive: true });
+  const nb = path.join(lib, 'book-notes-qa0');
+  fs.mkdirSync(path.join(nb, 'chapters'), { recursive: true });
+  fs.writeFileSync(path.join(nb, 'book.json'), JSON.stringify({ id: 'book-notes-qa0', title: 'Dunmere Notes', chapterOrder: ['n1'], chapterTitles: { n1: 'People' }, format: 'notebook' }));
+  fs.writeFileSync(path.join(nb, 'chapters', 'n1.html'), `<p>${page}</p>`);
+  const L = JSON.parse(fs.readFileSync(path.join(lib, 'library.json'), 'utf8'));
+  L.shelves[0].bookIds.unshift('book-notes-qa0');
+  fs.writeFileSync(path.join(lib, 'library.json'), JSON.stringify(L));
+  const dir = path.join(lib, L.shelves[0].canonId);
+  let cache = null;
+  const io = { ...folderIO(lib, dir), cache: () => cache && structuredClone(cache), saveCache: (c) => { cache = structuredClone(c); } };
+  const engine = Canon.createEngine({ io, reader: Canon.fakeReader(JSON.parse(fs.readFileSync(path.join(QA, 'reader-answers.json'), 'utf8'))) });
+  await engine.readShelf({});
+  return { root, io, engine, mara: () => io.entries().map((x) => Canon.parseEntry(x.text)).find((x) => x.name === 'Mara Venn') };
+}
+
+test('the notebook against the prose: Which is right? for an age and a birthplace, resolved by the writer\'s pick; never two kept', async () => {
+  const S = await withNotebook('Mara Venn: forty, brown eyes, born in Saltmarsh.');
+  try {
+    const mara = S.mara();
+    const l = lines(mara);
+    // an open fact said otherwise in the notes and the prose: both wait, neither kept
+    assert.ok(l.includes('Age: forty · disagree') && l.includes('Age: thirty-four · disagree'), l.join('\n'));
+    assert.ok(l.includes('Origin: Saltmarsh · disagree') && l.some((x) => /^Origin: born in Coldharbour.* · disagree$/.test(x)), l.join('\n'));
+    assert.ok(!l.some((x) => /^Origin: .* · verified$/.test(x)), 'two birthplaces never both kept');
+    // the writer picks the prose: the notes' values step aside (an open fact too), recoverable
+    Canon.confirmFact(mara, mara.facts.findIndex((f) => f.value === 'thirty-four'));
+    Canon.confirmFact(mara, mara.facts.findIndex((f) => /Coldharbour/.test(f.value)));
+    assert.deepEqual(mara.facts.filter((f) => /^(?:Age|Origin)$/.test(Canon.labelOf(f))).map((f) => `${f.value} · ${f.state}`), ['thirty-four · yours', 'born in Coldharbour, in a house above the fish market · yours']);
+    assert.deepEqual(mara.setAside.map((f) => f.value).sort(), ['Saltmarsh', 'forty']);
+  } finally { fs.rmSync(S.root, { recursive: true, force: true }); }
+});
+
+test('a notebook\'s colour against "a tall woman with … grey eyes": the notes stand, the prose is the pass\'s slip; no fact cites a passage that says otherwise', async () => {
+  const S = await withNotebook('Mara Venn: forty, brown eyes, born in Saltmarsh.');
+  try {
+    const mara = S.mara();
+    const eyes = mara.facts.filter((f) => f.attr === 'eyes');
+    assert.deepEqual(eyes.map((f) => `${f.value} · ${f.state}`), ['brown · verified']);
+    // the brown fact cites only what says brown
+    assert.ok(eyes[0].sources.every((x) => !/grey eyes/.test(x.quote)), JSON.stringify(eyes[0].sources));
+    const { slips } = await S.engine.check({ scope: 'shelf' });
+    assert.ok(slips.some((s) => s.name === 'Mara Venn' && s.span === 'grey' && s.to === 'brown'), slips.map((s) => s.span).join(', '));
+  } finally { fs.rmSync(S.root, { recursive: true, force: true }); }
+});

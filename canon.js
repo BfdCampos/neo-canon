@@ -665,6 +665,8 @@
   // The canonical key of any fact: a closed attribute's own, an open one's label's
   const ATTR_KEY = { sex: 'sex', species: 'species', eyes: 'appearance.eyes', hair: 'appearance.hair', birthplace: 'origin', sibling: 'relationship.kin', parent: 'relationship.kin', child: 'relationship.kin', spouse: 'relationship.kin', owner: 'possession', home: 'location.home', title: 'role', state: 'state' };
   const factKind = (f) => f.attr !== 'other' ? ATTR_KEY[f.attr] || 'other' : canonLabel(labelOf(f));
+  // open facts that hold one value only: one age, one place of birth
+  const OPEN_SINGLE = new Set(['age', 'origin']);
   // Where a fact sits on its entry's page (READING.md §4): in this order,
   // a place's routines being how it works, a person's their habits
   const SECTIONS = ['who', 'appearance', 'role', 'personality', 'habits', 'relationships', 'history', 'state', 'like', 'works', 'there', 'rules', 'other'];
@@ -851,8 +853,13 @@
     }
     f.state = 'yours';
     for (const s of f.sources) delete s.changed;
-    // the other values (checked or not) step aside
-    for (const o of e.facts.filter((x) => x !== f && x.attr === f.attr && x.state !== 'yours' && norm(x.value) !== norm(f.value) && ATTRS[f.attr] && ATTRS[f.attr].single)) setAsideFact(e, e.facts.indexOf(o), false);
+    // the other values (checked or not) step aside; for an open fact
+    // (round 3: Age, Origin…), the values it was asked against — those that
+    // disagree with it under the same label — and any other of a label that
+    // holds one value only
+    const keyOf = (x) => (x.attr === 'other' ? factKind(x) : x.attr);
+    const single = (x) => (ATTRS[x.attr] && ATTRS[x.attr].single) || (x.attr === 'other' && OPEN_SINGLE.has(factKind(x)));
+    for (const o of e.facts.filter((x) => x !== f && x.attr === f.attr && x.state !== 'yours' && norm(x.value) !== norm(f.value) && keyOf(x) === keyOf(f) && (single(f) || x.state === 'disagree'))) setAsideFact(e, e.facts.indexOf(o), false);
   }
   const sameFact = (x, y) => x.attr === y.attr && norm(x.value) === norm(y.value) && (x.attr !== 'other' || norm(x.label || '') === norm(y.label || ''));
   const sameSrc = (a, b) => a.written || b.written ? !!(a.written && b.written) : a.book === b.book && a.ch === b.ch && norm(a.quote) === norm(b.quote);
@@ -1264,7 +1271,12 @@
           const read = det && ['her', 'his'].includes(det.lw) && opts.refs && opts.refs.get(det.start);
           // (only among the ones the sentence names, whose sex is known and agrees: the old rules' care with "John met Pell. His…" stands)
           const byReading = read && read.strong && ids.length >= 2 && ids.includes(read.id) && world.get(read.id) && world.get(read.id).sex && PRONOUNS[det.lw] === world.get(read.id).sex.value ? { id: read.id, start: det.start, end: det.end } : null;
-          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver || noteHead || mine || byReading;
+          // (round 3) or "She was thirty-four, a tall woman with a long dark braid and grey eyes":
+          // the subject's, the she or he the reading is sure of, its sex known and agreeing
+          const lead = !inS.length && c && c.end <= w.start && words[0] && ['he', 'she'].includes(words[0].lw) && words[1] && ['was', 'is'].includes(words[1].lw) && opts.refs && opts.refs.get(words[0].start);
+          const leadK = lead && lead.strong && world.get(lead.id);
+          const pronHaver = leadK && leadK.sex && PRONOUNS[words[0].lw] === leadK.sex.value && i <= 16 && words.slice(2, i).some((x) => x.lw === 'with') && !/[;:—–()"“”]/.test(text.slice(words[1].end, c.start)) && !/\b(?:and|but)\s+(?:he|she|they|it)\b/i.test(text.slice(words[1].end, c.start)) ? { id: lead.id, start: words[0].start, end: words[0].end } : null;
+          const owner = inS.find((m) => /^['’]s\s/.test(text.slice(m.end, m.end + 3)) && after(m.end + 2) >= i - 1 && after(m.end + 2) <= i) || (agrees && inS[0]) || head || haver || noteHead || mine || byReading || pronHaver;
           const k = owner && world.get(owner.id);
           if (k && k[attr] && c && COLOURS[c.lw] !== k[attr].value) add({ kind: 'colour', strength: 'strong', id: owner.id, attr, fact: k[attr], start: c.start, end: c.end, to: keepCase(c.w, colourWord(k[attr])) });
           // or, in a sentence naming no one, "his blue eyes" of the one person
@@ -3061,6 +3073,17 @@
               continue;
             }
             if (TIED[f.attr]) {
+              // (round 3) a passage whose own words give another value ("grey
+              // eyes" under Eyes: brown) is no source of it: the value must be
+              // its quote's
+              if (['eyes', 'hair'].includes(f.attr)) {
+                const target = f.attr === 'eyes' ? /^eyes?$|-eyed$/ : /^hair(?:ed)?$|-haired$/;
+                const against = (x) => { const ws = wordsOf(x.quote); return !ws.some((w) => COLOURS[w] === f.value) && ws.some((w, i) => COLOURS[w] && COLOURS[w] !== f.value && ws.slice(i + 1, i + 3).some((y) => target.test(y))); };
+                const bad = f.sources.filter((x) => !x.written && against(x));
+                if (bad.length) { f.sources = f.sources.filter((x) => !bad.includes(x)); if (!f.sources.length) continue; }
+              }
+              const firmNow = f.sources.filter((x) => live(x) && !x.said && !x.plan);
+              firm.splice(0, firm.length, ...firmNow);
               // a trait is checked only by the text: the shelf's own ties
               // ("Bramble, the grey mare"), or its own quote tying the word to
               // the entry. A pronoun, or a word the rules don't tie, is left out.
@@ -3209,6 +3232,20 @@
                 const gw = where(clashWith.sources.find(live) || {});
                 const fw = where(f.sources.find(live) || {});
                 if (gw && fw && gw.note !== fw.note) { clashWith.state = 'disagree'; f.state = 'disagree'; keep.push(f); continue; }
+                const x = f.sources.find(live) || {};
+                dropped[factKey(e, f) + '|' + textHash(norm(x.quote || ''))] = { entry: e.name, attr: f.attr, value: f.value, quote: x.quote || '', why: 'later' };
+                e.facts.splice(e.facts.indexOf(f), 1);
+                continue;
+              }
+              // (round 3) one place of birth: "Saltmarsh" in the notes against
+              // "born in Coldharbour" in the prose is Which is right?; a later
+              // one in the prose is the pass's
+              const born = (g) => (g.value.match(/(?<![\p{L}])\p{Lu}[\p{L}'’-]+(?:\s+\p{Lu}[\p{L}'’-]+)*/gu) || []).map(norm).filter((w) => !TITLES.has(w));
+              const bornClash = k === 'origin' && born(f).length && keep.find((g) => factKind(g) === 'origin' && born(g).length && !born(g).some((w) => born(f).includes(w)));
+              if (bornClash) {
+                const gw = where(bornClash.sources.find(live) || {});
+                const fw = where(f.sources.find(live) || {});
+                if (gw && fw && gw.note !== fw.note) { bornClash.state = 'disagree'; f.state = 'disagree'; keep.push(f); continue; }
                 const x = f.sources.find(live) || {};
                 dropped[factKey(e, f) + '|' + textHash(norm(x.quote || ''))] = { entry: e.name, attr: f.attr, value: f.value, quote: x.quote || '', why: 'later' };
                 e.facts.splice(e.facts.indexOf(f), 1);
