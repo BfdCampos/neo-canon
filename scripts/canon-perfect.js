@@ -314,14 +314,17 @@ function driftReader(sheet, base, { log, wrongSet, hash, N, Canon }) {
         { t: `${name}, whose ${String(b.label).toLowerCase()} is ${b.value}, is loved by everyone.`, f: [b.n] },
         // (every word in the facts, the meaning not: a "never" dropped, one word of a value picked out)
         ...facts.filter((f) => /(?<![\p{L}])(?:never|not|no|none|nobody)(?![\p{L}])/iu.test(f.value)).slice(0, 1).map((f) => ({ t: `${name} ${f.value.replace(/(?<![\p{L}])(?:never|not|no|none|nobody)\s+/iu, '')}.`, f: [f.n] })),
-        ...facts.filter((f) => f.value.split(/\s+/).length >= 3).slice(0, 1).map((f) => ({ t: `${name} is ${f.value.split(/\s+/).pop()}.`, f: [f.n] }))
+        ...facts.filter((f) => /\s(?:of|in|at)\s+\S/.test(f.value)).slice(0, 1).map((f) => ({ t: `${name} is ${f.value.split(/\s(?:of|in|at)\s+/)[1]}.`, f: [f.n] }))
       ];
-      // (every one of them but a plain "X's label is value" says something the facts don't)
-      for (const x of out) drifted.add(N(x.t).replace(/[.\s]+$/, ''));
+      // (every one of them but a plain "X's label is value" says something the facts don't;
+      // "X is value" does only when value isn't what X is: an age, a role, a look of the whole)
+      // ("X is value" says otherwise when the value is what happened to X, what X does or has, whom X is kin to)
+      const BAD = /^(?:history|habit|routine|custom|relationship|possession|residents|members|function|use|effect)/;
+      for (const x of out) if (x !== out[0] || (BAD.test(Canon.canonLabel(a.label || '')) && !/^(?:born|built|founded|kept|owned)\b/i.test(a.value))) drifted.add(N(x.t).replace(/[.\s]+$/, ''));
       out.push({ t: `The ${String(a.label).toLowerCase()} of ${name} is ${a.value}.`, f: [a.n] });
       return out;
     },
-    async entails() { return 'yes'; },
+    async entails({ more }) { return more ? 'no' : 'yes'; },
     async contradicts() { return 'no'; },
     async clash() { return 'no'; }
   };

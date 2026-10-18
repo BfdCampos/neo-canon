@@ -3585,7 +3585,24 @@
               const used = [...new Set((x.f || []).map((n) => facts.find((y) => y.n === +n)).filter(Boolean))];
               // (the reader's own marks of its ids, "(2,4)", "f: [1][2]", come off)
               const t = String(x.t || '').replace(/\s*(?:\b[fF]\s*:\s*)?(?:\[[\d,\s]*\]|\((?:\d+\s*,?\s*)+\))/g, ' ').replace(/\s+/g, ' ').trim().replace(/[.!\s]+$/, '').replace(/\s*\b[fF]\s*:?$/, '');
-              if (!used.length || !t || !Editor.profileOk(t, used.map((y) => y.f), e)) continue;
+              if (!used.length || !t || !Editor.profileOk(t, used.map((y) => y.f), e) || !Editor.profileEntailed(t, used.map((y) => y.f), e)) continue;
+              // (round 4) and the reader asked both ways: do the facts say all
+              // of it (yes), does it say anything they don't (no)
+              if (typeof reader.entails === 'function') {
+                const ck = textHash(JSON.stringify([t, used.map((y) => [y.label, y.value])]));
+                got.checks = got.checks || {};
+                if (!(ck in got.checks)) {
+                  const ask = { name: e.name, kind: e.kind, sentence: t, facts: used.map(({ label, value }) => ({ label, value })) };
+                  let ok = false;
+                  try {
+                    const a = await reader.entails(ask);
+                    ok = a === 'yes' && (await reader.entails({ ...ask, more: true })) === 'no';
+                  } catch (err) { if (stop && stop()) { stopped = true; break; } throw err; }
+                  calls += 2;
+                  got.checks[ck] = ok;
+                }
+                if (!got.checks[ck]) continue;
+              }
               const refs = [];
               for (const y of used) {
                 const src = y.f.sources.find((z) => live(z) && !z.said && !z.plan);
@@ -3708,6 +3725,11 @@
       async clash({ sentence }) {
         const hit = (answers.clash || []).find((x) => starts(sentence, x.sentence));
         return hit ? hit.answer : 'no';
+      },
+      // (round 4) a profile sentence the file says says more than its facts: no; else the facts say it all
+      async entails({ sentence, more = false }) {
+        const bad = (answers.entails || []).some((x) => starts(sentence, x));
+        return more ? (bad ? 'yes' : 'no') : (bad ? 'no' : 'yes');
       },
       async pick() { return null; },
       abort() {}
@@ -3846,6 +3868,8 @@
     'You write the short introduction to one entry of a story bible, using only the numbered facts given.',
     'Write 2 to 4 short sentences, plain and factual. In f, list the numbers of the facts each sentence uses. Use the facts\' own words; add nothing that is not in them: no guesses, no feelings, no opinions, no quotation marks.'
   ].join('\n');
+  const ENTAILS_SYSTEM = 'You check one sentence of a story bible against the numbered facts it was written from. Answer yes only if the facts state everything the sentence says, with the same meaning. Answer no if the sentence changes a fact, joins facts into something they do not say, or adds anything. Answer unclear if you cannot tell.';
+  const ENTAILS_MORE_SYSTEM = 'You check one sentence of a story bible against the numbered facts it was written from. Answer yes if the sentence says anything the facts do not: an added detail, a feeling, a judgement, a habit from one moment, a word of one fact applied to another, a dropped "not" or "never". Answer no if it says only what the facts say. Answer unclear if you cannot tell.';
   const PROFILE_SCHEMA = {
     type: 'object',
     properties: { p: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'object', properties: { t: { type: 'string' }, f: { type: 'array', minItems: 1, maxItems: 6, items: { type: 'integer' } } }, required: ['t', 'f'] } } },
@@ -3973,6 +3997,12 @@
         const opts = [...options, ELSE, UNSURE];
         const r = await safe({ system: WHOSE_SYSTEM, user: `Passage:\n${passage}\n\nClaim: ${label}: ${value}\nWho or what is this claim about, in the passage?\nOptions: ${opts.join('; ')}`, schema: { type: 'object', properties: { a: { enum: opts } }, required: ['a'] }, maxTokens: 24, compact: true }, null);
         return (r && r.a) || UNSURE;
+      },
+      // (round 4) a profile sentence against the facts it cites, both ways round
+      async entails({ name, sentence, facts, more = false }) {
+        const user = `${name}. Facts:\n${facts.map((f, i) => `[${i + 1}] ${f.label}: ${f.value}`).join('\n')}\n\nSentence: ${sentence}\n` + (more ? 'Does the sentence say anything these facts do not?' : 'Do these facts say everything this sentence says?');
+        const r = await safe({ system: more ? ENTAILS_MORE_SYSTEM : ENTAILS_SYSTEM, user, schema: ANSWER_SCHEMA, maxTokens: 10, compact: true }, null);
+        return (r && r.a) || 'unclear';
       },
       async profile({ name, kind, facts }) {
         this.calls++;

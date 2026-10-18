@@ -265,3 +265,52 @@ test('identity: a number turned round is no new place but a slip on the kept one
   assert.equal(Canon.turnedNumbers(src(['Room 14 was empty, and Room 41 was full.']), [room, abbott]).length, 0, 'both written: two rooms');
   assert.ok(Canon.turnedNumbers(src(['She took Mrs Abbott her tea in Room 41.']), [room, abbott])[0].tied);
 });
+
+/* ---------- 7 · profiles ---------- */
+
+test('profiles say only what their facts say: no word picked out of a value, no "never" dropped or added, a look keeps its word, a where its preposition, a deed is no "is"', () => {
+  const E = Canon.Editor;
+  const e = { name: 'Ivo Marchetti', aliases: ['Ivo'] };
+  const F = (label, value, as = '') => ({ attr: 'other', label, value, as });
+  const ok = (t, facts) => E.profileOk(t, facts, e) && E.profileEntailed(t, facts, e);
+  assert.equal(ok('Ivo Marchetti is the foreman of the Lisle orchard', [F('Work', 'foreman of the Lisle orchard')]), true);
+  assert.equal(ok('Ivo Marchetti is a foreman', [F('Work', 'foreman of the Lisle orchard')]), true, 'a value\'s head may stand for it');
+  assert.equal(ok('Ivo Marchetti is the Lisle orchard', [F('Work', 'foreman of the Lisle orchard')]), false, 'its complement never does');
+  assert.equal(ok('Ivo has never touched a drop of the cider', [F('Habit', 'has never touched a drop of the cider')]), true);
+  assert.equal(ok('Ivo has touched a drop of the cider', [F('Habit', 'has never touched a drop of the cider')]), false, 'a never dropped');
+  assert.equal(ok('Ivo never drinks the cider', [F('Habit', 'drinks the cider')]), false, 'a never added');
+  assert.equal(ok('Ivo Marchetti is green', [F('Eye look', 'green')]), false, 'the eyes\' colour is no person\'s');
+  assert.equal(ok('Ivo Marchetti has green eyes', [F('Eye look', 'green')]), true);
+  assert.equal(ok('Ivo Marchetti is the end', [F('Location', 'at the end of the row')]), false);
+  assert.equal(ok('Ivo Marchetti is the accident', [F('History', 'the accident')]), false);
+  assert.equal(ok('Ivo Marchetti is male (man)', [F('Sex', 'male', 'man')]), false, 'no brackets');
+  assert.equal(ok('Tamsin is thirty-four', [F('Age', 'thirty-four')]), false, 'it opens with whom it is about');
+});
+
+test('profiles in a read: the drift reader\'s sentences that say more than their facts are left out; the reader is asked both ways', async () => {
+  let kept = 0;
+  let bad = 0;
+  for (const fx of [...P.FIXTURES, ...P.DEV3]) {
+    const r = await P.runSheet(fx, { mode: 'drift', setting: P.SETTINGS[path.relative(FIX, fx)] || '' });
+    const x = P.summary(r);
+    kept += x.profOf;
+    bad += x.profBad;
+  }
+  assert.ok(kept >= 40, 'profiles kept ' + kept);
+  assert.equal(bad, 0);
+  // a reader that says a sentence says more than its facts: left out
+  const reader = Canon.fakeReader({ entails: ['Mara Venn is a thirty-four'] , ...JSON.parse(require('node:fs').readFileSync(path.join(FIX, 'qa', 'reader-answers.json'), 'utf8')) });
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { folderIO } = require('./canon-eval.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-canon-r4-'));
+  const lib = path.join(root, 'library');
+  fs.cpSync(path.join(FIX, 'qa', 'library'), lib, { recursive: true });
+  const library = JSON.parse(fs.readFileSync(path.join(lib, 'library.json'), 'utf8'));
+  let cache = null;
+  const io = { ...folderIO(lib, path.join(lib, library.shelves[0].canonId)), cache: () => cache && structuredClone(cache), saveCache: (c) => { cache = structuredClone(c); } };
+  await Canon.createEngine({ io, reader }).readShelf({});
+  const mara = io.entries().map((x) => Canon.parseEntry(x.text)).find((x) => x.name === 'Mara Venn');
+  fs.rmSync(root, { recursive: true, force: true });
+  assert.ok(mara.profile && !/thirty-four/.test(mara.profile.text) && /Coldharbour/.test(mara.profile.text), mara.profile && mara.profile.text);
+});

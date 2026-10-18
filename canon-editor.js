@@ -1403,6 +1403,23 @@ module.exports = function canonEditor(C) {
       if (cited.some((l) => l.why !== 'name' && personal(clauseOf(l.s, grounded)))) return { why: 'someone else' };
     }
     if (labelFamily(keyOf(g, label)) === 'appearance' && namesOther(value, true)) return { why: 'someone else' };
+    // (round 4) a place's, group's or thing's claim in a clause a person's he
+    // or she is the subject of is theirs ("He stood at the orchard gate …: the Dunne family")
+    if (!['person', 'creature'].includes(c.kind) && !thingDone && !['relationship', 'possession', 'membership', 'history'].includes(g) && labelFamily(key) !== 'history' && !['residents', 'members'].includes(key) && cited.every((l) => /^\W*(?:(?:then|and|but|so|now)\s+)?(?:he|she|i|we)\s/i.test(clauseOf(l.s, grounded)))) return { why: 'someone else' };
+    // (round 4) a colour, a number, a direction or a material the value gives
+    // must be in the sentences: "blue Rover" from "his old Rover, a green P6" is the reader's
+    {
+      const HARD = (w) => COLOURS[w] || (NUMBER.test(w) && !/^(?:one|first)$/.test(w)) || /^(?:north|south|east|west|left|right|upper|lower|brick|stone|timber|wooden|iron|steel|glass|slate|marble|granite|sandstone|concrete|thatched|thatch)$/.test(w);
+      const raw = new Set(tokens(text));
+      if (tokens(value).filter(HARD).some((w) => !raw.has(w) && !inBag(stem(w), bag))) return { why: 'invented' };
+      // (kin: every kin word of the value is the sentences' own — "father's brother" from "my father's grey eyes" is not)
+      const KIN_W = /^(?:father|mother|brother|sister|son|daughter|uncle|aunt|cousin|niece|nephew|grandfather|grandmother|grandson|granddaughter|husband|wife|grandad|granny|gran|nan|stepfather|stepmother|half-brother|half-sister|twin)$/;
+      // (or its other side: "brother of Tamsin" from "his younger sister Tamsin")
+      const SIDE = { brother: ['sister', 'brother', 'twin'], sister: ['brother', 'sister', 'twin'], son: ['father', 'mother', 'parent'], daughter: ['father', 'mother', 'parent'], father: ['son', 'daughter', 'child', 'boy', 'girl'], mother: ['son', 'daughter', 'child', 'boy', 'girl'],
+        uncle: ['niece', 'nephew'], aunt: ['niece', 'nephew'], niece: ['uncle', 'aunt'], nephew: ['uncle', 'aunt'], husband: ['wife'], wife: ['husband'], grandson: ['grandfather', 'grandmother'], granddaughter: ['grandfather', 'grandmother'], grandfather: ['grandson', 'granddaughter'], grandmother: ['grandson', 'granddaughter'] };
+      const has = (w) => raw.has(w) || raw.has(w + 's') || (SIDE[w] || []).some((x) => raw.has(x) || raw.has(x + 's'));
+      if (labelFamily(keyOf(g, label)) === 'relationship' && tokens(value).filter((w) => KIN_W.test(w)).some((w) => !has(w))) return { why: 'invented' };
+    }
     // (round 3) a name that is another's ("Arthur, to Constance" is the doctor's
     // name); a person's own name owning the value ("Mara's apprentice") is someone else's fact
     if (keyOf(g, label) === 'name') {
@@ -1898,6 +1915,54 @@ module.exports = function canonEditor(C) {
     return words.every((w) => inBag(w, allowed));
   }
 
+  // (round 4) …and says only what they say: the real reader's profiles cited
+  // real facts and drifted from them ("X is registrar" from "the night
+  // registrar"; a "never" dropped; a look's colour given to the person). A
+  // sentence opens with whom it is about; uses most of each cited fact's
+  // value (no one word picked out of it); keeps a fact's "never", and adds
+  // none; gives a short look or tie its label's word ("grey eyes", not
+  // "grey"); has no brackets. Else it is left out.
+  const GENERIC_KEYS = new Set(['appearance.build', 'appearance.height', 'role', 'occupation', 'personality', 'description', 'age', 'name', 'habit', 'routine', 'custom', 'history', 'state', 'other', 'species', 'sex', 'skill', 'manner', 'manner.speech', 'atmosphere', 'function', 'use', 'effect', 'rule', 'opinion']);
+  function profileEntailed(sentence, facts, e) {
+    if (/[()[\]]/.test(sentence)) return false;
+    // (its words, not the entry's own name's: "Room 14 is the end" holds no "room" of a value)
+    const named = new Set([e.name, ...(e.aliases || [])].flatMap((n) => content(n)));
+    const sw = new Set(content(sentence).filter((w) => !named.has(w)));
+    const own = [e.name, ...(e.aliases || [])].map((n) => norm(n).replace(/^the\s+/, '')).filter(Boolean);
+    const first = norm(sentence).replace(/^the\s+/, '');
+    if (!own.some((n) => first.startsWith(n)) && !/^(?:he|she|it|they|his|her|its|their|the\s+[\p{L}-]+(?:\s+[\p{L}-]+)?\s+of)\b/u.test(norm(sentence))) return false;
+    for (const f of facts) {
+      const vw = content(f.value).filter((w) => !STOPW.has(w));
+      if (!vw.length) continue;
+      const share = (ws) => ws.length ? ws.filter((w) => inBag(w, sw)).length / ws.length : 0;
+      // (a value's head may stand for it, "a lamplighter" for "lamplighter of the
+      // Lantern House"; its complement alone never does, "the Younger" for "father of the Younger")
+      const chunk = content(String(f.value).replace(/^\s*(?:on|in|at|by|under|near|beside|next to)\s+/i, '').split(/[,;]|\s(?:of|in|at|on|with|to|for|from|by|and|who|which|that|when|since)\s/i)[0]);
+      const verbish = (w) => /(?:s|ed|ing)$/.test(w) || DYNAMIC.test(w);
+      const head = chunk.length ? (verbish(tokens(f.value)[0] || '') ? chunk[0] : chunk[chunk.length - 1]) : null;
+      if (share(content(f.as || '')) < 0.6) {
+        if (vw.length <= 2 ? share(vw) < 1 : !(head && inBag(head, sw)) || share(vw) < 0.3) return false;
+      }
+      if (negated(f.value) && !negated(sentence)) return false;
+      const k = canonLabel(f.label || (C.ATTRS[f.attr] || {}).label || '');
+      if (vw.length <= 2 && !GENERIC_KEYS.has(k) && !GENERIC_KEYS.has(labelFamily(k)) && !content(f.label || (C.ATTRS[f.attr] || {}).label || '').some((w) => inBag(w, sw))) return false;
+    }
+    if (negated(sentence) && !facts.some((f) => negated(`${f.value} ${f.as || ''}`))) return false;
+    // (a where kept with its preposition: "at the end of Larch Ward" is no "is the end"; a deed is no "is floods";
+    // one clause, one verb: "the ledger is the weigher writes…")
+    for (const f of facts) {
+      const lead = (/^\s*(next to|in front of|on|in|at|by|under|near|beside|behind|above|below|across|along|off|outside|inside|between)\s/i.exec(f.value) || [])[1];
+      if (lead && !new RegExp(`(?<![\\p{L}])${escRe(lead.toLowerCase())}(?![\\p{L}])`, 'iu').test(sentence)) return false;
+      const v0 = tokens(f.value)[0] || '';
+      if (/(?:s|ed)$/.test(v0) && !STOPW.has(v0) && new RegExp(`(?<![\\p{L}])(?:is|was|are|were)\\s+${escRe(v0)}(?![\\p{L}])`, 'iu').test(sentence)) return false;
+    }
+    if (/(?<![\p{L}])(?:is|was|are|were)\s+(?:[\p{L}'’-]+\s+){1,4}?(?:is|was|are|were|writes|wrote)(?![\p{L}])/iu.test(sentence.split(/[,;]|\s(?:and|but|who|which|that|where|when)\s/)[0])) return false;
+    // ("Dock Three is the accident": what happened there, what it does, whom it has, is no "is")
+    const lead = new RegExp(`^\\s*(?:${[e.name, ...(e.aliases || [])].map((n) => escRe(n)).join('|')}|he|she|it|they)\\s+(?:is|was|are|were)\\s+(?!a\\s|an\\s)`, 'iu');
+    if (lead.test(sentence) && facts.some((f) => ['history', 'habit', 'relationship', 'possession', 'function'].includes(labelFamily(canonLabel(f.label || (C.ATTRS[f.attr] || {}).label || ''))) && !/^\s*(?:on|in|at|by|under|near|beside|next to|born|built|founded|kept|owned|married|known|the\s+\p{L}+\s+of)\b/iu.test(f.value))) return false;
+    return true;
+  }
+
   /* ---------- reading one chapter ---------- */
 
   // A pool of `n` at a time over `items`; `fn(item, i)`; stops between items
@@ -2163,5 +2228,5 @@ module.exports = function canonEditor(C) {
     return ch.paras.map((p) => new Map([...(p.refs || new Map())].map(([at, r]) => [at, { id: cast[r.key].entry.id, strong: r.strong, body: !!r.body }])));
   }
 
-  return { EDITOR_PROMPT, readingRefs, resolveRefs, writtenNames, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
+  return { EDITOR_PROMPT, readingRefs, resolveRefs, writtenNames, firstPerson, narratorNames, selfHits, clashDetail, chapterModel, castGate, namingTies, chapterHits, sexHints, packFor, packParts, gateFact, clauseOf, claimOwner, introFacts, traitOf, clashCandidate, overlap, profileOk, profileEntailed, readChapter, pool, stem, content, inBag, GROUPS, KINDS };
 };
