@@ -239,3 +239,18 @@ The evaluation lead ran Careful on six stories the builder had never seen (`/tmp
 | False slips (sex, deeds, quotes) | rule 19; an exception told as one is no slip |
 | Unsupported profile sentences | rule 20 |
 | Too few trait proposals | introductions read by code (`introFacts`: "a short, bald man with half-moon spectacles", "Brennock was a grey slate town"), each still through the gates and the reader; the dossier names each kind's checklist |
+
+### Results, round 2 (Careful 4B, 4-core CPU)
+
+`node scripts/canon-eval.js --fixture <dir>,<dir>… --model careful --keep <run>`, then `canon-score.js` per fixture with `--reviewed reviewed-careful.json` (dev: `reviewed-careful-r2.json`). Precision counts every kept fact: matched to the sheet, a trap, or judged by the builder (a fact not on the sheet is true only when it holds of that entity, lastingly, in the narration; one moment, another's, or only said is wrong). Before: the round-1 engine (`0b91b73`) on the same answers; dev's "before" is §11's.
+
+| Set | Engine | Must facts | Precision (all kept, reviewed) | Slips | False slips | Which is right? | Junk entries | Profile sentences unsupported |
+|---|---|---|---|---|---|---|---|---|
+| dev2 (5 stories, 2,480 words) | round 1 | 81/129 (63%) | 145/149 judged, 54 unreviewed | 4/11 | 0 | 0/2 | 3 | — |
+| dev2 | **round 2** | **92/129 (71%)** | **139/139 (100%)** | **11/11** | **0** | **2/2** | **0** | **0/23** |
+| dev (1,670 words) | round 1 (§11) | 29/41 (71%) | 64/65 (98%) | 3/3 | 0 | — | — | — |
+| dev | **round 2** | 26/41 (63%) | **45/45 (100%)** | 2/3 (+1 worth a look: the crust, which the reader won't call one event) | **0** | — | 0 | 0/7 |
+
+Model time: dev 1,870 s, dev2 5,182 s (2,480 words), about the round-1 engine's per word: the second questions (whose, wrong-about) cost ~3 s each, and code reads the introductions.
+
+What the numbers are not: dev2 was written for the failure types and the rules were tuned on it, so it is a second dev set, not a held-out estimate. The held-out brief's 37% must and ~55–72% precision were on prose the builder had never read; the final gate is a new unseen batch. Recall on dev fell a little (Hesper's Spared, her friend Coll and the Weighhouse's routines still need the reader; a habit "she kept her hands still" is no longer a habit), and that was the trade the owner asked for: precision first.
