@@ -794,11 +794,13 @@ module.exports = function canonEditor(C) {
       const at0 = all.findIndex((t, i) => i > 0 && words.some((w) => stem(t.w) === w));
       let from = 0;
       for (const m of l.s.text.matchAll(/(?:,\s+(?:and|but|so)\s+|;\s+|:\s+)/g)) if (at0 >= 0 && m.index < all[at0].at) from = m.index + m[0].length;
-      const toks = all.filter((t) => t.at >= from);
+      let toks = all.filter((t) => t.at >= from);
+      // (a clause with no verb of its own, "and Moss at his heels", is the sentence's)
+      if (!toks.some((t, i) => DYNAMIC.test(t.w) || ['was', 'were', 'is', 'are', 'had', 'has', 'have'].includes(t.w))) toks = all;
       // the main verb: the first dynamic past, or "was|were" + -ing, outside a leading apposition
       let vi = -1;
       for (let i = 0; i < toks.length; i++) {
-        const before = l.s.text.slice(0, toks[i].at);
+        const before = l.s.text.slice(toks === all ? 0 : from, toks[i].at);
         if ((before.match(/,/g) || []).length % 2 === 1) continue; // (inside ", his grey mare,")
         if (['was', 'were'].includes(toks[i].w) && toks[i + 1] && /ing$/.test(toks[i + 1].w)) { vi = i + 1; break; }
         // ("had felt", "had known": an action done before; "had a dog", "had been": not)
@@ -873,7 +875,7 @@ module.exports = function canonEditor(C) {
       }
     }
     let owned = false;
-    if (ctx.hits && !['relationship', 'location', 'membership', 'possession'].includes(g) && !['residents', 'members', 'possession'].includes(key)) {
+    if (ctx.hits && !['relationship', 'membership', 'possession'].includes(g) && !['residents', 'members', 'possession'].includes(key)) {
       const owners = cited.map((l) => claimOwner(l, grounded, c, ctx));
       if (owners.some((k) => k != null && k !== c.key)) return { why: 'someone else' };
       owned = owners.some((k) => k === c.key);
