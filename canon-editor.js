@@ -103,7 +103,7 @@ module.exports = function canonEditor(C) {
   // the common nouns a named place or thing is called by (a reader's alias "the river")
   const CATEGORY = new Set(['river', 'stream', 'brook', 'canal', 'town', 'village', 'city', 'hamlet', 'house', 'cottage', 'farm', 'orchard', 'station', 'ship', 'boat', 'inn', 'pub', 'tavern',
     'mill', 'school', 'church', 'chapel', 'castle', 'tower', 'lighthouse', 'harbour', 'port', 'island', 'forest', 'wood', 'valley', 'lake', 'bay', 'market', 'academy', 'prison',
-    'hospital', 'abbey', 'monastery', 'college', 'camp', 'base', 'manor', 'estate', 'palace', 'temple', 'shop', 'hotel', 'surgery', 'car', 'van', 'lorry', 'train', 'cart']);
+    'hospital', 'abbey', 'monastery', 'college', 'camp', 'base', 'manor', 'estate', 'palace', 'temple', 'shop', 'hotel', 'surgery', 'car', 'van', 'lorry', 'train', 'cart', 'barn', 'hangar', 'dock', 'plant', 'factory', 'yard']);
   const NAMING = /(?<![\p{L}])(?:name|names|named|called|calls|call|known as|nicknamed|nickname|went by)(?![\p{L}])/iu;
   const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // how often the chapter writes `phrase`, as written (capitals kept) or,
@@ -557,8 +557,9 @@ module.exports = function canonEditor(C) {
         // ("the house", and in the narration "my grandmother’s house")
         for (const m of p.text.matchAll(new RegExp(`(?<![\\p{L}])(?:[Tt]he|(?:(?:[Mm]y|[Hh]is|[Hh]er|[Tt]heir|[Oo]ur)\\s+)?\\p{Ll}+['’]s)\\s+${escRe(head)}(?![\\p{L}])(?!\\s+(?:with|of|that|where|which|on|in|at|behind|beside|across)\\b)`, 'gu'))) {
           if (!/^the\s/i.test(m[0]) && p.talk.some(([a, b]) => m.index < b && m.index + m[0].length > a)) continue;
-          if (hits.some((h) => h.start < m.index + m[0].length && h.end > m.index)) continue;
-          hits.push({ key, start: m.index, end: m.index + m[0].length, via: 'head' });
+          const at = /^the\s/i.test(m[0]) ? m.index : m.index + m[0].length - head.length;
+          if (hits.some((h) => h.start < m.index + m[0].length && h.end > at)) continue;
+          hits.push({ key, start: at, end: m.index + m[0].length, via: 'head' });
         }
       }
       return hits.sort((a, b) => a.start - b.start);
@@ -884,7 +885,7 @@ module.exports = function canonEditor(C) {
       for (let i = 0; i < ts.length; i++) {
         if (!words.some((w) => w === st[i] || inBag(w, new Set([st[i]])))) continue;
         if (NEGATORS.has(ts[i]) && words.includes(st[i])) return true; // ("never" is the value's own word)
-        if (ts.slice(Math.max(0, i - 5), i).some((w) => NEGATORS.has(w))) return true;
+        if (ts.slice(Math.max(0, i - 5), i).some((w, k, arr) => NEGATORS.has(w) && !(w === 'without' && arr.length - k > 2))) return true;
       }
     }
     return false;
@@ -1117,6 +1118,7 @@ module.exports = function canonEditor(C) {
       // ("Mara kept a brass key on a cord around her neck")
       if (c.kind !== 'person' && c.kind !== 'creature' && /^(?:stood|lay|sat|ran|rose|wound|stretched|climbed|faced|overlooked|looked|hung|sloped|leaned|towered|squatted)$/.test(toks[vi].w)) return false;
       if (fam === 'possession' && /^(?:kept|had|owned|carried|wore|held)$/.test(toks[vi].w)) return false;
+      { const k = toks.findIndex((t, i) => i > 0 && words.some((w) => stem(t.w) === w)); if (fam === 'possession' && k > 0 && ['his', 'her', 'their', 'my'].includes(toks[k - 1].w)) return false; }
       // (a mark is what a deed left: "He had lost two fingers of his left hand to a winch")
       if (key === 'appearance.mark') return false;
       const ci = toks.findIndex((t, i) => i > 0 && words.some((w) => stem(t.w) === w));
@@ -1148,6 +1150,12 @@ module.exports = function canonEditor(C) {
     const bag = new Set(content(text));
     // 3 grounded: half the value's words (all its names and numbers) in the sentences
     const grounded = valueWords.filter((w) => inBag(w, bag));
+    // (a sex the cited sentence gives by a he or she the chapter's reading is sure is c: the trait rules decide)
+    if (g === 'sex' && !grounded.length && ['male', 'female', 'man', 'woman', 'boy', 'girl'].includes(norm(value))) {
+      const want = ['male', 'man', 'boy'].includes(norm(value)) ? 'male' : 'female';
+      const by = cited.some((l) => [...((ctx.ch.paras[l.s.pi].refs) || new Map()).entries()].some(([at, r]) => at >= l.s.start && at < l.s.end && r.strong && r.key === c.key && PRONOUNS[norm(ctx.ch.paras[l.s.pi].text.slice(at).match(/^[\p{L}]+/u)[0])] === want));
+      if (by) grounded.push(...valueWords);
+    }
     const caps = (value.match(/(?<![\p{L}])\p{Lu}[\p{L}'’-]+/gu) || []).filter((w, i) => i > 0 || !STOPW.has(w.toLowerCase()));
     // (a name the cited sentences give by a pronoun the chapter's reading is sure of: "he had been her apprentice" → Tobias)
     const meant = new Set(cited.flatMap((l) => [...((ctx.ch.paras[l.s.pi].refs) || new Map()).entries()].filter(([at, r]) => at >= l.s.start && at < l.s.end && r.strong).map(([, r]) => r.key))
@@ -1202,13 +1210,14 @@ module.exports = function canonEditor(C) {
     let owned = false;
     if (ctx.hits && !['relationship', 'membership', 'possession'].includes(g) && !['residents', 'members', 'possession'].includes(key)) {
       const owners = cited.map((l) => claimOwner(l, grounded, c, ctx, key));
-      if (owners.some((k) => k != null && k !== c.key)) return { why: 'someone else' };
+      // (a sentence that is no one's of the cast, "They got a number inked…", beside one that is c's, "Hesper's was 41": c's)
+      if (owners.some((k) => k != null && k >= 0 && k !== c.key) || (owners.includes(-1) && !owners.includes(c.key))) return { why: 'someone else' };
       owned = owners.some((k) => k === c.key);
     }
     // the setting's own: how it works (its routines and rules, who belongs),
     // from a clause that names no one and nothing else of the cast
     const bySetting = cited.some((l) => l.why === 'setting');
-    if (bySetting && !['habit', 'rule', 'membership'].includes(g)) return { why: 'setting' };
+    if (bySetting && !['habit', 'rule', 'membership'].includes(g) && !['residents', 'members'].includes(key)) return { why: 'setting' };
     const interpretive = INTERPRETIVE.has(key) || INTERPRETIVE.has(labelFamily(key)) || g === 'personality';
     const ratio = valueWords.length ? grounded.length / valueWords.length : 0;
     if (!valueWords.length) return { why: 'empty' };
@@ -1261,7 +1270,7 @@ module.exports = function canonEditor(C) {
     if (quotes.length !== cited.length) return { why: 'quote' };
     // said: inside speech or reported speech, whatever the reader marked
     const said = !!x.x || cited.every((l) => { const q = clauseOf(l.s, grounded); return talkOf(l.s, q, ctx); });
-    if (bySetting && quotes.some((q) => namesOther(q) || others.some((o) => o.kind === 'place' && o.name.split(/\s+/).length > 1 && new RegExp(`(?<![\\p{L}])${o.name.split(/\s+/).pop()}s?(?![\\p{L}])`, 'iu').test(q)))) return { why: 'setting' };
+    if (bySetting && !['membership', 'residents', 'members'].includes(key) && g !== 'membership' && quotes.some((q) => namesOther(q) || others.some((o) => o.kind === 'place' && o.name.split(/\s+/).length > 1 && new RegExp(`(?<![\\p{L}])${o.name.split(/\s+/).pop()}s?(?![\\p{L}])`, 'iu').test(q)))) return { why: 'setting' };
     // not from a sentence a slip stands on (a later value that differs)
     if (cited.some((l) => ctx.suspect && ctx.suspect.has(l.s.id))) return { why: 'suspect' };
     return { g, key, label, value, quotes, cited, said, interpretive: interpretive && ratio < 0.5, strong: cited.every((l) => l.why === 'name'), owned,
@@ -1778,7 +1787,7 @@ module.exports = function canonEditor(C) {
     // that calls them so (code's, like the shelf's own kin)
     for (const c of cast) {
       if (c.kind !== 'person') continue;
-      const role = [c.name, ...c.aliases].find((n) => /^the\s+\p{Ll}[\p{Ll}-]+$/u.test(n) && !CROWD.has(n.slice(4)));
+      const role = [c.name, ...c.aliases].find((n) => /^the\s+(?:\p{Ll}[\p{Ll}-]+|\p{Lu}\p{Ll}{3,})$/u.test(n) && !CROWD.has(n.slice(4).toLowerCase()) && !TITLES.has(n.slice(4).toLowerCase()) && !NUMBER.test(n.slice(4).toLowerCase()));
       if (!role) continue;
       const re = new RegExp(`(?<![\\p{L}])[Tt]he\\s+${escRe(role.slice(4))}(?![\\p{L}])`, 'u');
       const s = ch.sents.find((x) => re.test(x.text) && !x.said && !ch.paras[x.pi].talk.some(([a, b]) => a < x.end && b > x.start));

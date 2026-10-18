@@ -1885,7 +1885,7 @@
       if (!pron && words[0] && ['he', 'she'].includes(words[0].lw)) {
         for (let i = 2; i < words.length && !pron; i++) {
           if (!target.test(words[i].lw) || COLOURS[words[i - 1].lw] !== f.value) continue;
-          const have = words.slice(Math.max(1, i - 4), i - 1).find((w) => ['had', 'has', 'with'].includes(w.lw));
+          const have = words.slice(Math.max(1, i - 8), i - 1).find((w) => ['had', 'has', 'with'].includes(w.lw));
           if (have && !/[;:]/.test(st.text.slice(0, have.start - st.start))) pron = words[0];
         }
       }

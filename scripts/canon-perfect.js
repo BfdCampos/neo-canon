@@ -228,12 +228,13 @@ async function runSheet(fixture, { mode = 'perfect', setting = '' } = {}) {
 }
 
 // Of the sheet's facts a reader could keep as true (not said; not one the
-// sheet asks the writer about), how many the entries keep → { of, kept, lost: [] }
+// sheet asks the writer about), how many the entries keep → { of, kept, lost: [],
+// proposed: { of, kept } (those the perfect reader proposed: what the gates decide) }
 function survival(run) {
   const { sheet, entries } = run;
   const needs = new Set((sheet.needs || []).map((n) => n.entity + '|' + n.attr));
   const ent = (a) => entries.filter((e) => [e.name, ...e.aliases].some((n) => [a.name, ...(a.aliases || [])].some((x) => N(x).replace(/^the\s+/, '') === N(n).replace(/^the\s+/, ''))));
-  const out = { of: 0, kept: 0, lost: [] };
+  const out = { of: 0, kept: 0, lost: [], proposed: { of: 0, kept: 0 } };
   for (const a of sheet.entities) {
     const mine = ent(a);
     for (const f of a.facts) {
@@ -244,7 +245,11 @@ function survival(run) {
         const LEG = { sex: 'sex', species: 'species', eyes: 'appearance.eyes', hair: 'appearance.hair', birthplace: 'origin', sibling: 'relationship.kin', parent: 'relationship.kin', child: 'relationship.kin', spouse: 'relationship.kin', owner: 'possession', home: 'location.home', title: 'role' };
         return { value: g.value, as: g.as, attr: g.attr !== 'other' ? (LEG[g.attr] || Score.canonLabel(label)) : Score.canonLabel(label), quotes: g.sources.filter((s) => !s.written).map((s) => s.quote) };
       }));
-      if (produced.some((pf) => { const m = Score.matchFact(pf, [{ ...f, entity: a }]); return m; })) out.kept++;
+      // (a name is kept in the entry's names: "Anselm", "Brother Ink")
+      const named = f.attr === 'name' && mine.some((e) => [e.name, ...e.aliases].some((n) => Canon.Editor.content(f.value).some((w) => Canon.Editor.content(n).includes(w))));
+      const offered = named || (run.log || []).some((y) => !y.wrong && y.value === f.value && y.quote === f.quote);
+      if (offered) out.proposed.of++;
+      if (named || produced.some((pf) => { const m = Score.matchFact(pf, [{ ...f, entity: a }]); return m; })) { out.kept++; if (offered) out.proposed.kept++; }
       else {
         // why: the gate that dropped what the reader proposed, or never proposed (not in the pack)
         const said = (run.log || []).filter((y) => !y.wrong && y.value === f.value && y.quote === f.quote);
@@ -290,7 +295,7 @@ async function main() {
     const sv = survival(run);
     const adv = await runSheet(fx, { mode: 'adversarial', setting });
     const bad = survivors(adv);
-    console.log(`\n== ${name}: pack coverage must ${covMust.in}/${covMust.of}, all ${cov.in}/${cov.of}; perfect reader keeps ${sv.kept}/${sv.of}; wrong kept ${run.score.precision.wrong.length}; adversary's kept ${bad.length}/${adv.log.filter((x) => x.wrong).length}; slips ${run.score.slips ? `${run.score.slips.found}/${run.score.slips.of}, false ${run.score.slips.false.length}` : '-'}`);
+    console.log(`\n== ${name}: pack coverage must ${covMust.in}/${covMust.of}, all ${cov.in}/${cov.of}; perfect reader keeps ${sv.kept}/${sv.of} (of what it proposed ${sv.proposed.kept}/${sv.proposed.of}); wrong kept ${run.score.precision.wrong.length}; adversary's kept ${bad.length}/${adv.log.filter((x) => x.wrong).length}; slips ${run.score.slips ? `${run.score.slips.found}/${run.score.slips.of}, false ${run.score.slips.false.length}` : '-'}`);
     if (process.argv.includes('--v')) {
       for (const m of cov.missing) console.log('  not in pack: ' + m);
       for (const m of sv.lost) console.log('  lost: ' + m);
