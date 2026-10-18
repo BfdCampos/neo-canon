@@ -235,7 +235,7 @@ const DRIFT = {
 };
 const MOMENT_RE = /(?<![\p{L}])(?:was|were|lay|sat|stood|fell|felt|looked)\s+((?:(?:very|so|too|quite|half|fast)\s+)?(?:awake|asleep|cold|tired|frightened|afraid|scared|furious|angry|sad|happy|hungry|wet|exhausted|nervous|late|alone|still|quiet|silent|crying|shaking|pale|ill|sick|drunk)(?:\s*(?:,|and)\s*(?:(?:very|so)\s+)?[\p{Ll}]+){0,2}(?:\s+(?:on|at|by|with|in|across)\s+(?:his|her|the|their|its)\s+\p{Ll}+)?)/u;
 const POSTURE_RE = /(?<![\p{L}])(?:fell asleep|stood at|lay across|sat on|sat at|stood by)\s+((?:the|his|her|its|their)\s+[\p{Ll}-]+(?:,\s*[\p{Ll}]+)?)/u;
-function driftReader(sheet, base, { log, wrongSet, hash, N, Canon }) {
+function driftReader(sheet, base, { log, wrongSet, hash, N, Canon, yesToSlips = false }) {
   const pick = (xs, k) => xs[Math.abs(hash(k)) % xs.length];
   const drift = (attr, k) => pick(DRIFT[attr] || DRIFT[String(attr).split('.')[0]] || [String(attr).split('.').pop()], k);
   const EPITHET = /\s+(?:the\s+(?:Elder|Younger|Third|Second|First)|Junior|Senior|Jr|Sr)$/;
@@ -320,7 +320,6 @@ function driftReader(sheet, base, { log, wrongSet, hash, N, Canon }) {
       return base.verify({ ...q, label: 'other' });
     },
     async whose(q) { return wrongSet.has(N(q.name + '|' + q.value)) ? q.name : base.whose({ ...q, label: 'other' }); },
-    async refers() { return 'yes'; },
     // sentences that cite real facts and say more than they do
     async profile({ name, kind, facts }) {
       if (!facts.length) return [];
@@ -343,8 +342,9 @@ function driftReader(sheet, base, { log, wrongSet, hash, N, Canon }) {
       return out;
     },
     async entails({ more }) { return more ? 'no' : 'yes'; },
-    async contradicts() { return 'no'; },
-    async clash() { return 'no'; }
+    async contradicts() { return yesToSlips ? 'yes' : 'no'; },
+    async clash() { return yesToSlips ? 'yes' : 'no'; },
+    async refers() { return 'yes'; }
   };
 }
 
@@ -384,8 +384,9 @@ async function runSheet(fixture, { mode = 'perfect', setting = '' } = {}) {
     const io = { ...folderIO(lib, dir), cache: () => cache && structuredClone(cache), saveCache: (c) => { cache = structuredClone(c); } };
     const log = [];
     const packs = new Map();
-    const reader = mode === 'drift'
-      ? (() => { const base = sheetReader(sheet, { mode: 'perfect', setting, log, packs }); return driftReader(sheet, base, { log, wrongSet: base.wrongSet, hash: (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7), N, Canon }); })()
+    // ('credulous': the drift reader, but yes to every slip question — what a false slip needs)
+    const reader = mode === 'drift' || mode === 'credulous'
+      ? (() => { const base = sheetReader(sheet, { mode: 'perfect', setting, log, packs }); return driftReader(sheet, base, { log, wrongSet: base.wrongSet, hash: (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7), N, Canon, yesToSlips: mode === 'credulous' }); })()
       : sheetReader(sheet, { mode, setting, log, packs });
     const engine = Canon.createEngine({ io, reader });
     await engine.readShelf({});
@@ -495,8 +496,9 @@ async function main() {
     const bad = survivors(adv);
     const dr = await runSheet(fx, { mode: 'drift', setting });
     const drBad = survivors(dr);
+    const cr = await runSheet(fx, { mode: 'credulous', setting });
     console.log(`\n== ${name}: pack coverage must ${covMust.in}/${covMust.of}, all ${cov.in}/${cov.of}; perfect reader keeps ${sv.kept}/${sv.of} (of what it proposed ${sv.proposed.kept}/${sv.proposed.of}); adversary's kept ${bad.length}/${adv.log.filter((x) => x.wrong).length}; drift's kept ${drBad.length}/${dr.log.filter((x) => x.wrong).length}`);
-    const sums = { perfect: summary(run), adversary: summary(adv, { made: bad }), drift: summary(dr, { made: drBad }) };
+    const sums = { perfect: summary(run), adversary: summary(adv, { made: bad }), drift: summary(dr, { made: drBad }), credulous: summary(cr, { made: survivors(cr) }) };
     for (const [m, x] of Object.entries(sums)) { console.log('  ' + line(m, x)); sum(m, x); if (name.startsWith('dev3/')) sum(m + '·dev3', x); }
     const show = (tag, r, made) => {
       for (const w of r.score.precision.wrong) console.log(`  ${tag} wrong: ${w}`);
@@ -509,7 +511,7 @@ async function main() {
       for (const w of r.score.entities.split || []) console.log(`  ${tag} split: ${w}`);
       for (const w of r.score.profiles.unsupported || []) console.log(`  ${tag} profile: ${w}`);
     };
-    if (v || process.argv.includes('--drift')) show('drift', dr, drBad);
+    if (v || process.argv.includes('--drift')) { show('drift', dr, drBad); show('credulous', cr, survivors(cr)); }
     if (v) {
       for (const m of cov.missing) console.log('  not in pack: ' + m);
       for (const m of sv.lost) console.log('  lost: ' + m);

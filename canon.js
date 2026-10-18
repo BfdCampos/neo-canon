@@ -1802,7 +1802,10 @@
           const sentenceHash = textHash(norm(s.text));
           if (dismissed.has(fact + '|' + sentenceHash)) continue;
           const fact1 = `${labelOf(o.f)}: ${o.f.value}`;
-          const said = reader && typeof reader.clash === 'function' ? await reader.clash({ name: e.name, a: o.quote, label: o.label, fact: fact1, sentence: s.text, paragraph: p.text, question: detail.q }) : null;
+          // (round 4) an age, a colour, a material or a count said otherwise of the
+          // same thing is the pass's slip by rule: the real reader said no to every
+          // such question. A never, a not or an antonym is still the reader's to confirm.
+          const said = detail.sure ? 'yes' : reader && typeof reader.clash === 'function' ? await reader.clash({ name: e.name, a: o.quote, label: o.label, fact: fact1, sentence: s.text, paragraph: p.text, question: detail.q }) : null;
           if (!said || said === 'no') continue;
           const at = s.start + s.text.indexOf(span);
           out.push({

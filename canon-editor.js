@@ -1755,7 +1755,7 @@ module.exports = function canonEditor(C) {
   function agesIn(text) {
     const out = [];
     const NUM = '(\\d+|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-(?:one|two|three|four|five|six|seven|eight|nine))?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)';
-    for (const re of [new RegExp(`(?<![\\p{L}-])${NUM}[- ]years?(?:[- ]old)?(?![\\p{L}])`, 'giu'), new RegExp(`(?<![\\p{L}])(?:aged|was|is|of)\\s+${NUM}(?![\\p{L}-])(?!\\s+(?:years?\\s+(?:ago|before|later|since)|times|of|minutes|hours|days|weeks|months|men|women|people|feet|miles|yards|metres|pounds))`, 'giu')]) {
+    for (const re of [new RegExp(`(?<![\\p{L}-])(?<!(?:for|in|after|within|over|nearly|almost|about|some|those|these|the|first|last|next)\\s)${NUM}[- ]years?(?:[- ]old(?![\\p{L}])|\\s+of\\s+(?:him|her|age)\\b)`, 'giu'), new RegExp(`(?<![\\p{L}])(?:aged|was|is|of)\\s+${NUM}(?![\\p{L}-])(?!\\s+(?:years?\\s+(?:ago|before|later|since)|times|of|minutes|hours|days|weeks|months|men|women|people|feet|miles|yards|metres|pounds))`, 'giu')]) {
       for (const m of text.matchAll(re)) {
         const n = numberOf(m[1]);
         if (n == null || n > 120) continue;
@@ -1775,10 +1775,12 @@ module.exports = function canonEditor(C) {
       const had = agesIn(f.value).concat(numberOf(f.value.trim()) != null ? [{ n: numberOf(f.value.trim()) }] : []);
       // ("Hesper's was 41": a number of hers, not her age; "was N" needs her, or her he or she, as its subject)
       const subj = (x) => { const before = sentence.slice(0, x.start); if (!/(?:was|is)\s+$/i.test(before)) return true; const w = (before.replace(/\s*(?:was|is)\s+$/i, '').match(/([\p{L}'’]+)$/u) || [])[1] || ''; return !/['’]s$/.test(w) && (/^(?:he|she)$/i.test(w) || names.some((n) => content(n).includes(stem(norm(w))))); };
-      const now = UNREAL.test(sentence) ? [] : agesIn(sentence).filter(subj);
+      // (round 4: an age that was, "when she was nine", "at nine", "had been twelve", is no age said otherwise)
+      const then = (x) => /(?:when|while|since|until|till|before|after|by the time|as a (?:child|girl|boy)|at|had been|would be|will be|would turn|turned|turns)\s+(?:[\p{L}'’-]+\s+){0,2}$/iu.test(sentence.slice(Math.max(0, x.start - 30), x.start));
+      const now = UNREAL.test(sentence) ? [] : agesIn(sentence).filter((x) => subj(x) && !then(x));
       if (had.length && now.length && !now.some((x) => had.some((y) => y.n === x.n))) {
         const x = now[0];
-        return { span: sentence.slice(x.start, x.end), q: `is ${who} ${sentence.slice(x.start, x.end)} years old?` };
+        return { span: sentence.slice(x.start, x.end), q: `is ${who} ${sentence.slice(x.start, x.end)} years old?`, sure: true };
       }
     }
     // a colour or a material said otherwise of the same thing: "his blue
@@ -1811,7 +1813,7 @@ module.exports = function canonEditor(C) {
           if (UNREAL.test(sentence.slice(a, at + raw[i][0].length + 20))) continue;
           const nounStem = next[noun];
           const thing = names.find((n) => content(n).includes(nounStem)) || 'the ' + raw[i + 1 + noun][0].replace(/['’]s$/, '');
-          return { span: raw[i][0], q: `is ${thing} ${raw[i][0]}?` };
+          return { span: raw[i][0], q: `is ${thing} ${raw[i][0]}?`, sure: true };
         }
       }
     }
@@ -1880,9 +1882,11 @@ module.exports = function canonEditor(C) {
     for (const [i, w] of bs.entries()) {
       if (!NUMBER.test(w) || own.has(w)) continue;
       const next = bs[i + 1];
-      if (next && own.has(next) && vs.some((x) => NUMBER.test(x)) && mark(i + 1)) {
+      // (round 4: the fact's own number counts the same thing — "forty beds" — not "thirty-one" beside "Year Eleven")
+      const counted = [tokens(f.value).map(stem), tokens(quote).map(stem)].some((ts) => ts.some((x, k) => (NUMBER.test(x) || numberOf(x) != null) && ts[k + 1] === next));
+      if (next && own.has(next) && vs.some((x) => NUMBER.test(x)) && counted && mark(i + 1)) {
         const span = sentence.slice(sentence.toLowerCase().indexOf(b[i]), sentence.toLowerCase().indexOf(b[i]) + b[i].length + 1 + (b[i + 1] || '').length).trim();
-        return { span, q: `does ${who} have ${span.toLowerCase()}?` };
+        return { span, q: `does ${who} have ${span.toLowerCase()}?`, sure: true };
       }
     }
     return null;

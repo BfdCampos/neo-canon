@@ -353,3 +353,25 @@ test('Canon\'s reading: a fact only the reader\'s word ties to its entry keeps i
   // the score counts what the page shows, and what it checks apart
   assert.ok(dev.score.facts.mustDotted.found <= dev.score.facts.must.found);
 });
+
+/* ---------- the slips by rule, and none false ---------- */
+
+test('slips by rule: an age, a colour, a material or a count said otherwise needs no yes; a duration, a then-age, a year group is none; nothing false with the drift reader anywhere', async () => {
+  const E = Canon.Editor;
+  const d = (f, q, t) => { const x = E.clashDetail(f, q, t, ['Hester']); return x ? `${x.span}${x.sure ? '' : '?'}` : null; };
+  const age = { label: 'Age', value: 'thirty-one' };
+  assert.equal(d(age, 'She was thirty-one', 'Hester, all thirty-four years of her, sat down.'), 'thirty-four');
+  assert.equal(d(age, 'She was thirty-one', 'Miss Pell taught biology to Year Eleven, as she had for six years.'), null);
+  assert.equal(d(age, 'She was thirty-one', 'When she was nine years old she had wanted to teach.'), null);
+  let falseSlips = 0;
+  let found = 0;
+  let of = 0;
+  for (const fx of [...P.FIXTURES, ...P.DEV3]) {
+    const r = await P.runSheet(fx, { mode: 'drift', setting: P.SETTINGS[path.relative(FIX, fx)] || '' });
+    falseSlips += r.score.slips.false.length;
+    found += r.score.slips.found;
+    of += r.score.slips.of;
+  }
+  assert.equal(falseSlips, 0);
+  assert.ok(found / of >= 0.85, `${found}/${of} with a reader that says no to every slip question`);
+});
