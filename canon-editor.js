@@ -2055,6 +2055,8 @@ module.exports = function canonEditor(C) {
     for (const [i, w] of bs.entries()) {
       if (!NUMBER.test(w) || own.has(w)) continue;
       const next = bs[i + 1];
+      // (round 5: years, months, days counted are how long, not what one has — "served nineteen years", "three years left")
+      if (/^(?:year|month|week|day|hour|minute|second|night|morning|time|decade|centur)/.test(next || '')) continue;
       // (round 4: the fact's own number counts the same thing — "forty beds" — not "thirty-one" beside "Year Eleven")
       const counted = [tokens(f.value).map(stem), tokens(quote).map(stem)].some((ts) => ts.some((x, k) => (NUMBER.test(x) || numberOf(x) != null) && ts[k + 1] === next));
       if (next && own.has(next) && vs.some((x) => NUMBER.test(x)) && counted && mark(i + 1)) {

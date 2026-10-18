@@ -171,3 +171,11 @@ test('Tolland\'s: the father\'s bell given to the son by his nickname, the old m
   assert.equal(r.slips.length, 3, r.slips.map((s) => s.span).join(', '));
   assert.ok(entry(r.entries, 'Young Joss') === entry(r.entries, 'Josiah Tolland Junior'), 'Young Joss is the boy');
 });
+
+test('values of different people never meet: an age beside another\'s, years served beside years left', () => {
+  const f = { attr: 'other', label: 'History', value: 'served nineteen years in the navy', as: '' };
+  assert.equal(E.clashDetail(f, 'Petty Officer Dunn had served nineteen years in the navy.', 'Dunn had three years left before his pension.', ['Dunn']), null);
+  const age = { attr: 'other', label: 'Age', value: 'forty-four', as: '' };
+  const c = E.clashDetail(age, 'Dunn was forty-four that winter', 'Dunn was forty-four that winter, and Jo was twenty-six.', ['Dunn']);
+  assert.equal(c, null);
+});

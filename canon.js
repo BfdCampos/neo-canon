@@ -1905,6 +1905,13 @@
           if (!detail) continue;
           { const at0 = s.start + s.text.indexOf(detail.span); if (talk.some(([a, b]) => at0 < b && at0 + detail.span.length > a)) continue; }
           const span = detail.span;
+          // (round 5) the words said otherwise are this one's, not the next one's named before them in the
+          // sentence ("Dunn was forty-four that winter, and Jo was twenty-six": twenty-six is Jo's)
+          {
+            const at0 = s.start + s.text.indexOf(span);
+            const prev = here.filter((m) => m.end <= at0 && byId.get(m.id) && ['person', 'creature'].includes(byId.get(m.id).kind)).pop();
+            if (prev && prev.id !== id) continue;
+          }
           const fact = factKey(o.e, o.f);
           const sentenceHash = textHash(norm(s.text));
           if (dismissed.has(fact + '|' + sentenceHash)) continue;
