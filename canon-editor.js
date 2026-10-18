@@ -922,7 +922,7 @@ module.exports = function canonEditor(C) {
   }
   // what is done more than once, in so many words (round 2: "all" and "any"
   // made one moment a habit)
-  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|after (?:the\s+)?\p{Ll}+ came|the (?:mon|tues|wednes|thurs|fri|satur|sun)day \p{Ll}+)(?![\p{L}])/iu;
+  const HABITUAL = /(?<![\p{L}])(?:always|every|each|never|usually|often|ever|would|used to|whenever|daily|nightly|weekly|the same|again and again|by height|the way it|habit|habits|rules?|allowed|nobody|no one|seldom|rarely|sometimes|most days|on (?:mon|tues|wednes|thurs|fri|satur|sun)days|in the (?:mornings|evenings|afternoons)|at nights?|winter and summer|in (?:the )?(?:winter|summer|spring|autumn)s?|of an? (?:morning|evening|night)|after (?:the\s+)?\p{Ll}+ came|the (?:mon|tues|wednes|thurs|fri|satur|sun)day \p{Ll}+)(?![\p{L}])/iu;
   // a role that was, not one that is: "had been a soldier", "used to be",
   // "formerly" (but "had been the town's doctor for twenty-two years" still is)
   const PAST_ROLE = /(?<![\p{L}])(?:had been|used to be|was once|once was|formerly|former|ex-|retired|until)(?![\p{L}])/iu;
@@ -1333,6 +1333,19 @@ module.exports = function canonEditor(C) {
     // rows") is the scene; an apposition before the verb ("Clem, his grey
     // mare, was waiting") still describes. Roles, routines, history, kin: not this.
     if (!thingDone && actionPredicate(cited, grounded, c, key)) return { why: 'once' };
+    // (round 4) a feeling, a posture or a state of one scene is the story's,
+    // not the bible's ("very cold and frightened", "asleep on his chest",
+    // "stood at the orchard gate"): a living one's fact made of such words
+    // needs standing evidence — words that it recurs or lasts (always,
+    // every, whenever, in winter), a description of the kind they are ("a
+    // nervous man"), or the same word in another sentence about them
+    if (momentary(value, cited, part, c, key)) return { why: 'moment' };
+    // (a word of the value that the text has only in how long something went on — "quiet for a long while" — is no trait of anyone)
+    {
+      const spans = cited.flatMap((l) => [...l.s.text.matchAll(DURATION)].map((m) => content(m[0])));
+      const vw = content(value).filter((w) => !own.has(w));
+      if (spans.length && vw.length && vw.every((w) => spans.some((sp) => sp.includes(w)) || STOPW.has(w))) return { why: 'once' };
+    }
     // a day or a month for a value ("Role: Thursdays"), or a look that is only where it was seen ("in the instrument light")
     if (content(value).length && content(value).every((w) => nonEntity(w) && !TITLES.has(w))) return { why: 'empty' };
     // its own name for a value ("called the Anchor")
@@ -1376,6 +1389,53 @@ module.exports = function canonEditor(C) {
     if (cited.some((l) => ctx.suspect && ctx.suspect.has(l.s.id))) return { why: 'suspect' };
     return { g, key, label, value, quotes, cited, said, interpretive: interpretive && ratio < 0.5, strong: cited.every((l) => l.why === 'name'), owned, ownedByName,
       setting: bySetting, lasting: LASTING.has(g) || ['habit', 'routine', 'custom', 'state', 'possession', 'personality'].includes(labelFamily(key)) || ['habit', 'routine', 'custom', 'state', 'possession'].includes(key) };
+  }
+  // (round 4) what one scene is: feelings, postures, states of the body
+  const MOMENT_WORDS = new Set(('frightened afraid scared terrified cold freezing chilled tired weary exhausted angry furious cross livid sad unhappy upset miserable happy glad pleased delighted relieved worried ' +
+    'embarrassed ashamed startled surprised shocked confused hungry thirsty sick drunk wet soaked drenched sleepy asleep awake alone late quiet silent calm bored lonely jealous excited breathless ' +
+    'pale flushed crying weeping sobbing shaking trembling shivering laughing smiling frowning grinning lying sitting standing kneeling crouching curled leaning folded waiting sleeping dozing hunched slumped panting sweating').split(' '));
+  const POSTURE = /(?<![\p{L}])(?:stood|stands|sat|sits|lay|lies|knelt|kneels|leaned|leant|crouched|waited|slept|dozed|fell asleep|curled|perched|slumped|huddled|paced)(?![\p{L}])/iu;
+  const CONDITION = /(?<![\p{L}])(?:when|if|while|until|till|as soon as|once)\s+(?:\p{L}+\s+){0,3}$/iu;
+  const KIND_NOUN = /(?<![\p{L}])(?:a|an)\s+(?:[\p{L}-]+\s+){0,2}?(?:man|woman|girl|boy|child|person|sort|kind|type|creature|dog|cat|horse|soul|fellow|lad|lass|lady|gentleman|bitch|mare|beast|thing)(?![\p{L}])/iu;
+  const STANDING = /(?<![\p{L}])(?:by nature|by temperament|all (?:his|her|their|its) life|since (?:he|she|it) was|had always|was always|is always|always|never|every|whenever|easily|of (?:dogs|horses|thunder|the dark|water|heights|strangers|crowds|fire|spiders))(?![\p{L}])/iu;
+  // (what a place, a group or a thing can be in a lasting way of these: a cold room, a quiet street)
+  const PLACE_OK = new Set(['cold', 'freezing', 'chilled', 'wet', 'quiet', 'silent', 'calm', 'late', 'pale', 'alone', 'folded', 'curled', 'waiting', 'sitting', 'sleeping', 'standing', 'lying', 'dozing']);
+  const DURATION = /(?<![\p{L}])(?:for (?:a |an )?(?:long |little |short |good |few |whole )?(?:while|moment|time|minute|minutes|second|seconds|spell|instant|hour|hours|night|day|week)|a long (?:while|time)|all (?:night|day|morning|evening))(?![\p{L}])/giu;
+  function momentary(value, cited, part, c, key) {
+    const fam = labelFamily(key);
+    if (['role', 'origin', 'history', 'age', 'sex', 'name', 'membership', 'species', 'rule'].includes(fam) || key === 'relationship.kin' || key === 'location.home') return false;
+    const living = ['person', 'creature'].includes(c.kind);
+    const vt = tokens(value);
+    const words = vt.filter((w) => MOMENT_WORDS.has(w) && (living || !PLACE_OK.has(w)));
+    const cw = content(value);
+    // (the clauses that hold the value's words: "The girls were frightened of Mr Wilde, who never raised his voice" — the never is the voice's)
+    const clauseText = (l) => l.s.text.split(/[,;:]\s+|\s+(?:who|which|whose|but)\s+/).filter((x) => content(x).some((w) => cw.includes(w)));
+    const text = cited.flatMap(clauseText).join(' ') || cited.map((l) => l.s.text).join(' ');
+    if (!living) {
+      // (a place is never frightened or sick: whoever is, it isn't this one's; "never hungry here" is what it does)
+      return words.length > 0 && words.length * 2 >= Math.max(1, cw.length) && !HABITUAL.test(text) && !STANDING.test(text);
+    }
+    if (words.length && new RegExp(DURATION.source, 'iu').test(text)) return true;
+    // (made of such words, or of where one stood or lay: "the orchard" from "He stood at the orchard gate")
+    // (where: "stood at the orchard gate"; a manner, "sat very upright", is how they are)
+    const posture = !words.length && cw.length <= 4 && cited.every((l) => {
+      const m = POSTURE.exec(l.s.text);
+      if (!m) return false;
+      const after = l.s.text.slice(m.index + m[0].length).split(/[,;]|\s+and\s+/)[0];
+      return /^\s*(?:at|on|in|by|beside|under|across|against|near|behind|outside|inside|upon|over)\s/i.test(after) && cw.every((w) => content(after).includes(w));
+    });
+    // (made of them, or opening with one: "asleep on the Younger's chest")
+    const opens = words.length && /^(?:(?:very|so|too|quite|half|fast|sound)\s+)?(\p{L}+)/u.exec(norm(value)) && MOMENT_WORDS.has(/^(?:(?:very|so|too|quite|half|fast|sound)\s+)?(\p{L}+)/u.exec(norm(value))[1]);
+    if (!posture && !(words.length && (words.length * 2 >= Math.max(1, cw.length) || opens))) return false;
+    // a condition is no state: "when he was tired"
+    const at = (w) => { const i = norm(text).search(new RegExp(`(?<![\\p{L}])${escRe(w)}(?![\\p{L}])`, 'u')); return i < 0 ? null : norm(text).slice(0, i); };
+    if (words.some((w) => { const b = at(w); return b != null && CONDITION.test(b); })) return true;
+    if (HABITUAL.test(text) || STANDING.test(text)) return false;
+    if (words.some((w) => new RegExp(KIND_NOUN.source.replace('(?:[\\p{L}-]+\\s+){0,2}?', `(?:[\\p{L}-]+\\s+){0,2}?${escRe(w)}\\s+(?:[\\p{L}-]+\\s+)?`), 'iu').test(text))) return false;
+    // the same word in another sentence of the pack about them
+    const others = part.lines.filter((l) => ['name', 'chain'].includes(l.why) && !cited.includes(l));
+    if (words.length && words.every((w) => others.some((l) => tokens(l.s.text).includes(w)))) return false;
+    return true;
   }
   // is the clause `q` of sentence `s` talk (speech, or reported)
   function talkOf(s, q, ctx) {
@@ -1857,6 +1917,11 @@ module.exports = function canonEditor(C) {
       }
       // one moment, or lasting?
       if (p.verdict === 'yes' && p.lasting) p.verdict = await ask('verdict', H('lasting', claim), () => reader.verify({ ...claim, lasting: true }));
+      // (round 4) and the other way round: only this moment? (only "no" keeps it)
+      if (p.verdict === 'yes' && p.lasting) {
+        const once = await ask('verdict', H('moment', claim), () => reader.verify({ ...claim, moment: true }));
+        if (once !== 'no') p.verdict = once === 'yes' ? 'no' : 'unclear';
+      }
     }, stop);
     if (stop && stop()) return { calls, dropped, stopped: true };
     // into the entries: open facts (and what is only said) and trait proposals

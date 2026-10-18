@@ -153,11 +153,11 @@ function sheetReader(sheet, { mode = 'perfect', setting = '', log = [], packs = 
       }
       return out;
     },
-    async verify({ name, label, value, negated, other, lasting }) {
+    async verify({ name, label, value, negated, other, lasting, moment }) {
       const madeUp = wrong.has(N(name + '|' + value));
       const t = ix.truth(name, label, value);
-      if (adversary && madeUp) return negated || other ? 'no' : 'yes';
-      if (negated || other) return t ? 'no' : 'yes';
+      if (adversary && madeUp) return negated || other || moment ? 'no' : 'yes';
+      if (negated || other || moment) return t ? 'no' : 'yes';
       if (lasting) return t ? 'yes' : 'no';
       return t ? 'yes' : (adversary ? 'yes' : 'no');
     },

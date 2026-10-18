@@ -128,3 +128,45 @@ test('deeds in a read: the drift reader (no to every who-did-it question) still 
   assert.ok(slipOn(fr, 'the cedar that Hester Pell had planted'));
   assert.ok(!shown(entry(fr.entries, 'Hester Pell')).some((f) => /cedar/.test(f.value)), lines(entry(fr.entries, 'Hester Pell')).join('\n'));
 });
+
+/* ---------- 3 · moments ---------- */
+
+test('moments: a feeling, a posture or one scene\'s state is never a fact; one that recurs, lasts or describes the kind they are is', async () => {
+  const nw = await run('dev3/night-ward');
+  assert.ok(!shown(entry(nw.entries, 'Mrs Abbott')).some((f) => /cold|frightened/.test(f.value)), lines(entry(nw.entries, 'Mrs Abbott')).join('\n'));
+  assert.ok(shown(entry(nw.entries, 'Maud Rafferty')).some((f) => /always early/.test(f.value)), 'always early stays: ' + lines(entry(nw.entries, 'Maud Rafferty')).join('\n'));
+  const km = await run('dev3/kerrs-mill');
+  assert.ok(!shown(entry(km.entries, 'Smut')).some((f) => /asleep|chest/.test(f.value)), lines(entry(km.entries, 'Smut')).join('\n'));
+  assert.ok(!shown(entry(km.entries, 'Absalom Kerr the Younger')).some((f) => /cold|tired/.test(f.value)), lines(entry(km.entries, 'Absalom Kerr the Younger')).join('\n'));
+  const fr = await run('dev3/form-room');
+  assert.ok(!shown(entry(fr.entries, 'Hester Pell')).some((f) => /furious|folded/.test(f.value)), lines(entry(fr.entries, 'Hester Pell')).join('\n'));
+  assert.ok(!shown(entry(fr.entries, 'Jonah Wilde')).some((f) => /frightened/.test(f.value)), 'the girls\' fear is no fact of his: ' + lines(entry(fr.entries, 'Jonah Wilde')).join('\n'));
+  // QA's "He was quiet for a long while": no height, no nature, whatever the label
+  const qa = await run('qa');
+  assert.ok(!shown(entry(qa.entries, 'Tobias')).some((f) => /^(?:long|quiet)$/.test(f.value)), lines(entry(qa.entries, 'Tobias')).join('\n'));
+});
+
+test('moments by rule, word by word: the clause, the condition, the kind of one they are', () => {
+  const ch = Canon.Editor.chapterModel(Canon.sourceParas([
+    '<p>Mara was frightened of thunder, and always had been.</p>',
+    '<p>Mara was cold and tired.</p>',
+    '<p>Mara was a nervous woman with a nervous laugh.</p>',
+    '<p>Mara rubbed her eyes when she was tired.</p>',
+    '<p>Mara stood at the orchard gate.</p>',
+    '<p>Mara sat very upright.</p>'
+  ].join('')));
+  const cast = [{ key: 0, name: 'Mara', kind: 'person', aliases: [] }];
+  const hits = Canon.Editor.chapterHits(ch, cast);
+  Canon.Editor.resolveRefs(ch, hits, cast, () => 'female');
+  const pack = Canon.Editor.packFor(ch, hits, cast, cast[0], () => 'female');
+  const part = Canon.Editor.packParts(pack)[0];
+  const gate = (n, g, a, v) => Canon.Editor.gateFact({ g, a, v, s: [n] }, part, cast[0], { ch, text: ch.text, cast, hits, sexOf: () => 'female' }).why || 'kept';
+  const at = (start) => part.lines.findIndex((l) => l.s.text.startsWith(start)) + 1;
+  assert.equal(gate(at('Mara was frightened'), 'personality', 'fear', 'frightened of thunder'), 'kept');
+  const gone = (why) => ['moment', 'once'].includes(why);
+  assert.equal(gate(at('Mara was cold'), 'state', 'mood', 'cold and tired'), 'moment');
+  assert.equal(gate(at('Mara was a nervous'), 'personality', 'nature', 'nervous'), 'kept');
+  assert.ok(gone(gate(at('Mara rubbed'), 'state', 'condition', 'tired')));
+  assert.ok(gone(gate(at('Mara stood'), 'state', 'mood', 'the orchard gate')));
+  assert.notEqual(gate(at('Mara sat'), 'appearance', 'posture', 'sits very upright'), 'moment', 'a manner of sitting is no moment by this rule');
+});
