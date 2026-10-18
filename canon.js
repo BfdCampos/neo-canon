@@ -588,7 +588,11 @@
   const PRONOUNS = { she: 'female', her: 'female', hers: 'female', herself: 'female', he: 'male', him: 'male', his: 'male', himself: 'male' };
   const PRONOUN_SWAP = { he: 'she', she: 'he', him: 'her', her: 'his', hers: 'his', himself: 'herself', herself: 'himself', his: 'her' };
   const COLOURS = { grey: 'grey', gray: 'grey', brown: 'brown', green: 'green', blue: 'blue', black: 'black', red: 'red', fair: 'fair', blond: 'fair', blonde: 'fair', golden: 'fair', white: 'white', hazel: 'hazel', amber: 'amber' };
-  const SPECIES = { horse: 'horse', pony: 'horse', mule: 'mule', donkey: 'donkey', wolf: 'wolf', dog: 'dog', hound: 'dog', cat: 'cat', hawk: 'hawk', falcon: 'falcon', raven: 'raven', crow: 'crow', ox: 'cattle', cattle: 'cattle', sheep: 'sheep', goat: 'goat', fox: 'fox', bear: 'bear', dragon: 'dragon' };
+  const SPECIES = { horse: 'horse', pony: 'horse', mule: 'mule', donkey: 'donkey', wolf: 'wolf', dog: 'dog', hound: 'dog', cat: 'cat', hawk: 'hawk', falcon: 'falcon', raven: 'raven', crow: 'crow', ox: 'cattle', cattle: 'cattle', sheep: 'sheep', goat: 'goat', fox: 'fox', bear: 'bear', dragon: 'dragon',
+    // (round 4: a breed is its kind — an animal the reader called a person was "a wire-haired terrier")
+    terrier: 'dog', spaniel: 'dog', collie: 'dog', sheepdog: 'dog', lurcher: 'dog', mastiff: 'dog', retriever: 'dog', setter: 'dog', pointer: 'dog', beagle: 'dog', whippet: 'dog', greyhound: 'dog', poodle: 'dog',
+    labrador: 'dog', alsatian: 'dog', dachshund: 'dog', bulldog: 'dog', corgi: 'dog', puppy: 'dog', pup: 'dog', mongrel: 'dog', kitten: 'cat', tabby: 'cat', tomcat: 'cat', moggy: 'cat', cob: 'horse', foal: 'horse',
+    carthorse: 'horse', nag: 'horse', lamb: 'sheep', calf: 'cattle', heifer: 'cattle', bullock: 'cattle', pig: 'pig', sow: 'pig', boar: 'pig', piglet: 'pig', goose: 'goose', gander: 'goose', duck: 'duck', owl: 'owl', parrot: 'parrot', rabbit: 'rabbit', hare: 'hare', ferret: 'ferret', mouse: 'mouse', rat: 'rat' };
   for (const [w, [, , sp]] of Object.entries(SEX_WORDS)) if (sp) SPECIES[w] = sp;
   const KIN = { younger: 'younger', youngest: 'younger', elder: 'elder', eldest: 'elder', older: 'elder', oldest: 'elder', twin: 'twin' };
   const KIN_SWAP = { younger: 'elder', elder: 'younger' };
@@ -1489,6 +1493,21 @@
           });
         }
       }
+      // (round 4) a number turned round: "Room 41" where Room 14 is kept and
+      // this chapter never writes it. Tied to it (the sentence names someone
+      // or something Room 14's facts hold, or whose facts hold Room 14): a
+      // slip on the name, fixed back; else worth a look
+      for (const x of turnedNumbers(src, entries)) {
+        if (paraOk && !paraOk(src, x.para)) continue;
+        const fact = `${x.e.id}/name`;
+        const sentenceHash = textHash(norm(x.sentence));
+        if (dismissed.has(fact + '|' + sentenceHash)) continue;
+        slips.push({
+          seq: all.length + slips.length, bookId: src.bookId, chId: src.chId, book: src.book, label: src.label, para: x.para.hash, sentence: x.sentence, sat: x.sat, sentenceHash, at: x.at, span: x.span,
+          to: x.e.name, kind: 'name', strength: x.tied ? 'strong' : 'weak', entry: x.e.id, name: x.e.name, attr: 'name', value: x.e.name, as: '', fact,
+          sources: x.tied ? [{ label: x.tied.label, quote: x.tied.quote }] : [], more: 0, written: false, ...(x.tied ? {} : { ask: true, ref: x.span })
+        });
+      }
       // (round 4) a deed done once given later to someone else, by rule
       for (const d of deeds || []) {
         if (!d.against || d.src.bookId !== src.bookId || d.src.chId !== src.chId) continue;
@@ -1529,6 +1548,40 @@
     }
     // the slips, and apart from them the ones worth a look (`ask`)
     return { slips: all.filter((x) => !x.ask), asks: all.filter((x) => x.ask), facts };
+  }
+
+  // (round 4) numbers turned round, in one source's narration: [{ e (the
+  // kept one), para, sentence, sat, at, span, tied: source | null }]
+  function turnedNumbers(src, entries) {
+    const out = [];
+    if (isNote(src)) return out;
+    const live = entries.filter((e) => !e.locked);
+    const numbered = live.filter((e) => /^\S.*\s\d{2,4}$/.test(e.name));
+    if (!numbered.length) return out;
+    const paras = sourceParas(src.html);
+    const all = paras.map((p) => p.text).join('\n');
+    const idx = mentionIndex(live);
+    for (const p of paras) {
+      const talk = talkSpans(p.text);
+      for (const s of sentences(p.text)) {
+        for (const m of s.text.matchAll(/(?<![\p{L}])(\p{Lu}[\p{L}]+)\s+(\d{2,4})(?![\d\p{L}])/gu)) {
+          const at = s.start + m.index;
+          if (talk.some(([a, b]) => at < b && at + m[0].length > a) || live.some((e) => norm(e.name) === norm(m[0]))) continue;
+          const e = numbered.find((x) => { const y = /^(.*\S)\s+(\d{2,4})$/.exec(x.name); return y && norm(y[1]) === norm(m[1]) && y[2] !== m[2] && [...y[2]].sort().join('') === [...m[2]].sort().join(''); });
+          if (!e || new RegExp(`(?<![\\p{L}\\d])${e.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\d])`, 'u').test(all)) continue;
+          // the tie: someone or something named here whose facts hold the kept one, or that it holds
+          const here = mentions(s.text, idx).filter((x) => x.id !== e.id).map((x) => live.find((y) => y.id === x.id)).filter(Boolean);
+          const holds = (f, n) => norm(`${f.value} ${(f.sources || []).map((y) => y.quote || '').join(' ')}`).includes(norm(n));
+          let tied = null;
+          for (const o of here) {
+            const f = o.facts.find((g) => ['verified', 'yours'].includes(g.state) && holds(g, e.name)) || e.facts.find((g) => ['verified', 'yours'].includes(g.state) && [o.name, ...o.aliases].some((n) => holds(g, n)));
+            if (f) { tied = (f.sources || []).find((y) => !y.written) || { label: '', quote: '' }; break; }
+          }
+          out.push({ e, para: p, sentence: s.text, sat: s.start, at, span: m[0], tied });
+        }
+      }
+    }
+    return out;
   }
 
   // Deeds done once, by rule (round 4: the real reader answered "no" to
@@ -1813,6 +1866,11 @@
     }
     // open facts said otherwise: earlier ones, of the one a sentence names
     const opens = [...live.flatMap((e) => e.facts.filter((f) => (f.attr === 'other' || f.attr === 'state') && firm(f)).map((f) => ({ e, f }))), ...kept.filter((k) => k.f.attr === 'other' || k.f.attr === 'state')].filter((k) => prose(k.f));
+    // (round 4) a number turned round ("Room 41" for the kept Room 14): its sentence gives no facts
+    if (!inNotes) {
+      const turned = new Set(turnedNumbers({ html: paras.map((p) => `<p>${p.text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`).join('') }, entries).map((x) => norm(x.sentence)));
+      for (const { ss } of model) for (const x of ss) if (turned.has(norm(x.text))) ids.add(x.id);
+    }
     // deeds: an earlier key point's distinctive words, with someone else named
     const deeds = told.map((ev) => ({ ids: ev.who.map((w) => w.id), words: new Set(heavy(ev.did + ' ' + ev.quote).map(stemOf)) }));
     const nameStems = new Set(live.flatMap((e) => [e.name, ...e.aliases]).flatMap(wordsOf).map(stemOf));
@@ -3964,6 +4022,6 @@
     newEntry, parseEntry, serialiseEntry, dedupFacts, confirmFact, setAsideFact, replaceFact, mergeEntry, restoreFact, lexical,
     firmFact, editDistance, checkSources, createEngine, fakeReader,
     shelfEvidence, established, relation, misspelt, shelfNames, kinEvidence, shelfPlaces,
-    gateEvent, storyIndex, rarity, STORY_SCHEMA, kinMentions, kinClash, nonEntity, deedIndex, proseTalk, markProseTalk
+    gateEvent, storyIndex, rarity, STORY_SCHEMA, kinMentions, kinClash, nonEntity, deedIndex, proseTalk, markProseTalk, turnedNumbers
   };
 });

@@ -223,3 +223,45 @@ test('speech: a chat line, a letter and a radio call are someone\'s words, thoug
   assert.ok(!school.facts.some((f) => /never once closed/.test(f.value) && f.state === 'verified'), lines(school).join('\n'));
   assert.ok(!slipOn(fr, 'Dear girls'), 'no slip in the letter');
 });
+
+/* ---------- 6 · who is who ---------- */
+
+test('identity: a surname\'s nickname joins its one full name; generations of one name stay apart by their epithets; a breed is an animal', async () => {
+  const nw = await run('dev3/night-ward');
+  const raff = entry(nw.entries, 'Raff');
+  assert.ok(raff && /Rafferty/.test(raff.name), raff && raff.name);
+  assert.ok(shown(raff).some((f) => /tall, rawboned/.test(f.value)) && shown(raff).some((f) => /ten every night/.test(f.value)), lines(raff).join('\n'));
+  const km = await run('dev3/kerrs-mill');
+  assert.ok(!entry(km.entries, 'Absalom Kerr') && !entry(km.entries, 'Absalom'), km.entries.map((e) => e.name).join(', '));
+  const elder = entry(km.entries, 'the Elder');
+  const younger = entry(km.entries, 'the Younger');
+  assert.equal(elder.name, 'Absalom Kerr the Elder');
+  assert.equal(younger.name, 'Absalom Kerr the Younger');
+  assert.ok(!elder.aliases.includes('Elder') && !younger.facts.some((f) => /^(?:Elder|Younger)$/.test(f.value)), lines(younger).join('\n'));
+  assert.ok(shown(elder).some((f) => f.attr === 'eyes' && f.value === 'grey') && shown(younger).some((f) => f.attr === 'eyes' && f.value === 'blue'));
+  assert.equal(entry(km.entries, 'Biscuit').kind, 'creature', 'a wire-haired terrier, though the reader said person');
+  // one name the reader gave as one person: the text's own forms are the people
+  const E = Canon.Editor;
+  const ch = E.chapterModel(Canon.sourceParas('<p>Absalom Kerr the Elder built the race.</p><p>His son, Absalom Kerr the Younger, kept the ledgers. The Younger was impatient.</p><p>Absalom Kerr was a name the valley knew.</p>'));
+  const cast = E.castGate({ proposals: [{ name: 'Absalom Kerr', kind: 'person', aliases: [] }], ch, entries: [], names: Canon.shelfNames([ch.text]) });
+  assert.deepEqual(cast.map((c) => c.name).sort(), ['Absalom Kerr the Elder', 'Absalom Kerr the Younger']);
+  assert.ok(cast.find((c) => c.name === 'Absalom Kerr the Younger').aliases.includes('the Younger'));
+  // a nickname beside two names it could be is no one's
+  const ch2 = E.chapterModel(Canon.sourceParas('<p>Maud Rafferty and Lena Raffles worked nights.</p><p>Raff knew every patient.</p>'));
+  const cast2 = E.castGate({ proposals: [{ name: 'Maud Rafferty', kind: 'person' }, { name: 'Lena Raffles', kind: 'person' }, { name: 'Raff', kind: 'person' }], ch: ch2, entries: [], names: Canon.shelfNames([ch2.text]) });
+  assert.ok(cast2.some((c) => c.name === 'Raff'), cast2.map((c) => c.name).join(', '));
+});
+
+test('identity: a number turned round is no new place but a slip on the kept one when the text ties them, worth a look when it doesn\'t; both written, two places', async () => {
+  const nw = await run('dev3/night-ward');
+  assert.ok(!entry(nw.entries, 'Room 41'), nw.entries.map((e) => e.name).join(', '));
+  const s = slipOn(nw, 'Room 41');
+  assert.ok(s && s.kind === 'name' && s.to === 'Room 14' && !s.ask, JSON.stringify(s));
+  assert.ok(!shown(entry(nw.entries, 'Mrs Abbott')).some((f) => /41/.test(f.value)));
+  const room = { ...Canon.newEntry('Room 14', 'place', 'room-14'), facts: [{ attr: 'other', label: 'Residents', value: 'Mrs Abbott', state: 'verified', sources: [{ label: 'B, c1', quote: 'Mrs Abbott had been in Room 14', book: 'b', ch: 'c1' }] }] };
+  const abbott = { ...Canon.newEntry('Mrs Abbott', 'person', 'abbott'), aliases: [] };
+  const src = (ps) => ({ bookId: 'b', chId: 'c2', book: 'B', label: 'c2', html: ps.map((p) => `<p>${p}</p>`).join('') });
+  assert.equal(Canon.turnedNumbers(src(['Gerald went up to Room 41.']), [room, abbott])[0].tied, null, 'untied: worth a look');
+  assert.equal(Canon.turnedNumbers(src(['Room 14 was empty, and Room 41 was full.']), [room, abbott]).length, 0, 'both written: two rooms');
+  assert.ok(Canon.turnedNumbers(src(['She took Mrs Abbott her tea in Room 41.']), [room, abbott])[0].tied);
+});

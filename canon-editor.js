@@ -105,6 +105,10 @@ module.exports = function canonEditor(C) {
     'mill', 'school', 'church', 'chapel', 'castle', 'tower', 'lighthouse', 'harbour', 'port', 'island', 'forest', 'wood', 'valley', 'lake', 'bay', 'market', 'academy', 'prison',
     'hospital', 'abbey', 'monastery', 'college', 'camp', 'base', 'manor', 'estate', 'palace', 'temple', 'shop', 'hotel', 'surgery', 'car', 'van', 'lorry', 'train', 'cart', 'barn', 'hangar', 'dock', 'plant', 'factory', 'yard']);
   const NAMING = /(?<![\p{L}])(?:name|names|named|called|calls|call|known as|nicknamed|nickname|went by)(?![\p{L}])/iu;
+  // (round 4) what tells apart people of one name, generations mostly: never a role or a name alone
+  const EPITHET_WORDS = 'Elder|Younger|Eldest|Youngest|Senior|Junior|First|Second|Third|Fourth|Fifth|Great|Less|Lesser|Greater';
+  const EPITHET = new RegExp(`^the\\s+(?:${EPITHET_WORDS})$`, 'i');
+  const EPITHET_AFTER = new RegExp(`\\s+(?:the\\s+(?:${EPITHET_WORDS})|Junior|Senior|Jr\\.?|Sr\\.?|II|III|IV)(?![\\p{L}])`, 'u');
   const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // how often the chapter writes `phrase`, as written (capitals kept) or,
   // for a role, with a capital The at a sentence's start
@@ -271,6 +275,9 @@ module.exports = function canonEditor(C) {
       }
     }
     personMerges(cast, names);
+    epithetSplits(cast, text, lower, entries);
+    nicknames(cast, ch, names);
+    numberedSlips(cast, text, entries);
     // (round 3) a group's, place's or thing's short name that one full name
     // opens with: "the Guild" for "the Guild of Wick-Trimmers" (never two:
     // "the Hall" beside "the Hall of Records" and "the Hall of Mirrors" is no one's)
@@ -309,6 +316,13 @@ module.exports = function canonEditor(C) {
       const m = re.exec(text);
       const w = m && (m[1] || m[2]);
       if (w && ((SEX_WORDS[w] && SEX_WORDS[w][2]) || SPECIES[w])) c.kind = 'creature';
+      // (round 4) any word of the apposition ("Biscuit, a wire-haired terrier with one torn ear"),
+      // "The dog was Biscuit", or what only an animal has or does ("Biscuit wagged her tail")
+      const kindOf = (x) => (SEX_WORDS[x] && SEX_WORDS[x][2]) || SPECIES[x];
+      const ap = new RegExp(`(?<![\\p{L}])${n}\\s*[,:—–]\\s*(?:the|a|an|his|her|their|\\p{Lu}\\p{L}+['’]s)\\s+((?:[\\p{L}-]+\\s+){0,3}[\\p{L}-]+)`, 'u').exec(text);
+      const was = new RegExp(`(?<![\\p{L}])[Tt]he\\s+([\\p{Ll}]+)\\s+(?:was|is)\\s+${n}(?![\\p{L}])|(?<![\\p{L}])${n}\\s+(?:was|is)\\s+(?:a|an|the)\\s+(?:[\\p{L}-]+\\s+){0,2}?([\\p{Ll}]+)(?![\\p{L}])`, 'u').exec(text);
+      const does = new RegExp(`(?<![\\p{L}])${n}(?:['’]s\\s+(?:tail|paws?|collar|mane|hooves|hoof|whiskers|muzzle|snout|fur|leash|lead|kennel|stall|saddle|bridle)|\\s+(?:wagged|barked|purred|whinnied|neighed|pawed|growled|mewed|miaowed|snarled|yapped|whined|nickered|bleated|lowed|grazed))(?![\\p{L}])`, 'u').test(text);
+      if ((ap && ap[1].split(/\s+/).map((x) => x.toLowerCase()).some(kindOf)) || (was && kindOf((was[1] || was[2] || '').toLowerCase())) || does) c.kind = 'creature';
     }
     // the name the text gives a role is its name: "His name … was Anselm"
     for (const t of ties.filter((y) => y.given)) {
@@ -317,8 +331,8 @@ module.exports = function canonEditor(C) {
     }
     // a role keeps its bare word as an alias too ("warden" for "the warden")
     for (const c of cast) {
-      if (/^the\s/i.test(c.name) && !c.aliases.some((a) => norm(a) === norm(c.name.slice(4)))) c.aliases.push(c.name.slice(4));
-      for (const a of [...c.aliases]) if (/^the\s/i.test(a) && !c.aliases.some((x) => norm(x) === norm(a.slice(4)))) c.aliases.push(a.slice(4));
+      if (/^the\s/i.test(c.name) && !EPITHET.test(c.name) && !c.aliases.some((a) => norm(a) === norm(c.name.slice(4)))) c.aliases.push(c.name.slice(4));
+      for (const a of [...c.aliases]) if (/^the\s/i.test(a) && !EPITHET.test(a) && !c.aliases.some((x) => norm(x) === norm(a.slice(4)))) c.aliases.push(a.slice(4));
       c.aliases = c.aliases.filter((a, i, all) => norm(a) !== norm(c.name) && all.findIndex((x) => norm(x) === norm(a)) === i);
     }
     const kept = cast.filter((c) => !c.gone);
@@ -333,6 +347,14 @@ module.exports = function canonEditor(C) {
         const titled = (n) => { const w = String(n).replace(/^the\s+/i, '').split(/\s+/); return w.length > 1 && TITLES.has(norm(w[0]).replace(/\.$/, '')); };
         const by = entries.filter((e) => e.kind === 'person' && !e.locked && [e.name, ...e.aliases].some((n) => { const w = coreOf(n); return w && !/\s/.test(w) && (w === ws[0] || (w === ws[ws.length - 1] && !titled(n))); }));
         if (by.length === 1 && !kept.some((o) => o !== c && o.kind === 'person' && coreOf(o.name).split(/\s+/).includes(coreOf(by[0].name)))) c.entry = by[0];
+      }
+      // (round 4) a given name's short form with the one surname: "Danny Fell" for the kept "Daniel Fell"
+      if (!c.entry && c.kind === 'person' && coreOf(c.name).split(/\s+/).length === 2) {
+        const [g, sn] = coreOf(c.name).split(/\s+/);
+        const same = (n) => { const w = coreOf(n).split(/\s+/); return w.length === 2 && w[1] === sn && w[0] !== g && w[0].slice(0, 3) === g.slice(0, 3) && g.length >= 3; };
+        const by = entries.filter((e) => e.kind === 'person' && !e.locked && [e.name, ...e.aliases].some(same));
+        const other = entries.filter((e) => e.kind === 'person' && !e.locked && !by.includes(e) && [e.name, ...e.aliases].some((n) => coreOf(n).split(/\s+/).pop() === sn));
+        if (by.length === 1 && !other.length && !kept.some((o) => o !== c && o.kind === 'person' && coreOf(o.name).split(/\s+/).pop() === sn)) c.entry = by[0];
       }
       if (c.entry && c.entry.locked) c.skip = true;
     }
@@ -386,6 +408,20 @@ module.exports = function canonEditor(C) {
       if (same.length === 1) { const [into, from] = longer(a, same[0]); mergeCast(cast, into, from); }
       else if (same.length > 1 && !title(a.name)) { a.gone = true; a.name = '\u0000'; a.aliases = []; }
     }
+    // (round 4) a given name and its short form, with one surname no one else
+    // of the cast has: "Danny Fell" and "Daniel Fell"
+    for (const a of people()) {
+      if (a.gone) continue;
+      const wa = core(a.name).split(/\s+/);
+      if (wa.length !== 2) continue;
+      for (const b of people()) {
+        if (b === a || b.gone) continue;
+        const wb = core(b.name).split(/\s+/);
+        if (wb.length !== 2 || wb[1] !== wa[1] || wb[0] === wa[0] || wb[0].slice(0, 3) !== wa[0].slice(0, 3) || wa[0].length < 3 || wb[0].length < 3) continue;
+        if (people().some((o) => o !== a && o !== b && core(o.name).split(/\s+/).length > 1 && core(o.name).split(/\s+/).pop() === wa[1])) continue;
+        mergeCast(cast, a, b);
+      }
+    }
     // (round 4) the title and surname of one full name
     for (const a of people()) {
       if (a.gone) continue;
@@ -413,6 +449,76 @@ module.exports = function canonEditor(C) {
       const titles = RANK[role.slice(4)];
       const holders = people().filter((b) => b !== r && [b.name, ...b.aliases].some((y) => titles.includes(norm(String(y).replace(/^the\s+/i, '').split(/\s+/)[0]).replace(/\.$/, '')) && String(y).split(/\s+/).length > 1));
       if (holders.length === 1) mergeCast(cast, holders[0], r);
+    }
+  }
+  // (round 4) One name, several people told apart by an epithet: "Absalom
+  // Kerr the Elder", "Absalom Kerr the Younger", "Absalom the Third". The
+  // text's own forms are the people; the bare name they share is no one's
+  // (a reader that made one person of three generations gave every one's
+  // eyes and deeds to all). "The Elder" alone is the one form that has it.
+  function epithetSplits(cast, text, lower, entries) {
+    for (const c of cast.filter((x) => !x.gone && x.kind === 'person' && x.proper)) {
+      if (EPITHET_AFTER.test(c.name) || c.gone) continue;
+      const base = c.name.replace(/^the\s+/i, '');
+      const given = base.split(/\s+/)[0];
+      const forms = new Map();
+      for (const stem of [...new Set([base, given])]) {
+        const re = new RegExp(`(?<![\\p{L}])${escRe(stem)}(${EPITHET_AFTER.source})`, 'gu');
+        for (const m of text.matchAll(re)) { const f = stem + m[1]; if (!forms.has(norm(f))) forms.set(norm(f), f.replace(/\s+/g, ' ')); }
+      }
+      if (!forms.size) continue;
+      // (a name written once with an epithet beside its own plain use is one person's grand name, unless two epithets tell two apart)
+      const eps = new Set([...forms.values()].map((f) => norm(f.slice(f.search(EPITHET_AFTER)))));
+      if (eps.size < 2 && !entries.some((e) => !e.locked && e.kind === 'person' && EPITHET_AFTER.test(e.name) && norm(e.name).startsWith(norm(given)))) continue;
+      for (const f of forms.values()) {
+        let o = cast.find((x) => !x.gone && [x.name, ...x.aliases].some((n) => norm(n) === norm(f)));
+        if (!o) { o = { key: cast.length, name: f, kind: 'person', aliases: [], in: '', proper: true, wanted: [] }; cast.push(o); }
+        // "the Elder" alone, when only this form has it and the text writes it so
+        const ep = (EPITHET_AFTER.exec(f) || [''])[0].trim();
+        if (/^the\s/i.test(ep) && written(text, ep.replace(/^the/, 'The')) + written(text, ep) > 0 && [...forms.values()].filter((g) => norm(g).endsWith(norm(ep))).length === 1 && !o.aliases.some((a) => norm(a) === norm(ep))) o.aliases.push(ep);
+        o.aliases = o.aliases.filter((a) => !eps.has(norm(a)) || norm(f).endsWith(norm(a)));
+      }
+      // the shared name's own aliases that name one form stay that form's; the shared name is no one
+      c.gone = true;
+      c.name = '\u0000';
+      c.aliases = [];
+    }
+  }
+  // (round 4) A nickname the text never declares: "Raff" a line after
+  // "Nurse Maud Rafferty" — the start of one person's surname or given
+  // name, no other name on the shelf starting so, never written beside it
+  // as another, and first used within two paragraphs of the name in full.
+  function nicknames(cast, ch, names) {
+    const people = cast.filter((c) => !c.gone && c.kind === 'person' && c.proper);
+    for (const a of people) {
+      if (a.gone || /\s/.test(a.name) || !/^\p{Lu}\p{Ll}{2,6}$/u.test(a.name) || TITLES.has(norm(a.name))) continue;
+      const n = norm(a.name);
+      const holders = people.filter((b) => b !== a && !b.gone && [b.name, ...b.aliases].some((x) => norm(x).split(/\s+/).some((w) => w.length > n.length + 1 && w.startsWith(n) && !TITLES.has(w))));
+      if (holders.length !== 1) continue;
+      const b = holders[0];
+      // (no other name the shelf writes starts so: "Raff" beside "Rafferty" and "Raffaella" is no one's)
+      const shelf = names && names.get ? [...(names.keys ? names.keys() : [])].filter((w) => String(w).startsWith(n) && String(w).length > n.length + 1) : [];
+      if (new Set(shelf.map((w) => String(w).slice(0, n.length + 3))).size > 1) continue;
+      const re = (x) => new RegExp(`(?<![\\p{L}])${escRe(x)}(?![\\p{L}])`, 'u');
+      const full = [b.name, ...b.aliases].filter((x) => /\s/.test(x) || x.length > n.length + 1);
+      const at = (pred) => ch.paras.findIndex((p) => pred(p.text));
+      const nick = at((t) => re(a.name).test(t));
+      const fullAt = at((t) => full.some((x) => re(x).test(t)));
+      if (nick < 0 || fullAt < 0 || nick - fullAt > 2 || nick < fullAt) continue;
+      if (ch.sents.some((s) => re(a.name).test(s.text) && full.some((x) => re(x).test(s.text)))) continue;
+      mergeCast(cast, b, a);
+    }
+  }
+  // (round 4) A numbered place or thing whose number is another's turned
+  // round ("Room 41" in a chapter that never writes "Room 14", where Room 14
+  // is kept): no new entry; the pass asks about the number.
+  function numberedSlips(cast, text, entries) {
+    for (const c of cast) {
+      if (c.gone || c.entry) continue;
+      const m = /^(.*\S)\s+(\d{2,4})$/.exec(c.name);
+      if (!m) continue;
+      const turned = entries.find((e) => !e.locked && new RegExp(`^${escRe(m[1])}\\s+(\\d{2,4})$`, 'i').test(e.name) && e.name !== c.name && [...e.name.match(/\d+$/)[0]].sort().join('') === [...m[2]].sort().join(''));
+      if (turned && !written(text, turned.name)) { c.gone = true; c.name = '\u0000'; c.aliases = []; }
     }
   }
   function mergeCast(cast, into, from) {
@@ -2006,7 +2112,7 @@ module.exports = function canonEditor(C) {
     // that calls them so (code's, like the shelf's own kin)
     for (const c of cast) {
       if (c.kind !== 'person') continue;
-      const role = [c.name, ...c.aliases].find((n) => /^the\s+(?:\p{Ll}[\p{Ll}-]+|\p{Lu}\p{Ll}{3,})$/u.test(n) && !CROWD.has(n.slice(4).toLowerCase()) && !TITLES.has(n.slice(4).toLowerCase()) && !NUMBER.test(n.slice(4).toLowerCase()));
+      const role = [c.name, ...c.aliases].find((n) => /^the\s+(?:\p{Ll}[\p{Ll}-]+|\p{Lu}\p{Ll}{3,})$/u.test(n) && !CROWD.has(n.slice(4).toLowerCase()) && !TITLES.has(n.slice(4).toLowerCase()) && !NUMBER.test(n.slice(4).toLowerCase()) && !EPITHET.test(n));
       if (!role) continue;
       const re = new RegExp(`(?<![\\p{L}])[Tt]he\\s+${escRe(role.slice(4))}(?![\\p{L}])`, 'u');
       const s = ch.sents.find((x) => re.test(x.text) && !x.said && !ch.paras[x.pi].talk.some(([a, b]) => a < x.end && b > x.start));
