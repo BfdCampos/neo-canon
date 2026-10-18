@@ -23,7 +23,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Canon = require('../canon.js');
+const Canon = require(process.env.CANON_JS || '../canon.js');
 const Score = require('./canon-score.js');
 const { folderIO } = require('./canon-eval.js');
 

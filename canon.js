@@ -533,7 +533,8 @@
     woman: ['female', 'man'], man: ['male', 'woman'], girl: ['female', 'boy'], boy: ['male', 'girl'], lady: ['female', 'lord'], lord: ['male', 'lady'],
     sister: ['female', 'brother'], brother: ['male', 'sister'], daughter: ['female', 'son'], son: ['male', 'daughter'],
     mother: ['female', 'father'], father: ['male', 'mother'], wife: ['female', 'husband'], husband: ['male', 'wife'],
-    queen: ['female', 'king'], king: ['male', 'queen'], aunt: ['female', 'uncle'], uncle: ['male', 'aunt'], niece: ['female', 'nephew'], nephew: ['male', 'niece']
+    queen: ['female', 'king'], king: ['male', 'queen'], aunt: ['female', 'uncle'], uncle: ['male', 'aunt'], niece: ['female', 'nephew'], nephew: ['male', 'niece'],
+    bitch: ['female', 'dog', 'dog']
   };
   const PRONOUNS = { she: 'female', her: 'female', hers: 'female', herself: 'female', he: 'male', him: 'male', his: 'male', himself: 'male' };
   const PRONOUN_SWAP = { he: 'she', she: 'he', him: 'her', her: 'his', hers: 'his', himself: 'herself', herself: 'himself', his: 'her' };
