@@ -916,6 +916,8 @@ module.exports = function canonEditor(C) {
     if (actionPredicate(cited, grounded, c, key)) return { why: 'once' };
     // a day or a month for a value ("Role: Thursdays"), or a look that is only where it was seen ("in the instrument light")
     if (content(value).length && content(value).every((w) => nonEntity(w))) return { why: 'empty' };
+    // its own name for a value ("called the Anchor")
+    if (valueWords.every((w) => ['call', 'called', 'name', 'named', 'known', 'nicknam'].includes(w))) return { why: 'empty' };
     if (labelFamily(key) === 'appearance' && /^(?:in|on|at|by|under|from|through)\s/i.test(value)) return { why: 'once' };
     // "sweeping the floor", "carrying fence posts": what they were doing then
     if (['other', 'state', 'location', 'appearance', 'personality', 'description'].includes(labelFamily(key)) && /^(?!being\b|living\b|wearing\b)\p{L}+ing\s+(?:the|a|an|his|her|their|its|some|\p{L}+s)\b/u.test(value) && !HABITUAL.test(citedText)) return { why: 'once' };
