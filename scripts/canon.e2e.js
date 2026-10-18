@@ -1477,7 +1477,7 @@ part('editor', 'an entry\'s page: the profile, each source a number that opens i
   await shot('editor-entry-person.png');
   await js(`canonShown = 'weighhouse'; renderCanon()`);
   await until(`document.querySelector('#canon-view .cn-name')?.textContent === 'the Weighhouse'`);
-  if (!REAL_RUN) assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-group')].map((h) => h.textContent)`), ['How it works', 'Rules']);
+  if (!REAL_RUN) assert.deepEqual(await js(`[...document.querySelectorAll('#canon-view .cn-group')].map((h) => h.textContent)`), ['What it is', 'How it works', 'Rules']);
   await tick(300);
   await shot('editor-entry-place.png');
   if (REAL_RUN) {
