@@ -294,3 +294,40 @@ On dev, dev2's five stories and QA's chapter (379 sheet facts, 205 must); before
 | QA's chapter: Lantern House facts; Tobias's | 0; 0 | 10; 6 |
 
 What is still lost with a perfect reader is mostly round 2's deliberate precision: a habit with no word that it recurs ("She kept her hands still"), a moment ("That night… she lay…"), a setting's routine told as a person's deed, a fact read between the lines (the town afraid of her). What these numbers are not: the readers are the sheets, so they measure the code, not a model; a real reader proposes less and worse, and the held-out estimate is still the evaluation lead's.
+
+## 14. Round 4: the real reader's failures, reproduced and met
+
+The evaluation lead ran Careful (4B) on four more unseen stories (brief only: types, no text): strict precision 73%, must recall 58%, slips 1/11 (0 false), Which is right? 0/2, about one profile sentence in seven wrong in meaning. The sheet readers of round 3 had scored 95% and 3% on dev: they failed only in ways the code already met. Round 4 builds readers that fail the way the real one did, writes stories for the types, and holds the engine to them.
+
+**dev3** (`scripts/fixtures/canon-editor/dev3/`, three stories written for the brief): *Kerr's Mill* (three generations of Absalom Kerr told apart by the Elder, the Younger and the Third; a terrier whose sex is her own she and a cat beside a man's he; a deed given to the next generation in a relative clause; one generation's eyes and the mill's bank said otherwise); *Night Ward* (Nurse Maud Rafferty, "Raff" a line later with no "called"; a group chat of `Name: message` lines with a lie in it; a ward's floor and wing, a shift's start and a room's number turned round, said otherwise); *The Form Room* (a notebook against the prose on the subject taught and the school year; a letter read out with no quotation marks; an assembly's hour said otherwise; a cedar's planting given to someone else; a neighbour that may hold beside the first).
+
+**The drift reader** (`scripts/canon-perfect.js`, mode `drift`): the perfect reader, plus every failure type of the brief — labels drift ("situated", "address", "shift start", "teaches"); each slip's later value proposed as a fact of its own under another label; feelings, postures and one scene's states proposed as lasting; an animal given the nearest he or she; what is said never marked said; a nickname proposed as its own one, generations as one person, an animal as a person, a turned room number as a place; profile sentences that cite real facts and say more; and *no* to every slip question. It believes everything it made up. `credulous` is the same with *yes* to every slip question, to price a reader that says yes.
+
+| Failure type (brief) | What decides now (ACCURACY.md) |
+|---|---|
+| Later value kept as a second fact under another label; slips almost silent | slots by a value's own shape (rule 21); deeds done once by rule (22); an age, colour, material or count said otherwise flagged with no question asked (27) |
+| One-off moments kept as traits | standing evidence in the clause, and the reader both ways (23) |
+| A pet's sex from another's he; facts on the wrong one | an animal is it or its name (24); a place's claim in a person's clause is theirs; a value's colour, number, kin word must be its sentences' (27) |
+| A lie in a group chat kept as checked | chat lines, letters, radio calls are speech (25) |
+| Nickname split; generations merged; turned room number made an entry; animal as person | rule 26 |
+| Profile sentences drifting from their facts | `profileEntailed` and the reader both ways (28) |
+| Notes against prose never asked | one slot across the notes and the prose; never merged by shared words (21) |
+| A fact only the model's word supports shown as checked | Canon's reading, no dot, never a slip's ground (29) |
+
+### Results, round 4 (no model: the sheet readers; `node scripts/canon-perfect.js`)
+
+Before: the round-3 engine (`471dcaa`) with the same readers and fixtures. Must: shown (checked, the writer's, or Canon's reading); precision counts what is shown, on the sheet, against the sheet's traps, said-as-true and everything the reader made up that the entries keep.
+
+| Set · reader | Must (r3 → r4) | Precision (r3 → r4) | Made-up kept | Slips found / false (r3 → r4) | Which is right? | Profile sentences wrong in meaning |
+|---|---|---|---|---|---|---|
+| dev3 · drift | 50 → 48/52 | 77% → **100%** | 17/38 → **0/38** | 1/8 → **8/8**, 0 → 0 | 0/2 → **2/2** | 18/54 → **0/24** |
+| dev2 · drift | 121 → 123/129 | 98% → 100% | 4/65 → 0/64 | 7/11 → 10/11, 0 → 0 | 2/2 → 2/2 | 29/88 → 0/29 |
+| dev · drift | 36/41 | 96% → 97% | 2/25 → 1/25 | 1/3 → 1/3, 0 → 0 | — | 7/28 → 0/9 |
+| QA · drift | 35/35 | 86% → 100% | 5/17 → 0/17 | 2/3 → 3/3, 0 → 0 | — | 5/17 → 0/6 |
+| all · perfect | 244 → 242/257 | 100% → 100% | — | 19/25 → **24/25**, 0 → 0 | 2/4 → **4/4** | — |
+| all · adversarial | 244 → 242/257 | 97% → 97% | 10/285 → 10/284 | 19/25 → 24/25, 0 → 0 | 2/4 → 4/4 | — |
+| all · credulous | 242/257 | — | — | 19/25 → 24/25, **9 → 5** | — | — |
+
+The two must facts dev3 "loses" are Hester's subject and year, which now wait as *Which is right?*, as the sheet asks. Of the 242 must facts shown, 238 carry the dot; the four of dev that don't (Hesper one of the Spared, from a sentence about the setting; three more like it) are Canon's reading. The slips still missed with the drift reader are the three only a reader's yes can make (a never, a polarity, a crust given by a verb of giving, which is no deed done once). With a credulous reader five false slips remain, all on candidates that wait for the reader's yes by design (a deed shared by words, a polarity, an antonym): a reader that says yes to anything is not one the real Careful reader was (0 false in every held-out run).
+
+What these numbers are not: dev3 was written by the builder for the brief's types and the rules were tuned on it, so it is a third dev set; the drift reader is the brief's failures as the builder understood them, not the model. The real reader's word on unseen prose is the evaluation lead's to measure (the prompts gained the "only this moment?" and the profile questions, `EDITOR_PROMPT` is unchanged, so the verdict cache holds round 3's answers and only the new questions are asked).
